@@ -1,0 +1,356 @@
+basePath: /api/v1
+definitions:
+  model.Category:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      parent_id:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - title
+    type: object
+  model.Cost:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      currency:
+        type: string
+      id:
+        type: string
+      incurred_at:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - amount
+    - currency
+    - incurred_at
+    - title
+    type: object
+info:
+  contact: {}
+  description: Nexo API documentation
+  title: Nexo API
+  version: "1.0"
+paths:
+  /categories:
+    get:
+      description: Get a paginated list of categories
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Category'
+            type: array
+        "500":
+          description: Failed to list categories
+          schema:
+            type: string
+      summary: List categories
+      tags:
+      - categories
+    post:
+      consumes:
+      - application/json
+      description: Create a new category
+      parameters:
+      - description: Category object
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/model.Category'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Category'
+        "400":
+          description: Invalid request payload
+          schema:
+            type: string
+        "500":
+          description: Failed to create category
+          schema:
+            type: string
+      summary: Create a new category
+      tags:
+      - categories
+  /categories/{id}:
+    delete:
+      description: Delete a category by its ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Invalid category ID
+          schema:
+            type: string
+        "404":
+          description: Category not found
+          schema:
+            type: string
+        "500":
+          description: Failed to delete category
+          schema:
+            type: string
+      summary: Delete a category
+      tags:
+      - categories
+    get:
+      description: Get a category by its ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Category'
+        "400":
+          description: Invalid category ID
+          schema:
+            type: string
+        "404":
+          description: Category not found
+          schema:
+            type: string
+        "500":
+          description: Failed to get category
+          schema:
+            type: string
+      summary: Get a category by ID
+      tags:
+      - categories
+    put:
+      consumes:
+      - application/json
+      description: Update an existing category
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category object
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/model.Category'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Category'
+        "400":
+          description: Invalid category ID or payload
+          schema:
+            type: string
+        "404":
+          description: Category not found
+          schema:
+            type: string
+        "500":
+          description: Failed to update category
+          schema:
+            type: string
+      summary: Update a category
+      tags:
+      - categories
+  /costs:
+    get:
+      description: Get a paginated list of costs
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Cost'
+            type: array
+        "500":
+          description: Failed to list costs
+          schema:
+            type: string
+      summary: List costs
+      tags:
+      - costs
+    post:
+      consumes:
+      - application/json
+      description: Create a new cost
+      parameters:
+      - description: Cost object
+        in: body
+        name: cost
+        required: true
+        schema:
+          $ref: '#/definitions/model.Cost'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Cost'
+        "400":
+          description: Invalid request payload
+          schema:
+            type: string
+        "500":
+          description: Failed to create cost
+          schema:
+            type: string
+      summary: Create a new cost
+      tags:
+      - costs
+  /costs/{id}:
+    delete:
+      description: Delete a cost by its ID
+      parameters:
+      - description: Cost ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Invalid cost ID
+          schema:
+            type: string
+        "404":
+          description: Cost not found
+          schema:
+            type: string
+        "500":
+          description: Failed to delete cost
+          schema:
+            type: string
+      summary: Delete a cost
+      tags:
+      - costs
+    get:
+      description: Get a cost by its ID
+      parameters:
+      - description: Cost ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Cost'
+        "400":
+          description: Invalid cost ID
+          schema:
+            type: string
+        "404":
+          description: Cost not found
+          schema:
+            type: string
+        "500":
+          description: Failed to get cost
+          schema:
+            type: string
+      summary: Get a cost by ID
+      tags:
+      - costs
+    put:
+      consumes:
+      - application/json
+      description: Update an existing cost
+      parameters:
+      - description: Cost ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Cost object
+        in: body
+        name: cost
+        required: true
+        schema:
+          $ref: '#/definitions/model.Cost'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Cost'
+        "400":
+          description: Invalid cost ID or payload
+          schema:
+            type: string
+        "404":
+          description: Cost not found
+          schema:
+            type: string
+        "500":
+          description: Failed to update cost
+          schema:
+            type: string
+      summary: Update a cost
+      tags:
+      - costs
+swagger: "2.0"
