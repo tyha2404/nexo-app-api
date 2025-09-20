@@ -2,42 +2,35 @@ basePath: /api/v1
 definitions:
   model.Category:
     properties:
-      created_at:
+      createdAt:
+        type: string
+      description:
         type: string
       id:
         type: string
-      parent_id:
+      name:
         type: string
-      title:
+      updatedAt:
         type: string
-      updated_at:
+      user:
+        $ref: '#/definitions/model.User'
+      userID:
         type: string
-    required:
-    - title
     type: object
-  model.Cost:
+  model.User:
     properties:
-      amount:
-        type: number
-      category:
+      createdAt:
         type: string
-      created_at:
-        type: string
-      currency:
+      email:
         type: string
       id:
         type: string
-      incurred_at:
+      passwordHash:
         type: string
-      title:
+      updatedAt:
         type: string
-      updated_at:
+      username:
         type: string
-    required:
-    - amount
-    - currency
-    - incurred_at
-    - title
     type: object
 info:
   contact: {}
@@ -199,9 +192,9 @@ paths:
       summary: Update a category
       tags:
       - categories
-  /costs:
+  /users:
     get:
-      description: Get a paginated list of costs
+      description: Get a paginated list of users
       parameters:
       - description: Limit
         in: query
@@ -218,49 +211,49 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/model.Cost'
+              $ref: '#/definitions/model.User'
             type: array
         "500":
-          description: Failed to list costs
+          description: Failed to list users
           schema:
             type: string
-      summary: List costs
+      summary: List users
       tags:
-      - costs
+      - users
     post:
       consumes:
       - application/json
-      description: Create a new cost
+      description: Create a new user
       parameters:
-      - description: Cost object
+      - description: User object
         in: body
-        name: cost
+        name: user
         required: true
         schema:
-          $ref: '#/definitions/model.Cost'
+          $ref: '#/definitions/model.User'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/model.Cost'
+            $ref: '#/definitions/model.User'
         "400":
           description: Invalid request payload
           schema:
             type: string
         "500":
-          description: Failed to create cost
+          description: Failed to create user
           schema:
             type: string
-      summary: Create a new cost
+      summary: Create a new user
       tags:
-      - costs
-  /costs/{id}:
+      - users
+  /users/{id}:
     delete:
-      description: Delete a cost by its ID
+      description: Delete a user by its ID
       parameters:
-      - description: Cost ID
+      - description: User ID
         in: path
         name: id
         required: true
@@ -271,24 +264,24 @@ paths:
           schema:
             type: string
         "400":
-          description: Invalid cost ID
+          description: Invalid user ID
           schema:
             type: string
         "404":
-          description: Cost not found
+          description: User not found
           schema:
             type: string
         "500":
-          description: Failed to delete cost
+          description: Failed to delete user
           schema:
             type: string
-      summary: Delete a cost
+      summary: Delete a user
       tags:
-      - costs
+      - users
     get:
-      description: Get a cost by its ID
+      description: Get a user by its ID
       parameters:
-      - description: Cost ID
+      - description: User ID
         in: path
         name: id
         required: true
@@ -299,58 +292,58 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Cost'
+            $ref: '#/definitions/model.User'
         "400":
-          description: Invalid cost ID
+          description: Invalid user ID
           schema:
             type: string
         "404":
-          description: Cost not found
+          description: User not found
           schema:
             type: string
         "500":
-          description: Failed to get cost
+          description: Failed to get user
           schema:
             type: string
-      summary: Get a cost by ID
+      summary: Get a user by ID
       tags:
-      - costs
+      - users
     put:
       consumes:
       - application/json
-      description: Update an existing cost
+      description: Update an existing user
       parameters:
-      - description: Cost ID
+      - description: User ID
         in: path
         name: id
         required: true
         type: string
-      - description: Cost object
+      - description: User object
         in: body
-        name: cost
+        name: user
         required: true
         schema:
-          $ref: '#/definitions/model.Cost'
+          $ref: '#/definitions/model.User'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Cost'
+            $ref: '#/definitions/model.User'
         "400":
-          description: Invalid cost ID or payload
+          description: Invalid user ID or payload
           schema:
             type: string
         "404":
-          description: Cost not found
+          description: User not found
           schema:
             type: string
         "500":
-          description: Failed to update cost
+          description: Failed to update user
           schema:
             type: string
-      summary: Update a cost
+      summary: Update a user
       tags:
-      - costs
+      - users
 swagger: "2.0"

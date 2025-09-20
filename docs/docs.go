@@ -248,16 +248,16 @@ const docTemplate = `{
                 }
             }
         },
-        "/costs": {
+        "/users": {
             "get": {
-                "description": "Get a paginated list of costs",
+                "description": "Get a paginated list of users",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "costs"
+                    "users"
                 ],
-                "summary": "List costs",
+                "summary": "List users",
                 "parameters": [
                     {
                         "type": "integer",
@@ -278,12 +278,12 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/model.Cost"
+                                "$ref": "#/definitions/model.User"
                             }
                         }
                     },
                     "500": {
-                        "description": "Failed to list costs",
+                        "description": "Failed to list users",
                         "schema": {
                             "type": "string"
                         }
@@ -291,7 +291,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Create a new cost",
+                "description": "Create a new user",
                 "consumes": [
                     "application/json"
                 ],
@@ -299,17 +299,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "costs"
+                    "users"
                 ],
-                "summary": "Create a new cost",
+                "summary": "Create a new user",
                 "parameters": [
                     {
-                        "description": "Cost object",
-                        "name": "cost",
+                        "description": "User object",
+                        "name": "user",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.Cost"
+                            "$ref": "#/definitions/model.User"
                         }
                     }
                 ],
@@ -317,7 +317,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/model.Cost"
+                            "$ref": "#/definitions/model.User"
                         }
                     },
                     "400": {
@@ -327,7 +327,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Failed to create cost",
+                        "description": "Failed to create user",
                         "schema": {
                             "type": "string"
                         }
@@ -335,20 +335,20 @@ const docTemplate = `{
                 }
             }
         },
-        "/costs/{id}": {
+        "/users/{id}": {
             "get": {
-                "description": "Get a cost by its ID",
+                "description": "Get a user by its ID",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "costs"
+                    "users"
                 ],
-                "summary": "Get a cost by ID",
+                "summary": "Get a user by ID",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Cost ID",
+                        "description": "User ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -358,23 +358,23 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.Cost"
+                            "$ref": "#/definitions/model.User"
                         }
                     },
                     "400": {
-                        "description": "Invalid cost ID",
+                        "description": "Invalid user ID",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "404": {
-                        "description": "Cost not found",
+                        "description": "User not found",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Failed to get cost",
+                        "description": "Failed to get user",
                         "schema": {
                             "type": "string"
                         }
@@ -382,7 +382,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Update an existing cost",
+                "description": "Update an existing user",
                 "consumes": [
                     "application/json"
                 ],
@@ -390,24 +390,24 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "costs"
+                    "users"
                 ],
-                "summary": "Update a cost",
+                "summary": "Update a user",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Cost ID",
+                        "description": "User ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Cost object",
-                        "name": "cost",
+                        "description": "User object",
+                        "name": "user",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.Cost"
+                            "$ref": "#/definitions/model.User"
                         }
                     }
                 ],
@@ -415,23 +415,23 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.Cost"
+                            "$ref": "#/definitions/model.User"
                         }
                     },
                     "400": {
-                        "description": "Invalid cost ID or payload",
+                        "description": "Invalid user ID or payload",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "404": {
-                        "description": "Cost not found",
+                        "description": "User not found",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Failed to update cost",
+                        "description": "Failed to update user",
                         "schema": {
                             "type": "string"
                         }
@@ -439,15 +439,15 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Delete a cost by its ID",
+                "description": "Delete a user by its ID",
                 "tags": [
-                    "costs"
+                    "users"
                 ],
-                "summary": "Delete a cost",
+                "summary": "Delete a user",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Cost ID",
+                        "description": "User ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -461,19 +461,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid cost ID",
+                        "description": "Invalid user ID",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "404": {
-                        "description": "Cost not found",
+                        "description": "User not found",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Failed to delete cost",
+                        "description": "Failed to delete user",
                         "schema": {
                             "type": "string"
                         }
@@ -485,58 +485,49 @@ const docTemplate = `{
     "definitions": {
         "model.Category": {
             "type": "object",
-            "required": [
-                "title"
-            ],
             "properties": {
-                "created_at": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "description": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "parent_id": {
+                "name": {
                     "type": "string"
                 },
-                "title": {
+                "updatedAt": {
                     "type": "string"
                 },
-                "updated_at": {
+                "user": {
+                    "$ref": "#/definitions/model.User"
+                },
+                "userID": {
                     "type": "string"
                 }
             }
         },
-        "model.Cost": {
+        "model.User": {
             "type": "object",
-            "required": [
-                "amount",
-                "currency",
-                "incurred_at",
-                "title"
-            ],
             "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "category": {
+                "createdAt": {
                     "type": "string"
                 },
-                "created_at": {
-                    "type": "string"
-                },
-                "currency": {
+                "email": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "incurred_at": {
+                "passwordHash": {
                     "type": "string"
                 },
-                "title": {
+                "updatedAt": {
                     "type": "string"
                 },
-                "updated_at": {
+                "username": {
                     "type": "string"
                 }
             }

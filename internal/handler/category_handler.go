@@ -209,14 +209,3 @@ func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// RegisterRoutes registers all category-related routes to the router
-func (h *CategoryHandler) RegisterRoutes(r chi.Router) {
-	r.Route("/categories", func(r chi.Router) {
-		r.Post("/", h.Create)
-		r.Get("/", h.List)
-		r.Get("/{id}", h.Get)
-		r.Put("/{id}", h.Update)
-		r.Delete("/{id}", h.Delete)
-	})
-}

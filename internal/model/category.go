@@ -4,27 +4,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type Category struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	Title     string    `gorm:"size:255;not null" json:"title" validate:"required"`
-	ParentID  uuid.UUID `gorm:"type:uuid" json:"parent_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
+	ID          uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	UserID      uuid.UUID `gorm:"type:uuid;not null;index"`
+	Name        string    `gorm:"type:varchar(50);not null;index:idx_user_category_name,unique"`
+	Description *string   `gorm:"type:text"`
+	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 
-func (c *Category) BeforeCreate(tx *gorm.DB) error {
-	// Set UUID if not already set
-	if c.ID == uuid.Nil {
-		c.ID = uuid.New()
-	}
-	// Set timestamps
-	now := time.Now()
-	if c.CreatedAt.IsZero() {
-		c.CreatedAt = now
-	}
-	c.UpdatedAt = now
-	return nil
+	User User `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }

@@ -19,7 +19,7 @@ func NewPostgres(cfg *config.Config) (*gorm.DB, error) {
 	}
 
 	// Auto-migrate (for small projects; for production use migrations)
-	if err := db.AutoMigrate(&model.Cost{}, &model.Category{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Cost{}, &model.Category{}, &model.Alert{}, &model.Expense{}, &model.Budget{}); err != nil {
 		return nil, err
 	}
 
