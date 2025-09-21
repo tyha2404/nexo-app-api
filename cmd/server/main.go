@@ -2,6 +2,10 @@
 // @version 1.0
 // @description Nexo API documentation
 // @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 package main
 
@@ -45,6 +49,7 @@ func main() {
 
 	go func() {
 		logg.Sugar().Infow("starting server", "addr", srv.Addr)
+		logg.Sugar().Infoln("swagger docs: http://localhost:" + cfg.Port + "/swagger/index.html")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logg.Sugar().Fatalf("listen: %v", err)
 		}

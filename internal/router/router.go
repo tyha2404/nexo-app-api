@@ -18,19 +18,23 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	categoryRepo := repository.NewCategoryRepo(db)
 
 	// Initialize services
+	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 
 	// Initialize handlers
+	authHandler := handler.NewAuthHandler(authService, logger)
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
 
 	// Initialize routers
+	authRouter := NewAuthRouter(authHandler, logger)
 	userRouter := NewUserRouter(userHandler, logger)
 	categoryRouter := NewCategoryRouter(categoryHandler, logger)
 
 	// Register all routes
 	r.Route("/api/v1", func(apiRouter chi.Router) {
+		authRouter.RegisterRoutes(apiRouter)
 		userRouter.RegisterRoutes(apiRouter)
 		categoryRouter.RegisterRoutes(apiRouter)
 	})

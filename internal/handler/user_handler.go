@@ -211,14 +211,3 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// RegisterRoutes registers all user-related routes to the router
-func (h *UserHandler) RegisterRoutes(r chi.Router) {
-	r.Route("/users", func(r chi.Router) {
-		r.Post("/", h.Create)
-		r.Get("/", h.List)
-		r.Get("/{id}", h.Get)
-		r.Put("/{id}", h.Update)
-		r.Delete("/{id}", h.Delete)
-	})
-}
