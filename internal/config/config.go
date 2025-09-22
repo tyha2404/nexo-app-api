@@ -29,7 +29,7 @@ func LoadConfig() (*Config, error) {
 		DBPass:    getEnv("DB_PASS", "postgres"),
 		DBName:    getEnv("DB_NAME", "costdb"),
 		DBSSL:     getEnv("DB_SSLMODE", "disable"),
-		Port:      getEnv("APP_PORT", "8080"),
+		Port:      getEnv("APP_PORT", "3000"),
 		LogLevel:  getEnv("LOG_LEVEL", "info"),
 		JwtSecret: getEnv("JWT_SECRET", "secret"),
 	}
