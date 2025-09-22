@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 )
 
@@ -11,9 +12,9 @@ var jwtKey = []byte("your-secret-key") // In production, this should be in your 
 
 // Claims represents the JWT claims
 type Claims struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	ID       uuid.UUID `json:"user_id"`
+	Username string    `json:"username"`
+	Email    string    `json:"email"`
 	jwt.RegisteredClaims
 }
 
@@ -22,7 +23,7 @@ func GenerateToken(user *model.User) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 
 	claims := &Claims{
-		UserID:   user.ID.String(),
+		ID:       user.ID,
 		Username: user.Username,
 		Email:    user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{

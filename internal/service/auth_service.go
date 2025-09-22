@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -12,7 +11,6 @@ import (
 type AuthService interface {
 	Login(ctx context.Context, email string, password string) (*model.User, error)
 	Register(ctx context.Context, user *model.User) (*model.User, error)
-	GetUserByID(ctx context.Context, userID string) (*model.User, error)
 }
 
 type authService struct {
@@ -94,24 +92,4 @@ func (s *authService) Register(ctx context.Context, user *model.User) (*model.Us
 	createdUser.Password = ""
 
 	return createdUser, nil
-}
-
-// GetUserByID retrieves a user by their ID
-func (s *authService) GetUserByID(ctx context.Context, userID string) (*model.User, error) {
-	// Convert string ID to UUID
-	id, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, constant.ErrInvalidInput
-	}
-
-	// Get user from repository
-	user, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Clear sensitive data
-	user.Password = ""
-
-	return user, nil
 }

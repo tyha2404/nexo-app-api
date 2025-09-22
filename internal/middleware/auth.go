@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
+	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
@@ -41,10 +42,17 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user information to the request context
+		// Create a new user struct without the password
+		user := model.User{
+			ID:       claims.ID,
+			Email:    claims.Email,
+			Username: claims.Username,
+			// Copy other non-sensitive fields as needed
+		}
+
+		// Store the user in context
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, constant.UserIDKey, claims.UserID)
-		ctx = context.WithValue(ctx, constant.UserEmailKey, claims.Email)
-		ctx = context.WithValue(ctx, constant.UserNameKey, claims.Username)
+		ctx = context.WithValue(ctx, constant.UserContextKey, user)
 
 		// Call the next handler with the new context
 		next.ServeHTTP(w, r.WithContext(ctx))

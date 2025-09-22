@@ -4,10 +4,6 @@ package constant
 type contextKey string
 
 const (
-	// UserIDKey is the key for storing user ID in context
-	UserIDKey contextKey = "userID"
-	// UserEmailKey is the key for storing user email in context
-	UserEmailKey contextKey = "userEmail"
-	// UserNameKey is the key for storing username in context
-	UserNameKey contextKey = "username"
+	// userContextKey is the key for storing user information in context
+	UserContextKey contextKey = "user"
 )

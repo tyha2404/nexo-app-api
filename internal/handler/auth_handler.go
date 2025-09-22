@@ -2,8 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
@@ -124,23 +126,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Router /auth/whoami [get]
 func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(constant.UserIDKey).(string)
-	if !ok || userID == "" {
+	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+	fmt.Println(user.ID, ok)
+	if !ok || user.ID == uuid.Nil {
 		h.log.Error("User ID not found in context")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	// Get user from database
-	user, err := h.svc.GetUserByID(r.Context(), userID)
-	if err != nil {
-		h.log.Error("failed to get user", zap.Error(err))
-		http.Error(w, "Failed to get user", http.StatusInternalServerError)
-		return
-	}
-
-	// Clear sensitive data
-	user.Password = ""
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(user); err != nil {
