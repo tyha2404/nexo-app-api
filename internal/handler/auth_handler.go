@@ -8,6 +8,7 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
@@ -62,14 +63,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Prepare and send response
-	response := dto.LoginResponse{
+	// Prepare and send loginResponse
+	loginResponse := dto.LoginResponse{
 		User:  user,
 		Token: token,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[dto.LoginResponse]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    loginResponse,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
@@ -109,7 +114,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(createdUser); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
+		Status:  http.StatusCreated,
+		Success: true,
+		Data:    *createdUser,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -133,7 +142,11 @@ func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(&user); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    user,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }

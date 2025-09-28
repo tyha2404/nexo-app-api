@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -50,7 +51,11 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(user); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
+		Status:  http.StatusCreated,
+		Success: true,
+		Data:    *user,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -86,7 +91,11 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(user); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *user,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -128,7 +137,14 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(users); err != nil {
+	if err := json.NewEncoder(w).Encode(response.PaginationResponse[model.User]{
+		Status:  http.StatusOK,
+		Success: true,
+		Items:   users,
+		Total:   len(users),
+		Page:    offset,
+		Limit:   limit,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -176,7 +192,11 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(updatedUser); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *updatedUser,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }

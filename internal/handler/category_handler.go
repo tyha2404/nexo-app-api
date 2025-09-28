@@ -10,6 +10,7 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -66,7 +67,11 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(category); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Category]{
+		Status:  http.StatusCreated,
+		Success: true,
+		Data:    *category,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -103,7 +108,11 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(category); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Category]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *category,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -146,7 +155,14 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(categories); err != nil {
+	if err := json.NewEncoder(w).Encode(response.PaginationResponse[model.Category]{
+		Status:  http.StatusOK,
+		Success: true,
+		Items:   categories,
+		Total:   len(categories),
+		Page:    offset,
+		Limit:   limit,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -193,7 +209,11 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(updatedCategory); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Category]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *updatedCategory,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }

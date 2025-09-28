@@ -11,6 +11,7 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -74,7 +75,11 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(cost); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Cost]{
+		Status:  http.StatusCreated,
+		Success: true,
+		Data:    *cost,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -111,7 +116,11 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(cost); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Cost]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *cost,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -154,7 +163,14 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(costs); err != nil {
+	if err := json.NewEncoder(w).Encode(response.PaginationResponse[model.Cost]{
+		Status:  http.StatusOK,
+		Success: true,
+		Items:   costs,
+		Total:   len(costs),
+		Page:    offset,
+		Limit:   limit,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
@@ -201,7 +217,11 @@ func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(updatedCost); err != nil {
+	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Cost]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *updatedCost,
+	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }
