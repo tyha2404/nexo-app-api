@@ -47,7 +47,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			ID:       claims.ID,
 			Email:    claims.Email,
 			Username: claims.Username,
-			// Copy other non-sensitive fields as needed
 		}
 
 		// Store the user in context

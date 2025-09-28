@@ -4,30 +4,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type Cost struct {
-	ID         uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	ID         uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
 	Title      string    `gorm:"size:255;not null" json:"title" validate:"required"`
 	Amount     float64   `gorm:"type:numeric;not null" json:"amount" validate:"required,gt=0"`
 	Currency   string    `gorm:"size:3;not null" json:"currency" validate:"required,len=3"`
-	Category   string    `gorm:"size:100" json:"category"`
+	UserID     uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
+	CategoryID uuid.UUID `gorm:"type:uuid;not null;index" json:"category_id"`
 	IncurredAt time.Time `json:"incurred_at" validate:"required"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-}
+	CreatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+	DeletedAt  DeletedAt `gorm:"index" json:"deleted_at,omitempty" swaggertype:"string"`
 
-func (c *Cost) BeforeCreate(tx *gorm.DB) error {
-	// Set UUID if not already set
-	if c.ID == uuid.Nil {
-		c.ID = uuid.New()
-	}
-	// Set timestamps
-	now := time.Now()
-	if c.CreatedAt.IsZero() {
-		c.CreatedAt = now
-	}
-	c.UpdatedAt = now
-	return nil
+	User     *User     `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Category *Category `gorm:"foreignKey:CategoryID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }

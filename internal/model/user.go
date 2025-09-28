@@ -9,12 +9,13 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id,omitempty"`
+	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
 	Username  string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required,min=3,max=50"`
 	Email     string    `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
-	Password  string    `gorm:"type:varchar(255);not null" json:"-"` // This will store the hashed password in the database
+	Password  string    `gorm:"type:varchar(255);not null" json:"-"`
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at,omitempty"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at,omitempty"`
+	DeletedAt DeletedAt `gorm:"index" json:"deleted_at,omitempty" swaggertype:"string"`
 }
 
 // Validate validates the User struct

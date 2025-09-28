@@ -16,27 +16,32 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	// Initialize repositories
 	userRepo := repository.NewUserRepo(db)
 	categoryRepo := repository.NewCategoryRepo(db)
+	costRepo := repository.NewCostRepo(db)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
+	costService := service.NewCostService(costRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService, logger)
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
+	costHandler := handler.NewCostHandler(costService, logger)
 
 	// Initialize routers
 	authRouter := NewAuthRouter(authHandler, logger)
 	userRouter := NewUserRouter(userHandler, logger)
 	categoryRouter := NewCategoryRouter(categoryHandler, logger)
+	costRouter := NewCostRouter(costHandler, logger)
 
 	// Register all routes
 	r.Route("/api/v1", func(apiRouter chi.Router) {
 		authRouter.RegisterRoutes(apiRouter)
 		userRouter.RegisterRoutes(apiRouter)
 		categoryRouter.RegisterRoutes(apiRouter)
+		costRouter.RegisterRoutes(apiRouter)
 	})
 
 	// Register Swagger UI route

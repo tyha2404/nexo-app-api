@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
+	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
@@ -28,20 +29,35 @@ func NewCategoryHandler(svc service.CategoryService, log *zap.Logger) *CategoryH
 // @Tags categories
 // @Accept json
 // @Produce json
-// @Param category body model.Category true "Category object"
+// @Security BearerAuth
+// @Param category body dto.CreateCategoryRequest true "Category object"
 // @Success 201 {object} model.Category
 // @Failure 400 {string} string "Invalid request payload"
 // @Failure 500 {string} string "Failed to create category"
 // @Router /categories [post]
 func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.Category
+	var req dto.CreateCategoryRequest
+	// Get user from context
+	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+	if !ok || user.ID == uuid.Nil {
+		h.log.Error("User ID not found in context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.log.Error("failed to decode request body", zap.Error(err))
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	category, err := h.svc.Create(r.Context(), &req)
+	category := &model.Category{
+		Name:        req.Name,
+		Description: req.Description,
+		UserID:      user.ID,
+	}
+
+	category, err := h.svc.Create(r.Context(), category)
 	if err != nil {
 		h.log.Error("failed to create category", zap.Error(err))
 		http.Error(w, "Failed to create category", http.StatusInternalServerError)
@@ -60,6 +76,7 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Description Get a category by its ID
 // @Tags categories
 // @Produce json
+// @Security BearerAuth
 // @Param id path string true "Category ID"
 // @Success 200 {object} model.Category
 // @Failure 400 {string} string "Invalid category ID"
@@ -96,6 +113,7 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Description Get a paginated list of categories
 // @Tags categories
 // @Produce json
+// @Security BearerAuth
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
 // @Success 200 {array} model.Category
@@ -139,6 +157,7 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Tags categories
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param id path string true "Category ID"
 // @Param category body model.Category true "Category object"
 // @Success 200 {object} model.Category
@@ -183,6 +202,7 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Summary Delete a category
 // @Description Delete a category by its ID
 // @Tags categories
+// @Security BearerAuth
 // @Param id path string true "Category ID"
 // @Success 204 {string} string "No Content"
 // @Failure 400 {string} string "Invalid category ID"

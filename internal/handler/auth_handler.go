@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -125,9 +124,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {string} string "Unauthorized"
 // @Router /auth/whoami [get]
 func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context
+	// Get user from context
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	fmt.Println(user.ID, ok)
 	if !ok || user.ID == uuid.Nil {
 		h.log.Error("User ID not found in context")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -135,7 +133,7 @@ func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(user); err != nil {
+	if err := json.NewEncoder(w).Encode(&user); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
 	}
 }

@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tyha2404/nexo-app-api/internal/handler"
+	"github.com/tyha2404/nexo-app-api/internal/middleware"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +24,7 @@ func NewCategoryRouter(handler *handler.CategoryHandler, logger *zap.Logger) *Ca
 func (r *CategoryRouter) RegisterRoutes(router chi.Router) {
 	// Add middleware here if needed (e.g., authentication, logging)
 	router.Route("/categories", func(categoriesRoute chi.Router) {
+		categoriesRoute.Use(middleware.AuthMiddleware)
 		categoriesRoute.Post("/", r.handler.Create)
 		categoriesRoute.Get("/", r.handler.List)
 		categoriesRoute.Get("/{id}", r.handler.Get)
