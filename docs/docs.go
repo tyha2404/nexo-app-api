@@ -908,6 +908,13 @@ const docTemplate = `{
         },
         "dto.CreateCostRequest": {
             "type": "object",
+            "required": [
+                "amount",
+                "category_id",
+                "currency",
+                "incurred_at",
+                "title"
+            ],
             "properties": {
                 "amount": {
                     "type": "number"
@@ -922,7 +929,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/dto.CustomTime"
                 },
                 "title": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
                 }
             }
         },
@@ -936,6 +945,10 @@ const docTemplate = `{
         },
         "dto.LoginRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
             "properties": {
                 "email": {
                     "type": "string",
@@ -943,6 +956,7 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string",
+                    "minLength": 8,
                     "example": "password123"
                 }
             }
@@ -960,6 +974,11 @@ const docTemplate = `{
         },
         "dto.RegisterRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "password",
+                "username"
+            ],
             "properties": {
                 "email": {
                     "type": "string",
@@ -967,10 +986,13 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string",
+                    "minLength": 8,
                     "example": "password123"
                 },
                 "username": {
                     "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3,
                     "example": "johndoe"
                 }
             }
@@ -1068,6 +1090,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "type": "string"
+                },
+                "role": {
                     "type": "string"
                 },
                 "updated_at": {

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -47,15 +46,11 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("user", user)
-
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.log.Error("failed to decode request body", zap.Error(err))
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-
-	fmt.Println("req", req)
 
 	cost := &model.Cost{
 		Title:      req.Title,
@@ -97,6 +92,14 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Failed to get cost"
 // @Router /costs/{id} [get]
 func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated user
+	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+	if !ok || user.ID == uuid.Nil {
+		h.log.Error("User ID not found in context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {

@@ -17,6 +17,7 @@ type Config struct {
 	Port      string
 	LogLevel  string
 	JwtSecret string
+	AppEnv    string
 }
 
 func LoadConfig() (*Config, error) {
@@ -29,14 +30,21 @@ func LoadConfig() (*Config, error) {
 		DBPass:    getEnv("DB_PASS", "postgres"),
 		DBName:    getEnv("DB_NAME", "costdb"),
 		DBSSL:     getEnv("DB_SSLMODE", "disable"),
-		Port:      getEnv("APP_PORT", "3000"),
+		Port:      getEnv("APP_PORT", "3001"),
 		LogLevel:  getEnv("LOG_LEVEL", "info"),
 		JwtSecret: getEnv("JWT_SECRET", "secret"),
+		AppEnv:    getEnv("APP_ENV", "dev"),
 	}
 
+	// Security validations
 	if c.DBHost == "" {
 		return nil, fmt.Errorf("DB_HOST is required")
 	}
+
+	if c.JwtSecret == "secret" || c.JwtSecret == "replace_me" || len(c.JwtSecret) < 32 {
+		return nil, fmt.Errorf("JWT_SECRET must be set to a secure value (minimum 32 characters)")
+	}
+
 	return c, nil
 }
 

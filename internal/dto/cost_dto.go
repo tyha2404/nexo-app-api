@@ -32,9 +32,9 @@ func (ct *CustomTime) UnmarshalJSON(b []byte) error {
 }
 
 type CreateCostRequest struct {
-	Title      string     `json:"title"`
-	Amount     float64    `json:"amount"`
-	Currency   string     `json:"currency"`
-	IncurredAt CustomTime `json:"incurred_at"`
-	CategoryID uuid.UUID  `json:"category_id"`
+	Title      string     `json:"title" validate:"required,min=1,max=255"`
+	Amount     float64    `json:"amount" validate:"required,gt=0"`
+	Currency   string     `json:"currency" validate:"required,len=3"`
+	IncurredAt CustomTime `json:"incurred_at" validate:"required"`
+	CategoryID uuid.UUID  `json:"category_id" validate:"required,uuid"`
 }

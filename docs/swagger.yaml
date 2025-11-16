@@ -18,7 +18,15 @@ definitions:
       incurred_at:
         $ref: '#/definitions/dto.CustomTime'
       title:
+        maxLength: 255
+        minLength: 1
         type: string
+    required:
+    - amount
+    - category_id
+    - currency
+    - incurred_at
+    - title
     type: object
   dto.CustomTime:
     properties:
@@ -32,7 +40,11 @@ definitions:
         type: string
       password:
         example: password123
+        minLength: 8
         type: string
+    required:
+    - email
+    - password
     type: object
   dto.LoginResponse:
     properties:
@@ -48,10 +60,17 @@ definitions:
         type: string
       password:
         example: password123
+        minLength: 8
         type: string
       username:
         example: johndoe
+        maxLength: 50
+        minLength: 3
         type: string
+    required:
+    - email
+    - password
+    - username
     type: object
   model.Category:
     properties:
@@ -113,6 +132,8 @@ definitions:
       email:
         type: string
       id:
+        type: string
+      role:
         type: string
       updated_at:
         type: string

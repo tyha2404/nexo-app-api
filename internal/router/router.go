@@ -25,19 +25,24 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	costService := service.NewCostService(costRepo)
 
 	// Initialize handlers
+	healthHandler := handler.NewHealthHandler(db, logger)
 	authHandler := handler.NewAuthHandler(authService, logger)
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
 	costHandler := handler.NewCostHandler(costService, logger)
 
 	// Initialize routers
+	healthRouter := NewHealthRouter(healthHandler)
 	authRouter := NewAuthRouter(authHandler, logger)
 	userRouter := NewUserRouter(userHandler, logger)
 	categoryRouter := NewCategoryRouter(categoryHandler, logger)
 	costRouter := NewCostRouter(costHandler, logger)
 
+	// Register health check routes (outside API versioning)
+
 	// Register all routes
 	r.Route("/api/v1", func(apiRouter chi.Router) {
+		healthRouter.RegisterRoutes(apiRouter)
 		authRouter.RegisterRoutes(apiRouter)
 		userRouter.RegisterRoutes(apiRouter)
 		categoryRouter.RegisterRoutes(apiRouter)

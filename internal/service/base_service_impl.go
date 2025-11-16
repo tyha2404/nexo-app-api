@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -32,7 +33,7 @@ func (s *BaseServiceImpl[T, ID]) Create(ctx context.Context, req *T) (*T, error)
 		Create(context.Context, *T) error
 	})
 	if !ok {
-		panic("repository does not implement Create method")
+		return nil, fmt.Errorf("repository does not implement Create method")
 	}
 
 	if err := repo.Create(ctx, req); err != nil {
@@ -47,7 +48,7 @@ func (s *BaseServiceImpl[T, ID]) Get(ctx context.Context, id ID) (*T, error) {
 		GetByID(context.Context, ID) (*T, error)
 	})
 	if !ok {
-		panic("repository does not implement GetByID method")
+		return nil, fmt.Errorf("repository does not implement GetByID method")
 	}
 
 	entity, err := repo.GetByID(ctx, id)
@@ -66,7 +67,7 @@ func (s *BaseServiceImpl[T, ID]) List(ctx context.Context, limit, offset int) ([
 		List(context.Context, int, int) ([]T, error)
 	})
 	if !ok {
-		panic("repository does not implement List method")
+		return nil, fmt.Errorf("repository does not implement List method")
 	}
 
 	return repo.List(ctx, limit, offset)
@@ -82,7 +83,7 @@ func (s *BaseServiceImpl[T, ID]) Update(ctx context.Context, req *T) (*T, error)
 		Update(context.Context, *T) error
 	})
 	if !ok {
-		panic("repository does not implement Update method")
+		return nil, fmt.Errorf("repository does not implement Update method")
 	}
 
 	if err := repo.Update(ctx, req); err != nil {
@@ -97,7 +98,7 @@ func (s *BaseServiceImpl[T, ID]) Delete(ctx context.Context, id ID) error {
 		Delete(context.Context, ID) error
 	})
 	if !ok {
-		panic("repository does not implement Delete method")
+		return fmt.Errorf("repository does not implement Delete method")
 	}
 
 	return repo.Delete(ctx, id)

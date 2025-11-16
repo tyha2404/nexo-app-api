@@ -61,17 +61,18 @@ func AuthMiddleware(next http.Handler) http.Handler {
 // AdminOnly is a middleware that ensures the user has admin role
 func AdminOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// In a real application, you would check the user's role from the token or database
-		// For now, this is a placeholder that always allows access
-		// Replace this with your actual admin check logic
+		user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+		if !ok {
+			render.Status(r, http.StatusUnauthorized)
+			render.JSON(w, r, map[string]string{"error": "User not found in context"})
+			return
+		}
 
-		// Example:
-		// userID := r.Context().Value(constant.UserIDKey).(string)
-		// if !isUserAdmin(userID) {
-		//     render.Status(r, http.StatusForbidden)
-		//     render.JSON(w, r, map[string]string{"error": "Admin access required"})
-		//     return
-		// }
+		if user.Role != "admin" {
+			render.Status(r, http.StatusForbidden)
+			render.JSON(w, r, map[string]string{"error": "Admin access required"})
+			return
+		}
 
 		next.ServeHTTP(w, r)
 	})

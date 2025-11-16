@@ -21,6 +21,7 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/db"
 	"github.com/tyha2404/nexo-app-api/internal/logger"
 	"github.com/tyha2404/nexo-app-api/internal/router"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 func main() {
@@ -28,6 +29,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+
+	// Initialize JWT before using it
+	util.InitJWT(cfg)
 
 	logg, err := logger.New(cfg.LogLevel)
 	if err != nil {

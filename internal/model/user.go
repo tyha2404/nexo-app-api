@@ -13,6 +13,7 @@ type User struct {
 	Username  string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required,min=3,max=50"`
 	Email     string    `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
 	Password  string    `gorm:"type:varchar(255);not null" json:"-"`
+	Role      string    `gorm:"type:varchar(20);default:'user';not null" json:"role"`
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at,omitempty"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at,omitempty"`
 	DeletedAt DeletedAt `gorm:"index" json:"deleted_at,omitempty" swaggertype:"string"`

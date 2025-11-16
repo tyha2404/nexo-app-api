@@ -95,7 +95,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.log.Error("failed to decode request body", zap.Error(err))
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		response.SendError(w, http.StatusBadRequest, "Invalid request payload", err)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	createdUser, err := h.svc.Register(r.Context(), user)
 	if err != nil {
 		h.log.Error("failed to create user", zap.Error(err))
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		response.SendError(w, http.StatusInternalServerError, "Failed to create user", err)
 		return
 	}
 
@@ -120,6 +120,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Data:    *createdUser,
 	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))
+		response.SendError(w, http.StatusInternalServerError, "Failed to encode response", err)
 	}
 }
 
