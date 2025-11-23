@@ -140,6 +140,14 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Failed to list costs"
 // @Router /costs [get]
 func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated user
+	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+	if !ok || user.ID == uuid.Nil {
+		h.log.Error("User ID not found in context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
 
@@ -158,7 +166,7 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	costs, err := h.svc.List(r.Context(), limit, offset)
+	costs, err := h.svc.ListWithCategory(r.Context(), user.ID, limit, offset)
 	if err != nil {
 		h.log.Error("failed to list costs", zap.Error(err))
 		http.Error(w, "Failed to list costs", http.StatusInternalServerError)
