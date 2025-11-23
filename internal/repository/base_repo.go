@@ -20,6 +20,9 @@ type BaseRepo[T any] interface {
 	// Update updates an existing entity
 	Update(ctx context.Context, entity *T) error
 
+	// UpdateFields updates specific fields of an existing entity
+	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
+
 	// Delete removes an entity by its ID
 	Delete(ctx context.Context, id uuid.UUID) error
 }

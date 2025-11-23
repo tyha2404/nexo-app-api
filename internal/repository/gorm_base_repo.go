@@ -46,6 +46,11 @@ func (r *GormBaseRepo[T, ID]) Update(ctx context.Context, entity *T) error {
 	return r.db.WithContext(ctx).Save(entity).Error
 }
 
+// UpdateFields implements BaseRepo.UpdateFields
+func (r *GormBaseRepo[T, ID]) UpdateFields(ctx context.Context, id ID, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).Model(new(T)).Where("id = ?", id).Updates(updates).Error
+}
+
 // Delete implements BaseRepo.Delete
 func (r *GormBaseRepo[T, ID]) Delete(ctx context.Context, id ID) error {
 	var entity T

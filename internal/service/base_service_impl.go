@@ -92,6 +92,18 @@ func (s *BaseServiceImpl[T, ID]) Update(ctx context.Context, req *T) (*T, error)
 	return req, nil
 }
 
+// UpdateFields updates specific fields of an existing entity
+func (s *BaseServiceImpl[T, ID]) UpdateFields(ctx context.Context, id ID, updates map[string]interface{}) error {
+	repo, ok := s.repo.(interface {
+		UpdateFields(context.Context, ID, map[string]interface{}) error
+	})
+	if !ok {
+		return fmt.Errorf("repository does not implement UpdateFields method")
+	}
+
+	return repo.UpdateFields(ctx, id, updates)
+}
+
 // Delete removes an entity by ID
 func (s *BaseServiceImpl[T, ID]) Delete(ctx context.Context, id ID) error {
 	repo, ok := s.repo.(interface {

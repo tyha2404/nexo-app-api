@@ -910,22 +910,22 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "amount",
-                "category_id",
+                "categoryId",
                 "currency",
-                "incurred_at",
+                "incurredAt",
                 "title"
             ],
             "properties": {
                 "amount": {
                     "type": "number"
                 },
-                "category_id": {
+                "categoryId": {
                     "type": "string"
                 },
                 "currency": {
                     "type": "string"
                 },
-                "incurred_at": {
+                "incurredAt": {
                     "$ref": "#/definitions/dto.CustomTime"
                 },
                 "title": {

@@ -189,22 +189,43 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req model.Category
+	var req dto.UpdateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.log.Error("failed to decode request body", zap.Error(err))
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-	req.ID = id
 
-	updatedCategory, err := h.svc.Update(r.Context(), &req)
-	if err != nil {
+	// Build updates map from non-nil fields
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+
+	if len(updates) == 0 {
+		http.Error(w, "No fields to update", http.StatusBadRequest)
+		return
+	}
+
+	// Update specific fields
+	if err := h.svc.UpdateFields(r.Context(), id, updates); err != nil {
 		if err == constant.ErrNotFound {
 			http.Error(w, "Category not found", http.StatusNotFound)
 			return
 		}
 		h.log.Error("failed to update category", zap.Error(err))
 		http.Error(w, "Failed to update category", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the updated category to return in response
+	updatedCategory, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		h.log.Error("failed to get updated category", zap.Error(err))
+		http.Error(w, "Failed to get updated category", http.StatusInternalServerError)
 		return
 	}
 
