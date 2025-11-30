@@ -28,6 +28,7 @@ func (r *costRepo) ListWithCategory(ctx context.Context, userID uuid.UUID, limit
 	err := r.db.WithContext(ctx).
 		Preload("Category").
 		Where("user_id = ?", userID).
+		Order("incurred_at DESC").
 		Limit(limit).
 		Offset(offset).
 		Find(&costs).Error

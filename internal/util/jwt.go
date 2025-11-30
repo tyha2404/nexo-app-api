@@ -22,7 +22,7 @@ func InitJWT(cfg *config.Config) {
 
 // Claims represents the JWT claims
 type Claims struct {
-	ID       uuid.UUID `json:"user_id"`
+	ID       uuid.UUID `json:"userId"`
 	Username string    `json:"username"`
 	Email    string    `json:"email"`
 	jwt.RegisteredClaims

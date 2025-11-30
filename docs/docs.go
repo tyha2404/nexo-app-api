@@ -1000,10 +1000,10 @@ const docTemplate = `{
         "model.Category": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "description": {
@@ -1015,13 +1015,13 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
                 "user": {
                     "$ref": "#/definitions/model.User"
                 },
-                "user_id": {
+                "userId": {
                     "type": "string"
                 }
             }
@@ -1031,7 +1031,7 @@ const docTemplate = `{
             "required": [
                 "amount",
                 "currency",
-                "incurred_at",
+                "incurredAt",
                 "title"
             ],
             "properties": {
@@ -1041,34 +1041,34 @@ const docTemplate = `{
                 "category": {
                     "$ref": "#/definitions/model.Category"
                 },
-                "category_id": {
+                "categoryId": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
                 "currency": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "incurred_at": {
+                "incurredAt": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
                 "user": {
                     "$ref": "#/definitions/model.User"
                 },
-                "user_id": {
+                "userId": {
                     "type": "string"
                 }
             }
@@ -1080,10 +1080,10 @@ const docTemplate = `{
                 "username"
             ],
             "properties": {
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "email": {
@@ -1095,7 +1095,7 @@ const docTemplate = `{
                 "role": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
                 "username": {

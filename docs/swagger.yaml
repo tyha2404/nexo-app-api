@@ -74,9 +74,9 @@ definitions:
     type: object
   model.Category:
     properties:
-      created_at:
+      createdAt:
         type: string
-      deleted_at:
+      deletedAt:
         type: string
       description:
         type: string
@@ -84,11 +84,11 @@ definitions:
         type: string
       name:
         type: string
-      updated_at:
+      updatedAt:
         type: string
       user:
         $ref: '#/definitions/model.User'
-      user_id:
+      userId:
         type: string
     type: object
   model.Cost:
@@ -97,37 +97,37 @@ definitions:
         type: number
       category:
         $ref: '#/definitions/model.Category'
-      category_id:
+      categoryId:
         type: string
-      created_at:
+      createdAt:
         type: string
       currency:
         type: string
-      deleted_at:
+      deletedAt:
         type: string
       id:
         type: string
-      incurred_at:
+      incurredAt:
         type: string
       title:
         type: string
-      updated_at:
+      updatedAt:
         type: string
       user:
         $ref: '#/definitions/model.User'
-      user_id:
+      userId:
         type: string
     required:
     - amount
     - currency
-    - incurred_at
+    - incurredAt
     - title
     type: object
   model.User:
     properties:
-      created_at:
+      createdAt:
         type: string
-      deleted_at:
+      deletedAt:
         type: string
       email:
         type: string
@@ -135,7 +135,7 @@ definitions:
         type: string
       role:
         type: string
-      updated_at:
+      updatedAt:
         type: string
       username:
         maxLength: 50

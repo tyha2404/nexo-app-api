@@ -993,10 +993,10 @@
         "model.Category": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "description": {
@@ -1008,13 +1008,13 @@
                 "name": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
                 "user": {
                     "$ref": "#/definitions/model.User"
                 },
-                "user_id": {
+                "userId": {
                     "type": "string"
                 }
             }
@@ -1024,7 +1024,7 @@
             "required": [
                 "amount",
                 "currency",
-                "incurred_at",
+                "incurredAt",
                 "title"
             ],
             "properties": {
@@ -1034,34 +1034,34 @@
                 "category": {
                     "$ref": "#/definitions/model.Category"
                 },
-                "category_id": {
+                "categoryId": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
                 "currency": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "incurred_at": {
+                "incurredAt": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
                 "user": {
                     "$ref": "#/definitions/model.User"
                 },
-                "user_id": {
+                "userId": {
                     "type": "string"
                 }
             }
@@ -1073,10 +1073,10 @@
                 "username"
             ],
             "properties": {
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "email": {
@@ -1088,7 +1088,7 @@
                 "role": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
                 "username": {

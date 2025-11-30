@@ -14,9 +14,9 @@ type User struct {
 	Email     string    `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
 	Password  string    `gorm:"type:varchar(255);not null" json:"-"`
 	Role      string    `gorm:"type:varchar(20);default:'user';not null" json:"role"`
-	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at,omitempty"`
-	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at,omitempty"`
-	DeletedAt DeletedAt `gorm:"index" json:"deleted_at,omitempty" swaggertype:"string"`
+	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt,omitempty"`
+	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt,omitempty"`
+	DeletedAt DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 }
 
 // Validate validates the User struct
