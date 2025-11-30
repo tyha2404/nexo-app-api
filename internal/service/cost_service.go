@@ -10,7 +10,7 @@ import (
 
 type CostService interface {
 	BaseService[model.Cost]
-	ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Cost, error)
+	ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Cost, error)
 }
 
 type costService struct {
@@ -25,6 +25,6 @@ func NewCostService(repo repository.CostRepo) CostService {
 	}
 }
 
-func (s *costService) ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Cost, error) {
-	return s.repo.ListWithCategory(ctx, userID, limit, offset)
+func (s *costService) ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Cost, error) {
+	return s.repo.ListWithCategory(ctx, userID, limit, offset, filters)
 }

@@ -39,7 +39,7 @@ func main() {
 	}
 	defer logg.Sync()
 
-	gormDB, err := db.NewPostgres(cfg)
+	gormDB, err := db.NewPostgres(cfg, logg)
 	if err != nil {
 		logg.Sugar().Fatalf("failed to connect db: %v", err)
 	}

@@ -136,6 +136,8 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
+// @Param startDate query string false "Start date filter (YYYY-MM-DD)"
+// @Param endDate query string false "End date filter (YYYY-MM-DD)"
 // @Success 200 {array} model.Cost
 // @Failure 500 {string} string "Failed to list costs"
 // @Router /costs [get]
@@ -150,6 +152,8 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	startDateStr := r.URL.Query().Get("startDate")
+	endDateStr := r.URL.Query().Get("endDate")
 
 	limit := 10
 	offset := 0
@@ -166,7 +170,10 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	costs, err := h.svc.ListWithCategory(r.Context(), user.ID, limit, offset)
+	costs, err := h.svc.ListWithCategory(r.Context(), user.ID, limit, offset, map[string]interface{}{
+		"startDate": startDateStr,
+		"endDate":   endDateStr,
+	})
 	if err != nil {
 		h.log.Error("failed to list costs", zap.Error(err))
 		http.Error(w, "Failed to list costs", http.StatusInternalServerError)

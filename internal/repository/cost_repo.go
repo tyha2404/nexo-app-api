@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
@@ -10,7 +11,7 @@ import (
 
 type CostRepo interface {
 	BaseRepo[model.Cost]
-	ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Cost, error)
+	ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Cost, error)
 }
 
 type costRepo struct {
@@ -23,9 +24,30 @@ func NewCostRepo(db *gorm.DB) CostRepo {
 	}
 }
 
-func (r *costRepo) ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Cost, error) {
+func (r *costRepo) ListWithCategory(
+	ctx context.Context,
+	userID uuid.UUID,
+	limit, offset int,
+	filters map[string]interface{},
+) ([]model.Cost, error) {
+	query := r.db.WithContext(ctx)
+
+	// Filter by startDate
+	if s, ok := filters["startDate"].(string); ok && s != "" {
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			query = query.Where("incurred_at >= ?", t)
+		}
+	}
+
+	// Filter by endDate (add +1 day to include full endDate)
+	if e, ok := filters["endDate"].(string); ok && e != "" {
+		if t, err := time.Parse("2006-01-02", e); err == nil {
+			query = query.Where("incurred_at < ?", t.Add(24*time.Hour))
+		}
+	}
+
 	var costs []model.Cost
-	err := r.db.WithContext(ctx).
+	err := query.
 		Preload("Category").
 		Where("user_id = ?", userID).
 		Order("incurred_at DESC").

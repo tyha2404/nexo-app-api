@@ -429,6 +429,18 @@ const docTemplate = `{
                         "description": "Offset",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD)",
+                        "name": "startDate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD)",
+                        "name": "endDate",
+                        "in": "query"
                     }
                 ],
                 "responses": {

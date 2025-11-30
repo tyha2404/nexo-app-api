@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tyha2404/nexo-app-api/internal/handler"
+	"github.com/tyha2404/nexo-app-api/internal/middleware"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
@@ -12,6 +13,9 @@ import (
 // New creates a new router with all routes configured
 func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
+
+	// Add logging middleware to log query strings
+	r.Use(middleware.LoggingMiddleware(logger))
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepo(db)
