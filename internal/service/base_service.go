@@ -6,6 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// Repository defines the basic repository operations
+type Repository[T any] interface {
+	Create(ctx context.Context, entity *T) error
+	GetByID(ctx context.Context, id uuid.UUID) (*T, error)
+	List(ctx context.Context, limit, offset int) ([]T, error)
+	Update(ctx context.Context, entity *T) error
+	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
 // BaseService defines the common CRUD operations for all services
 type BaseService[T any] interface {
 	// Create a new entity

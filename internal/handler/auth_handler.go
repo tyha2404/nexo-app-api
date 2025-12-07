@@ -1,26 +1,29 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
-	svc service.AuthService
-	log *zap.Logger
+	svc          service.AuthService
+	log          *zap.Logger
+	errorHandler *ErrorHandler
+	validator    *Validator
 }
 
 func NewAuthHandler(svc service.AuthService, log *zap.Logger) *AuthHandler {
-	return &AuthHandler{svc: svc, log: log}
+	return &AuthHandler{
+		svc:          svc,
+		log:          log,
+		errorHandler: NewErrorHandler(log),
+		validator:    NewValidator(),
+	}
 }
 
 // Login handles logging in a user
@@ -37,29 +40,22 @@ func NewAuthHandler(svc service.AuthService, log *zap.Logger) *AuthHandler {
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Error("failed to decode request body", zap.Error(err))
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "login")
 		return
 	}
 
 	// Authenticate user
 	user, err := h.svc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if err == constant.ErrInvalidCredentials {
-			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-			return
-		}
-		h.log.Error("failed to process login", zap.Error(err))
-		http.Error(w, "Failed to process login", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "login")
 		return
 	}
 
 	// Generate JWT token
 	token, err := util.GenerateToken(user)
 	if err != nil {
-		h.log.Error("failed to generate token", zap.Error(err))
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "login_token_generation")
 		return
 	}
 
@@ -69,15 +65,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Token: token,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[dto.LoginResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    loginResponse,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, loginResponse)
 }
 
 // Register handles the registration of a new user record
@@ -93,9 +81,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Error("failed to decode request body", zap.Error(err))
-		response.SendError(w, http.StatusBadRequest, "Invalid request payload", err)
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "register")
 		return
 	}
 
@@ -107,21 +94,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	createdUser, err := h.svc.Register(r.Context(), user)
 	if err != nil {
-		h.log.Error("failed to create user", zap.Error(err))
-		response.SendError(w, http.StatusInternalServerError, "Failed to create user", err)
+		h.errorHandler.HandleError(w, err, "register")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    *createdUser,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-		response.SendError(w, http.StatusInternalServerError, "Failed to encode response", err)
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, *createdUser)
 }
 
 // WhoAmI returns the current user's information
@@ -135,19 +112,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Router /auth/whoami [get]
 func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	// Get user from context
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.log.Error("User ID not found in context")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, "whoami")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.User]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    user,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, user)
 }

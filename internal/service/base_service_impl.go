@@ -2,56 +2,35 @@ package service
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"gorm.io/gorm"
 )
 
 // BaseServiceImpl is a base implementation of BaseService
-type BaseServiceImpl[T any, ID any] struct {
-	repo     interface{}
-	validate *validator.Validate
+type BaseServiceImpl[T any] struct {
+	repo Repository[T]
 }
 
 // NewBaseService creates a new base service
-func NewBaseService[T any, ID any](repo interface{}) *BaseServiceImpl[T, ID] {
-	return &BaseServiceImpl[T, ID]{
-		repo:     repo,
-		validate: validator.New(),
+func NewBaseService[T any](repo Repository[T]) *BaseServiceImpl[T] {
+	return &BaseServiceImpl[T]{
+		repo: repo,
 	}
 }
 
 // Create creates a new entity
-func (s *BaseServiceImpl[T, ID]) Create(ctx context.Context, req *T) (*T, error) {
-	if err := s.validate.Struct(req); err != nil {
-		return nil, err
-	}
-
-	repo, ok := s.repo.(interface {
-		Create(context.Context, *T) error
-	})
-	if !ok {
-		return nil, fmt.Errorf("repository does not implement Create method")
-	}
-
-	if err := repo.Create(ctx, req); err != nil {
+func (s *BaseServiceImpl[T]) Create(ctx context.Context, req *T) (*T, error) {
+	if err := s.repo.Create(ctx, req); err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
 // Get retrieves an entity by ID
-func (s *BaseServiceImpl[T, ID]) Get(ctx context.Context, id ID) (*T, error) {
-	repo, ok := s.repo.(interface {
-		GetByID(context.Context, ID) (*T, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("repository does not implement GetByID method")
-	}
-
-	entity, err := repo.GetByID(ctx, id)
+func (s *BaseServiceImpl[T]) Get(ctx context.Context, id uuid.UUID) (*T, error) {
+	entity, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, constant.ErrNotFound
@@ -62,56 +41,24 @@ func (s *BaseServiceImpl[T, ID]) Get(ctx context.Context, id ID) (*T, error) {
 }
 
 // List retrieves a paginated list of entities
-func (s *BaseServiceImpl[T, ID]) List(ctx context.Context, limit, offset int) ([]T, error) {
-	repo, ok := s.repo.(interface {
-		List(context.Context, int, int) ([]T, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("repository does not implement List method")
-	}
-
-	return repo.List(ctx, limit, offset)
+func (s *BaseServiceImpl[T]) List(ctx context.Context, limit, offset int) ([]T, error) {
+	return s.repo.List(ctx, limit, offset)
 }
 
 // Update updates an existing entity
-func (s *BaseServiceImpl[T, ID]) Update(ctx context.Context, req *T) (*T, error) {
-	if err := s.validate.Struct(req); err != nil {
-		return nil, err
-	}
-
-	repo, ok := s.repo.(interface {
-		Update(context.Context, *T) error
-	})
-	if !ok {
-		return nil, fmt.Errorf("repository does not implement Update method")
-	}
-
-	if err := repo.Update(ctx, req); err != nil {
+func (s *BaseServiceImpl[T]) Update(ctx context.Context, req *T) (*T, error) {
+	if err := s.repo.Update(ctx, req); err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
 // UpdateFields updates specific fields of an existing entity
-func (s *BaseServiceImpl[T, ID]) UpdateFields(ctx context.Context, id ID, updates map[string]interface{}) error {
-	repo, ok := s.repo.(interface {
-		UpdateFields(context.Context, ID, map[string]interface{}) error
-	})
-	if !ok {
-		return fmt.Errorf("repository does not implement UpdateFields method")
-	}
-
-	return repo.UpdateFields(ctx, id, updates)
+func (s *BaseServiceImpl[T]) UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return s.repo.UpdateFields(ctx, id, updates)
 }
 
 // Delete removes an entity by ID
-func (s *BaseServiceImpl[T, ID]) Delete(ctx context.Context, id ID) error {
-	repo, ok := s.repo.(interface {
-		Delete(context.Context, ID) error
-	})
-	if !ok {
-		return fmt.Errorf("repository does not implement Delete method")
-	}
-
-	return repo.Delete(ctx, id)
+func (s *BaseServiceImpl[T]) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.repo.Delete(ctx, id)
 }

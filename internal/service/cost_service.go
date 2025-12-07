@@ -14,13 +14,13 @@ type CostService interface {
 }
 
 type costService struct {
-	*BaseServiceImpl[model.Cost, uuid.UUID]
+	*BaseServiceImpl[model.Cost]
 	repo repository.CostRepo
 }
 
 func NewCostService(repo repository.CostRepo) CostService {
 	return &costService{
-		BaseServiceImpl: NewBaseService[model.Cost, uuid.UUID](repo),
+		BaseServiceImpl: NewBaseService(repo),
 		repo:            repo,
 	}
 }

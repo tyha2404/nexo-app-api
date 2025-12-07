@@ -1,27 +1,29 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type CostHandler struct {
-	svc service.CostService
-	log *zap.Logger
+	svc          service.CostService
+	log          *zap.Logger
+	errorHandler *ErrorHandler
+	validator    *Validator
 }
 
 func NewCostHandler(svc service.CostService, log *zap.Logger) *CostHandler {
-	return &CostHandler{svc: svc, log: log}
+	return &CostHandler{
+		svc:          svc,
+		log:          log,
+		errorHandler: NewErrorHandler(log),
+		validator:    NewValidator(),
+	}
 }
 
 // Create handles the creation of a new cost record
@@ -38,17 +40,16 @@ func NewCostHandler(svc service.CostService, log *zap.Logger) *CostHandler {
 // @Router /costs [post]
 func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateCostRequest
+
 	// Get user from context
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.log.Error("User ID not found in context")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, "cost_create")
 		return
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Error("failed to decode request body", zap.Error(err))
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "cost_create")
 		return
 	}
 
@@ -61,22 +62,13 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		UserID:     user.ID,
 	}
 
-	cost, err := h.svc.Create(r.Context(), cost)
+	createdCost, err := h.svc.Create(r.Context(), cost)
 	if err != nil {
-		h.log.Error("failed to create cost", zap.Error(err))
-		http.Error(w, "Failed to create cost", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "cost_create")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Cost]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    *cost,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, *createdCost)
 }
 
 // Get handles retrieving a single cost by ID
@@ -93,39 +85,31 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Router /costs/{id} [get]
 func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.log.Error("User ID not found in context")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, "cost_get")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		http.Error(w, "Invalid cost ID", http.StatusBadRequest)
+		h.errorHandler.HandleError(w, err, "cost_get")
 		return
 	}
 
 	cost, err := h.svc.Get(r.Context(), id)
 	if err != nil {
-		if err == constant.ErrNotFound {
-			http.Error(w, "Cost not found", http.StatusNotFound)
-			return
-		}
-		h.log.Error("failed to get cost", zap.Error(err))
-		http.Error(w, "Failed to get cost", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "cost_get")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Cost]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *cost,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
+	// Verify user has access to this cost
+	if cost.UserID != user.ID {
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, "cost_get")
+		return
 	}
+
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *cost)
 }
 
 // List handles retrieving a paginated list of costs
@@ -143,54 +127,24 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /costs [get]
 func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.log.Error("User ID not found in context")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	limitStr := r.URL.Query().Get("limit")
-	offsetStr := r.URL.Query().Get("offset")
-	startDateStr := r.URL.Query().Get("startDate")
-	endDateStr := r.URL.Query().Get("endDate")
-
-	limit := 10
-	offset := 0
-
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-
-	costs, err := h.svc.ListWithCategory(r.Context(), user.ID, limit, offset, map[string]interface{}{
-		"startDate": startDateStr,
-		"endDate":   endDateStr,
-	})
+	user, err := GetUserFromContext(r)
 	if err != nil {
-		h.log.Error("failed to list costs", zap.Error(err))
-		http.Error(w, "Failed to list costs", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "cost_list")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.PaginationResponse[model.Cost]{
-		Status:  http.StatusOK,
-		Success: true,
-		Items:   costs,
-		Total:   len(costs),
-		Page:    offset,
-		Limit:   limit,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
+	limit := ParseQueryIntWithValidation(r, "limit", 10, 1)
+	offset := ParseQueryIntWithValidation(r, "offset", 0, 0)
+
+	filters := BuildFilterMap(r, []string{"startDate", "endDate"})
+
+	costs, err := h.svc.ListWithCategory(r.Context(), user.ID, limit, offset, filters)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, "cost_list")
+		return
 	}
+
+	h.errorHandler.HandlePaginatedSuccess(w, http.StatusOK, costs, len(costs), offset, limit)
 }
 
 // Update handles updating an existing cost
@@ -208,40 +162,26 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Failed to update cost"
 // @Router /costs/{id} [put]
 func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		http.Error(w, "Invalid cost ID", http.StatusBadRequest)
+		h.errorHandler.HandleError(w, err, "cost_update")
 		return
 	}
 
 	var req model.Cost
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Error("failed to decode request body", zap.Error(err))
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+	if err := h.validator.ValidatePartial(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "cost_update")
 		return
 	}
 	req.ID = id
 
 	updatedCost, err := h.svc.Update(r.Context(), &req)
 	if err != nil {
-		if err == constant.ErrNotFound {
-			http.Error(w, "Cost not found", http.StatusNotFound)
-			return
-		}
-		h.log.Error("failed to update cost", zap.Error(err))
-		http.Error(w, "Failed to update cost", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "cost_update")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Cost]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *updatedCost,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *updatedCost)
 }
 
 // Delete handles deleting a cost by ID
@@ -256,20 +196,14 @@ func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Failed to delete cost"
 // @Router /costs/{id} [delete]
 func (h *CostHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		http.Error(w, "Invalid cost ID", http.StatusBadRequest)
+		h.errorHandler.HandleError(w, err, "cost_delete")
 		return
 	}
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		if err == constant.ErrNotFound {
-			http.Error(w, "Cost not found", http.StatusNotFound)
-			return
-		}
-		h.log.Error("failed to delete cost", zap.Error(err))
-		http.Error(w, "Failed to delete cost", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, "cost_delete")
 		return
 	}
 
