@@ -21,12 +21,14 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	userRepo := repository.NewUserRepo(db)
 	categoryRepo := repository.NewCategoryRepo(db)
 	costRepo := repository.NewCostRepo(db)
+	transactionRepo := repository.NewTransactionRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 	costService := service.NewCostService(costRepo)
+	transactionService := service.NewTransactionService(transactionRepo, categoryRepo)
 
 	// Initialize handlers
 	healthHandler := handler.NewHealthHandler(db, logger)
@@ -34,6 +36,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
 	costHandler := handler.NewCostHandler(costService, logger)
+	transactionHandler := handler.NewTransactionHandler(transactionService, logger)
 
 	// Initialize routers
 	healthRouter := NewHealthRouter(healthHandler)
@@ -41,6 +44,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	userRouter := NewUserRouter(userHandler, logger)
 	categoryRouter := NewCategoryRouter(categoryHandler, logger)
 	costRouter := NewCostRouter(costHandler, logger)
+	transactionRouter := NewTransactionRouter(transactionHandler, middleware.AuthMiddleware)
 
 	// Register health check routes (outside API versioning)
 
@@ -51,6 +55,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 		userRouter.RegisterRoutes(apiRouter)
 		categoryRouter.RegisterRoutes(apiRouter)
 		costRouter.RegisterRoutes(apiRouter)
+		transactionRouter.RegisterRoutes(apiRouter)
 	})
 
 	// Register Swagger UI route
