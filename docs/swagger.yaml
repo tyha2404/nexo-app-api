@@ -3,30 +3,45 @@ definitions:
   dto.CreateCategoryRequest:
     properties:
       description:
+        example: Food and groceries
+        maxLength: 500
         type: string
       name:
+        example: Food
+        maxLength: 50
+        minLength: 1
         type: string
+    required:
+    - name
     type: object
   dto.CreateCostRequest:
+    type: object
+  dto.CreateTransactionRequest:
     properties:
       amount:
+        example: 100.5
         type: number
       categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
-      currency:
+      description:
+        example: Grocery shopping
+        maxLength: 500
         type: string
-      incurredAt:
-        $ref: '#/definitions/dto.CustomTime'
-      title:
-        maxLength: 255
-        minLength: 1
+      transactionDate:
+        example: "2024-01-15T00:00:00Z"
+        type: string
+      type:
+        enum:
+        - INCOME
+        - EXPENSE
+        example: EXPENSE
         type: string
     required:
     - amount
     - categoryId
-    - currency
-    - incurredAt
-    - title
+    - transactionDate
+    - type
     type: object
   dto.CustomTime:
     properties:
@@ -37,9 +52,11 @@ definitions:
     properties:
       email:
         example: john@example.com
+        maxLength: 255
         type: string
       password:
         example: password123
+        maxLength: 128
         minLength: 8
         type: string
     required:
@@ -49,17 +66,20 @@ definitions:
   dto.LoginResponse:
     properties:
       token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
       user:
-        $ref: '#/definitions/model.User'
+        $ref: '#/definitions/dto.UserResponse'
     type: object
   dto.RegisterRequest:
     properties:
       email:
         example: john@example.com
+        maxLength: 255
         type: string
       password:
         example: password123
+        maxLength: 128
         minLength: 8
         type: string
       username:
@@ -71,6 +91,82 @@ definitions:
     - email
     - password
     - username
+    type: object
+  dto.TransactionResponse:
+    properties:
+      amount:
+        example: 100.5
+        type: number
+      categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      categoryName:
+        example: Food
+        type: string
+      createdAt:
+        example: "2024-01-15T00:00:00Z"
+        type: string
+      deletedAt:
+        example: "2024-01-20T00:00:00Z"
+        type: string
+      description:
+        example: Grocery shopping
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      transactionDate:
+        example: "2024-01-15T00:00:00Z"
+        type: string
+      type:
+        example: EXPENSE
+        type: string
+      updatedAt:
+        example: "2024-01-15T00:00:00Z"
+        type: string
+      userId:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  dto.UpdateTransactionRequest:
+    properties:
+      amount:
+        example: 150
+        type: number
+      categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      description:
+        example: Updated description
+        maxLength: 500
+        type: string
+      transactionDate:
+        example: "2024-01-20T00:00:00Z"
+        type: string
+      type:
+        enum:
+        - INCOME
+        - EXPENSE
+        example: INCOME
+        type: string
+    type: object
+  dto.UserResponse:
+    properties:
+      createdAt:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      email:
+        example: john@example.com
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      updatedAt:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      username:
+        example: johndoe
+        type: string
     type: object
   model.Category:
     properties:
@@ -144,6 +240,17 @@ definitions:
     required:
     - email
     - username
+    type: object
+  response.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
     type: object
 info:
   contact: {}
@@ -570,6 +677,166 @@ paths:
       summary: Update a cost
       tags:
       - costs
+  /transactions:
+    get:
+      description: List transactions
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Page limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.TransactionResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: List transactions
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Create a new transaction (Income or Expense)
+      parameters:
+      - description: Create transaction request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TransactionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Create a new transaction
+      tags:
+      - transactions
+  /transactions/{id}:
+    delete:
+      description: Delete a transaction
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a transaction
+      tags:
+      - transactions
+    get:
+      description: Get a transaction by ID
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TransactionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get a transaction by ID
+      tags:
+      - transactions
+    put:
+      consumes:
+      - application/json
+      description: Update a transaction
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update transaction request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateTransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TransactionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Update a transaction
+      tags:
+      - transactions
   /users:
     get:
       description: Get a paginated list of users

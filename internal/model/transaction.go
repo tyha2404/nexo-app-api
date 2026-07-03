@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type TransactionType string
@@ -14,7 +15,7 @@ const (
 )
 
 type Transaction struct {
-	ID              uuid.UUID       `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
+	ID              uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID          uuid.UUID       `gorm:"type:uuid;not null;index" json:"userId"`
 	CategoryID      uuid.UUID       `gorm:"type:uuid;not null;index" json:"categoryId"`
 	Amount          float64         `gorm:"type:numeric(15,2);not null" json:"amount"`
@@ -27,4 +28,12 @@ type Transaction struct {
 
 	User     *User     `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Category *Category `gorm:"foreignKey:CategoryID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+// BeforeCreate GORM Hook to generate UUID v7
+func (t *Transaction) BeforeCreate(tx *gorm.DB) (err error) {
+	if t.ID == uuid.Nil {
+		t.ID, err = uuid.NewV7()
+	}
+	return err
 }

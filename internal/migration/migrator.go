@@ -21,6 +21,11 @@ func (m *Migrator) AutoMigrate() error {
 		return fmt.Errorf("auto-migration is disabled in production")
 	}
 
+	// Enable uuid-ossp extension to allow uuid_generate_v4() function
+	if err := m.db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
+		return fmt.Errorf("failed to enable uuid-ossp extension: %w", err)
+	}
+
 	return m.db.AutoMigrate(
 		&model.User{},
 		&model.Category{},
@@ -28,6 +33,7 @@ func (m *Migrator) AutoMigrate() error {
 		&model.Alert{},
 		&model.Expense{},
 		&model.Budget{},
+		&model.Transaction{},
 	)
 }
 

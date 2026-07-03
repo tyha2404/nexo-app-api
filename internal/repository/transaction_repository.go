@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
@@ -11,7 +12,7 @@ import (
 type TransactionRepository interface {
 	Create(ctx context.Context, transaction *model.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Transaction, error)
-	ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Transaction, int64, error)
+	ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
 	Update(ctx context.Context, transaction *model.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -39,11 +40,37 @@ func (r *transactionRepository) GetByID(ctx context.Context, id uuid.UUID) (*mod
 	return &transaction, nil
 }
 
-func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Transaction, int64, error) {
+func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error) {
 	var transactions []model.Transaction
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
+
+	// Filter by Type
+	if t, ok := filters["type"].(string); ok && t != "" {
+		query = query.Where("type = ?", t)
+	}
+
+	// Filter by CategoryID
+	if c, ok := filters["categoryId"].(string); ok && c != "" {
+		if catID, err := uuid.Parse(c); err == nil {
+			query = query.Where("category_id = ?", catID)
+		}
+	}
+
+	// Filter by StartDate
+	if s, ok := filters["startDate"].(string); ok && s != "" {
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			query = query.Where("transaction_date >= ?", t)
+		}
+	}
+
+	// Filter by EndDate
+	if e, ok := filters["endDate"].(string); ok && e != "" {
+		if t, err := time.Parse("2006-01-02", e); err == nil {
+			query = query.Where("transaction_date <= ?", t)
+		}
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

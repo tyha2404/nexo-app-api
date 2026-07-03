@@ -38,9 +38,9 @@ func NewTransactionHandler(transactionService service.TransactionService, log *z
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.CreateTransactionRequest true "Create transaction request"
-// @Success 201 {object} response.BaseResponse[dto.TransactionResponse]
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
+// @Success 201 {object} dto.TransactionResponse
+// @Failure 400 {object} string "Bad Request"
+// @Failure 500 {object} string "Internal Server Error"
 // @Router /transactions [post]
 func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateTransactionRequest
@@ -79,10 +79,10 @@ func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Re
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Transaction ID"
-// @Success 200 {object} response.BaseResponse[dto.TransactionResponse]
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 404 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
+// @Success 200 {object} dto.TransactionResponse
+// @Failure 400 {object} string "Bad Request"
+// @Failure 404 {object} string "Not Found"
+// @Failure 500 {object} string "Internal Server Error"
 // @Router /transactions/{id} [get]
 func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -119,8 +119,8 @@ func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Reque
 // @Security BearerAuth
 // @Param page query int false "Page number"
 // @Param limit query int false "Page limit"
-// @Success 200 {object} response.PaginationResponse[dto.TransactionResponse]
-// @Failure 500 {object} response.ErrorResponse
+// @Success 200 {array} dto.TransactionResponse
+// @Failure 500 {object} string "Internal Server Error"
 // @Router /transactions [get]
 func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -133,8 +133,10 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 		limit = 10
 	}
 
+	filters := BuildFilterMap(r, []string{"type", "categoryId", "startDate", "endDate"})
+
 	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
-	transactions, total, err := h.transactionService.ListTransactions(r.Context(), userID, page, limit)
+	transactions, total, err := h.transactionService.ListTransactions(r.Context(), userID, page, limit, filters)
 	if err != nil {
 		h.log.Error("failed to list transactions", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -161,9 +163,9 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 // @Security BearerAuth
 // @Param id path string true "Transaction ID"
 // @Param request body dto.UpdateTransactionRequest true "Update transaction request"
-// @Success 200 {object} response.BaseResponse[dto.TransactionResponse]
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
+// @Success 200 {object} dto.TransactionResponse
+// @Failure 400 {object} string "Bad Request"
+// @Failure 500 {object} string "Internal Server Error"
 // @Router /transactions/{id} [put]
 func (h *TransactionHandler) UpdateTransaction(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

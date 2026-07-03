@@ -6,10 +6,11 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type User struct {
-	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	Username  string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required,min=3,max=50"`
 	Email     string    `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
 	Password  string    `gorm:"type:varchar(255);not null" json:"-"`
@@ -17,6 +18,14 @@ type User struct {
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt,omitempty"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt,omitempty"`
 	DeletedAt DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
+}
+
+// BeforeCreate GORM Hook to generate UUID v7
+func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
+	if u.ID == uuid.Nil {
+		u.ID, err = uuid.NewV7()
+	}
+	return err
 }
 
 // Validate validates the User struct

@@ -18,6 +18,8 @@ type Container struct {
 	CategoryRepo    repository.CategoryRepo
 	CostRepo        repository.CostRepo
 	TransactionRepo repository.TransactionRepository
+	BudgetRepo      repository.BudgetRepository
+	AlertRepo       repository.AlertRepository
 
 	// Services
 	AuthService        service.AuthService
@@ -25,6 +27,9 @@ type Container struct {
 	CategoryService    service.CategoryService
 	CostService        service.CostService
 	TransactionService service.TransactionService
+	BudgetService      service.BudgetService
+	AlertService       service.AlertService
+	ReportService      service.ReportService
 
 	// Handlers
 	HealthHandler      *handler.HealthHandler
@@ -33,6 +38,9 @@ type Container struct {
 	CategoryHandler    *handler.CategoryHandler
 	CostHandler        *handler.CostHandler
 	TransactionHandler *handler.TransactionHandler
+	BudgetHandler      *handler.BudgetHandler
+	AlertHandler       *handler.AlertHandler
+	ReportHandler      *handler.ReportHandler
 }
 
 // NewContainer initializes and wires all dependencies
@@ -42,13 +50,18 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	categoryRepo := repository.NewCategoryRepo(db)
 	costRepo := repository.NewCostRepo(db)
 	transactionRepo := repository.NewTransactionRepository(db)
+	budgetRepo := repository.NewBudgetRepository(db)
+	alertRepo := repository.NewAlertRepository(db)
 
 	// 2. Initialize Services
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 	costService := service.NewCostService(costRepo)
-	transactionService := service.NewTransactionService(transactionRepo, categoryRepo)
+	transactionService := service.NewTransactionService(transactionRepo, categoryRepo, budgetRepo, alertRepo)
+	budgetService := service.NewBudgetService(budgetRepo, categoryRepo)
+	alertService := service.NewAlertService(alertRepo)
+	reportService := service.NewReportService(transactionRepo)
 
 	// 3. Initialize Handlers
 	healthHandler := handler.NewHealthHandler(db, logger)
@@ -57,6 +70,9 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
 	costHandler := handler.NewCostHandler(costService, logger)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logger)
+	budgetHandler := handler.NewBudgetHandler(budgetService, logger)
+	alertHandler := handler.NewAlertHandler(alertService)
+	reportHandler := handler.NewReportHandler(reportService)
 
 	return &Container{
 		DB:                 db,
@@ -65,16 +81,24 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		CategoryRepo:       categoryRepo,
 		CostRepo:           costRepo,
 		TransactionRepo:    transactionRepo,
+		BudgetRepo:         budgetRepo,
+		AlertRepo:          alertRepo,
 		AuthService:        authService,
 		UserService:        userService,
 		CategoryService:    categoryService,
 		CostService:        costService,
 		TransactionService: transactionService,
+		BudgetService:      budgetService,
+		AlertService:       alertService,
+		ReportService:      reportService,
 		HealthHandler:      healthHandler,
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
 		CategoryHandler:    categoryHandler,
 		CostHandler:        costHandler,
 		TransactionHandler: transactionHandler,
+		BudgetHandler:      budgetHandler,
+		AlertHandler:       alertHandler,
+		ReportHandler:      reportHandler,
 	}
 }

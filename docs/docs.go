@@ -672,6 +672,258 @@ const docTemplate = `{
                 }
             }
         },
+        "/transactions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List transactions",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "List transactions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.TransactionResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new transaction (Income or Expense)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Create a new transaction",
+                "parameters": [
+                    {
+                        "description": "Create transaction request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateTransactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.TransactionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transactions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a transaction by ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Get a transaction by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.TransactionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a transaction",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Update a transaction",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update transaction request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateTransactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.TransactionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a transaction",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Delete a transaction",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users": {
             "get": {
                 "description": "Get a paginated list of users",
@@ -909,41 +1161,59 @@ const docTemplate = `{
     "definitions": {
         "dto.CreateCategoryRequest": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "Food and groceries"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1,
+                    "example": "Food"
                 }
             }
         },
         "dto.CreateCostRequest": {
+            "type": "object"
+        },
+        "dto.CreateTransactionRequest": {
             "type": "object",
             "required": [
                 "amount",
                 "categoryId",
-                "currency",
-                "incurredAt",
-                "title"
+                "transactionDate",
+                "type"
             ],
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 100.5
                 },
                 "categoryId": {
-                    "type": "string"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "incurredAt": {
-                    "$ref": "#/definitions/dto.CustomTime"
-                },
-                "title": {
                     "type": "string",
-                    "maxLength": 255,
-                    "minLength": 1
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "Grocery shopping"
+                },
+                "transactionDate": {
+                    "type": "string",
+                    "example": "2024-01-15T00:00:00Z"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "INCOME",
+                        "EXPENSE"
+                    ],
+                    "example": "EXPENSE"
                 }
             }
         },
@@ -964,10 +1234,12 @@ const docTemplate = `{
             "properties": {
                 "email": {
                     "type": "string",
+                    "maxLength": 255,
                     "example": "john@example.com"
                 },
                 "password": {
                     "type": "string",
+                    "maxLength": 128,
                     "minLength": 8,
                     "example": "password123"
                 }
@@ -977,10 +1249,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 },
                 "user": {
-                    "$ref": "#/definitions/model.User"
+                    "$ref": "#/definitions/dto.UserResponse"
                 }
             }
         },
@@ -994,10 +1267,12 @@ const docTemplate = `{
             "properties": {
                 "email": {
                     "type": "string",
+                    "maxLength": 255,
                     "example": "john@example.com"
                 },
                 "password": {
                     "type": "string",
+                    "maxLength": 128,
                     "minLength": 8,
                     "example": "password123"
                 },
@@ -1005,6 +1280,110 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 50,
                     "minLength": 3,
+                    "example": "johndoe"
+                }
+            }
+        },
+        "dto.TransactionResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 100.5
+                },
+                "categoryId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "categoryName": {
+                    "type": "string",
+                    "example": "Food"
+                },
+                "createdAt": {
+                    "type": "string",
+                    "example": "2024-01-15T00:00:00Z"
+                },
+                "deletedAt": {
+                    "type": "string",
+                    "example": "2024-01-20T00:00:00Z"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Grocery shopping"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "transactionDate": {
+                    "type": "string",
+                    "example": "2024-01-15T00:00:00Z"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "EXPENSE"
+                },
+                "updatedAt": {
+                    "type": "string",
+                    "example": "2024-01-15T00:00:00Z"
+                },
+                "userId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "dto.UpdateTransactionRequest": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 150
+                },
+                "categoryId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "Updated description"
+                },
+                "transactionDate": {
+                    "type": "string",
+                    "example": "2024-01-20T00:00:00Z"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "INCOME",
+                        "EXPENSE"
+                    ],
+                    "example": "INCOME"
+                }
+            }
+        },
+        "dto.UserResponse": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "updatedAt": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "username": {
+                    "type": "string",
                     "example": "johndoe"
                 }
             }
@@ -1114,6 +1493,23 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 50,
                     "minLength": 3
+                }
+            }
+        },
+        "response.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
                 }
             }
         }

@@ -14,7 +14,7 @@ import (
 type TransactionService interface {
 	CreateTransaction(ctx context.Context, userID uuid.UUID, req dto.CreateTransactionRequest) (*dto.TransactionResponse, error)
 	GetTransaction(ctx context.Context, userID, id uuid.UUID) (*dto.TransactionResponse, error)
-	ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int) ([]dto.TransactionResponse, int64, error)
+	ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, error)
 	UpdateTransaction(ctx context.Context, userID, id uuid.UUID, req dto.UpdateTransactionRequest) (*dto.TransactionResponse, error)
 	DeleteTransaction(ctx context.Context, userID, id uuid.UUID) error
 }
@@ -22,12 +22,21 @@ type TransactionService interface {
 type transactionService struct {
 	transactionRepo repository.TransactionRepository
 	categoryRepo    repository.CategoryRepo
+	budgetRepo      repository.BudgetRepository
+	alertRepo       repository.AlertRepository
 }
 
-func NewTransactionService(transactionRepo repository.TransactionRepository, categoryRepo repository.CategoryRepo) TransactionService {
+func NewTransactionService(
+	transactionRepo repository.TransactionRepository,
+	categoryRepo repository.CategoryRepo,
+	budgetRepo repository.BudgetRepository,
+	alertRepo repository.AlertRepository,
+) TransactionService {
 	return &transactionService{
 		transactionRepo: transactionRepo,
 		categoryRepo:    categoryRepo,
+		budgetRepo:      budgetRepo,
+		alertRepo:       alertRepo,
 	}
 }
 
@@ -54,6 +63,11 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		return nil, err
 	}
 
+	// Trigger budget limit verification if transaction is an Expense
+	if transaction.Type == model.TransactionTypeExpense {
+		s.checkBudgetLimit(ctx, userID, transaction.CategoryID, transaction.TransactionDate)
+	}
+
 	// Reload to get associations if needed (though we already have category)
 	transaction.Category = category
 
@@ -73,9 +87,9 @@ func (s *transactionService) GetTransaction(ctx context.Context, userID, id uuid
 	return s.toResponse(transaction), nil
 }
 
-func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int) ([]dto.TransactionResponse, int64, error) {
+func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, error) {
 	offset := (page - 1) * limit
-	transactions, total, err := s.transactionRepo.ListByUserID(ctx, userID, limit, offset)
+	transactions, total, err := s.transactionRepo.ListByUserID(ctx, userID, limit, offset, filters)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -127,6 +141,11 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 		return nil, err
 	}
 
+	// Trigger budget limit verification if transaction is an Expense
+	if transaction.Type == model.TransactionTypeExpense {
+		s.checkBudgetLimit(ctx, userID, transaction.CategoryID, transaction.TransactionDate)
+	}
+
 	return s.toResponse(transaction), nil
 }
 
@@ -167,5 +186,62 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		CreatedAt:       t.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       t.UpdatedAt.Format(time.RFC3339),
 		DeletedAt:       deletedAt,
+	}
+}
+
+func (s *transactionService) checkBudgetLimit(ctx context.Context, userID, categoryID uuid.UUID, transactionDate time.Time) {
+	budget, err := s.budgetRepo.GetByCategoryAndPeriod(ctx, userID, categoryID, transactionDate)
+	if err != nil || budget == nil {
+		return // No budget configured for this category/time
+	}
+
+	var start, end time.Time
+	if budget.PeriodType == "monthly" {
+		start = time.Date(transactionDate.Year(), transactionDate.Month(), 1, 0, 0, 0, 0, transactionDate.Location())
+		end = start.AddDate(0, 1, 0).Add(-time.Nanosecond)
+	} else if budget.PeriodType == "yearly" {
+		start = time.Date(transactionDate.Year(), 1, 1, 0, 0, 0, 0, transactionDate.Location())
+		end = start.AddDate(1, 0, 0).Add(-time.Nanosecond)
+	} else {
+		start = budget.PeriodStart
+		end = start.AddDate(0, 1, 0)
+	}
+
+	filters := map[string]interface{}{
+		"type":       string(model.TransactionTypeExpense),
+		"categoryId": categoryID.String(),
+		"startDate":  start.Format("2006-01-02"),
+		"endDate":    end.Format("2006-01-02"),
+	}
+
+	expenses, _, err := s.transactionRepo.ListByUserID(ctx, userID, 1000, 0, filters)
+	if err != nil {
+		return
+	}
+
+	var totalExpense float64
+	for _, e := range expenses {
+		totalExpense += e.Amount
+	}
+
+	var alertType string
+	var message string
+	ratio := totalExpense / budget.Amount
+	if ratio >= 1.0 {
+		alertType = "over_limit"
+		message = "Bạn đã vượt hạn mức chi tiêu của danh mục này!"
+	} else if ratio >= 0.8 {
+		alertType = "approaching_limit"
+		message = "Chi tiêu của bạn đã đạt trên 80% ngân sách danh mục này."
+	}
+
+	if alertType != "" {
+		alert := &model.Alert{
+			UserID:    userID,
+			BudgetID:  budget.ID,
+			AlertType: alertType,
+			Message:   message,
+		}
+		_ = s.alertRepo.Create(ctx, alert)
 	}
 }
