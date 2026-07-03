@@ -2,10 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/response"
 	"go.uber.org/zap"
 )
@@ -23,35 +21,7 @@ func NewErrorHandler(logger *zap.Logger) *ErrorHandler {
 }
 
 // HandleError processes errors and sends appropriate HTTP responses
-func (e *ErrorHandler) HandleError(w http.ResponseWriter, err error, operation string) {
-	var statusCode int
-	var message string
-
-	// Determine status code and message based on error type
-	switch {
-	case errors.Is(err, constant.ErrNotFound):
-		statusCode = http.StatusNotFound
-		message = "Resource not found"
-	case errors.Is(err, constant.ErrUnauthorized):
-		statusCode = http.StatusUnauthorized
-		message = "Unauthorized access"
-	case errors.Is(err, constant.ErrInvalidCredentials):
-		statusCode = http.StatusUnauthorized
-		message = "Invalid email or password"
-	case errors.Is(err, constant.ErrInvalidInput):
-		statusCode = http.StatusBadRequest
-		message = "Invalid input provided"
-	case errors.Is(err, constant.ErrEmailAlreadyExists):
-		statusCode = http.StatusConflict
-		message = "Email already exists"
-	case errors.Is(err, constant.ErrUsernameTaken):
-		statusCode = http.StatusConflict
-		message = "Username already taken"
-	default:
-		statusCode = http.StatusInternalServerError
-		message = "Internal server error"
-	}
-
+func (e *ErrorHandler) HandleError(w http.ResponseWriter, err error, statusCode int, message string, operation string) {
 	// Log the error with context
 	e.logger.Error("operation failed",
 		zap.String("operation", operation),

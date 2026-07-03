@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/service"
@@ -48,20 +50,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Authenticate user
 	user, err := h.svc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "login")
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Invalid email or password", "login")
 		return
 	}
 
 	// Generate JWT token
 	token, err := util.GenerateToken(user)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "login_token_generation")
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to generate session token", "login_token_generation")
 		return
 	}
 
 	// Prepare and send loginResponse
 	loginResponse := dto.LoginResponse{
-		User:  user,
+		User:  dto.NewUserResponse(user),
 		Token: token,
 	}
 
@@ -94,7 +96,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	createdUser, err := h.svc.Register(r.Context(), user)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "register")
+		if errors.Is(err, constant.ErrEmailAlreadyExists) {
+			h.errorHandler.HandleError(w, err, http.StatusConflict, "Email already exists", "register")
+		} else if errors.Is(err, constant.ErrUsernameTaken) {
+			h.errorHandler.HandleError(w, err, http.StatusConflict, "Username already taken", "register")
+		} else {
+			h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to create user", "register")
+		}
 		return
 	}
 
@@ -114,7 +122,7 @@ func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	// Get user from context
 	user, err := GetUserFromContext(r)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "whoami")
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "whoami")
 		return
 	}
 

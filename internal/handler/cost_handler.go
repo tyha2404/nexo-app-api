@@ -44,7 +44,7 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Get user from context
 	user, err := GetUserFromContext(r)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_create")
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "cost_create")
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	createdCost, err := h.svc.Create(r.Context(), cost)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_create")
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to create cost", "cost_create")
 		return
 	}
 
@@ -87,25 +87,25 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user
 	user, err := GetUserFromContext(r)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_get")
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "cost_get")
 		return
 	}
 
 	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_get")
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid cost ID", "cost_get")
 		return
 	}
 
 	cost, err := h.svc.Get(r.Context(), id)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_get")
+		h.errorHandler.HandleError(w, err, http.StatusNotFound, "Cost not found", "cost_get")
 		return
 	}
 
 	// Verify user has access to this cost
 	if cost.UserID != user.ID {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, "cost_get")
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusForbidden, "Forbidden access", "cost_get")
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user
 	user, err := GetUserFromContext(r)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_list")
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "cost_list")
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	costs, err := h.svc.ListWithCategory(r.Context(), user.ID, limit, offset, filters)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_list")
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to list costs", "cost_list")
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_update")
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid cost ID", "cost_update")
 		return
 	}
 
@@ -177,7 +177,7 @@ func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	updatedCost, err := h.svc.Update(r.Context(), &req)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_update")
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to update cost", "cost_update")
 		return
 	}
 
@@ -198,12 +198,12 @@ func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *CostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		h.errorHandler.HandleError(w, err, "cost_delete")
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid cost ID", "cost_delete")
 		return
 	}
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		h.errorHandler.HandleError(w, err, "cost_delete")
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to delete cost", "cost_delete")
 		return
 	}
 

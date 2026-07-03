@@ -1,21 +1,57 @@
 package repository
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"gorm.io/gorm"
 )
 
 type CategoryRepo interface {
-	BaseRepo[model.Category]
+	Create(ctx context.Context, category *model.Category) error
+	GetByID(ctx context.Context, id uuid.UUID) (*model.Category, error)
+	List(ctx context.Context, limit, offset int) ([]model.Category, error)
+	Update(ctx context.Context, category *model.Category) error
+	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type categoryRepo struct {
-	*GormBaseRepo[model.Category, uuid.UUID]
+	db *gorm.DB
 }
 
 func NewCategoryRepo(db *gorm.DB) CategoryRepo {
-	return &categoryRepo{
-		GormBaseRepo: NewGormBaseRepo[model.Category, uuid.UUID](db),
+	return &categoryRepo{db: db}
+}
+
+func (r *categoryRepo) Create(ctx context.Context, category *model.Category) error {
+	return r.db.WithContext(ctx).Create(category).Error
+}
+
+func (r *categoryRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Category, error) {
+	var category model.Category
+	err := r.db.WithContext(ctx).First(&category, "id = ?", id).Error
+	if err != nil {
+		return nil, err
 	}
+	return &category, nil
+}
+
+func (r *categoryRepo) List(ctx context.Context, limit, offset int) ([]model.Category, error) {
+	var categories []model.Category
+	err := r.db.WithContext(ctx).Limit(limit).Offset(offset).Find(&categories).Error
+	return categories, err
+}
+
+func (r *categoryRepo) Update(ctx context.Context, category *model.Category) error {
+	return r.db.WithContext(ctx).Save(category).Error
+}
+
+func (r *categoryRepo) UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).Model(&model.Category{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *categoryRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&model.Category{}, "id = ?", id).Error
 }

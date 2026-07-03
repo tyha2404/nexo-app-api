@@ -2,10 +2,7 @@ package router
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/tyha2404/nexo-app-api/internal/handler"
 	"github.com/tyha2404/nexo-app-api/internal/middleware"
-	"github.com/tyha2404/nexo-app-api/internal/repository"
-	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -14,39 +11,20 @@ import (
 func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
 
-	// Add logging middleware to log query strings
+	// Add logging and CORS middleware
+	r.Use(middleware.CorsMiddleware)
 	r.Use(middleware.LoggingMiddleware(logger))
 
-	// Initialize repositories
-	userRepo := repository.NewUserRepo(db)
-	categoryRepo := repository.NewCategoryRepo(db)
-	costRepo := repository.NewCostRepo(db)
-	transactionRepo := repository.NewTransactionRepository(db)
+	// Initialize dependency container
+	container := NewContainer(db, logger)
 
-	// Initialize services
-	authService := service.NewAuthService(userRepo)
-	userService := service.NewUserService(userRepo)
-	categoryService := service.NewCategoryService(categoryRepo)
-	costService := service.NewCostService(costRepo)
-	transactionService := service.NewTransactionService(transactionRepo, categoryRepo)
-
-	// Initialize handlers
-	healthHandler := handler.NewHealthHandler(db, logger)
-	authHandler := handler.NewAuthHandler(authService, logger)
-	userHandler := handler.NewUserHandler(userService, logger)
-	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
-	costHandler := handler.NewCostHandler(costService, logger)
-	transactionHandler := handler.NewTransactionHandler(transactionService, logger)
-
-	// Initialize routers
-	healthRouter := NewHealthRouter(healthHandler)
-	authRouter := NewAuthRouter(authHandler, logger)
-	userRouter := NewUserRouter(userHandler, logger)
-	categoryRouter := NewCategoryRouter(categoryHandler, logger)
-	costRouter := NewCostRouter(costHandler, logger)
-	transactionRouter := NewTransactionRouter(transactionHandler, middleware.AuthMiddleware)
-
-	// Register health check routes (outside API versioning)
+	// Initialize routers using handlers from the container
+	healthRouter := NewHealthRouter(container.HealthHandler)
+	authRouter := NewAuthRouter(container.AuthHandler, logger)
+	userRouter := NewUserRouter(container.UserHandler, logger)
+	categoryRouter := NewCategoryRouter(container.CategoryHandler, logger)
+	costRouter := NewCostRouter(container.CostHandler, logger)
+	transactionRouter := NewTransactionRouter(container.TransactionHandler, middleware.AuthMiddleware)
 
 	// Register all routes
 	r.Route("/api/v1", func(apiRouter chi.Router) {

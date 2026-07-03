@@ -47,6 +47,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			ID:       claims.ID,
 			Email:    claims.Email,
 			Username: claims.Username,
+			Role:     claims.Role,
 		}
 
 		// Store the user in context

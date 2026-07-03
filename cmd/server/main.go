@@ -69,4 +69,11 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		logg.Sugar().Fatalf("server forced to shutdown: %v", err)
 	}
+
+	// Close Database connection pool
+	sqlDB, err := gormDB.DB()
+	if err == nil {
+		logg.Sugar().Info("closing database connections...")
+		_ = sqlDB.Close()
+	}
 }

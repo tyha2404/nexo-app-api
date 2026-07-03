@@ -25,6 +25,7 @@ type Claims struct {
 	ID       uuid.UUID `json:"userId"`
 	Username string    `json:"username"`
 	Email    string    `json:"email"`
+	Role     string    `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -40,6 +41,7 @@ func GenerateToken(user *model.User) (string, error) {
 		ID:       user.ID,
 		Username: user.Username,
 		Email:    user.Email,
+		Role:     user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
