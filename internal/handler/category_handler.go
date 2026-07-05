@@ -54,6 +54,7 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	category := &model.Category{
 		Name:        req.Name,
+		Type:        model.CategoryType(req.Type),
 		Description: req.Description,
 		UserID:      user.ID,
 	}
@@ -200,6 +201,9 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	updates := make(map[string]interface{})
 	if req.Name != nil {
 		updates["name"] = *req.Name
+	}
+	if req.Type != nil {
+		updates["type"] = *req.Type
 	}
 	if req.Description != nil {
 		updates["description"] = *req.Description

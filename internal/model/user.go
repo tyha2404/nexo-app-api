@@ -48,3 +48,31 @@ func (u *User) HashPassword() error {
 func (u *User) CheckPassword(password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
 }
+
+// AfterCreate GORM Hook to automatically seed default categories for a new user
+func (u *User) AfterCreate(tx *gorm.DB) error {
+	defaultCategories := []Category{
+		{Name: "Ăn uống", Type: CategoryTypeExpense, Description: strPtr("Chi tiêu cho thực phẩm, ăn uống hàng ngày")},
+		{Name: "Di chuyển", Type: CategoryTypeExpense, Description: strPtr("Chi phí đi lại, xăng xe, dịch vụ vận chuyển")},
+		{Name: "Nhà cửa", Type: CategoryTypeExpense, Description: strPtr("Tiền thuê nhà, hóa đơn điện nước và dịch vụ")},
+		{Name: "Giải trí", Type: CategoryTypeExpense, Description: strPtr("Xem phim, mua sắm giải trí, du lịch")},
+		{Name: "Y tế & Sức khỏe", Type: CategoryTypeExpense, Description: strPtr("Khám bệnh, thuốc men, tập thể dục")},
+		{Name: "Giáo dục", Type: CategoryTypeExpense, Description: strPtr("Học phí, sách vở, khóa học phát triển")},
+		{Name: "Lương", Type: CategoryTypeIncome, Description: strPtr("Thu nhập từ lương công việc chính")},
+		{Name: "Thưởng", Type: CategoryTypeIncome, Description: strPtr("Tiền thưởng hiệu suất, thưởng tháng 13")},
+		{Name: "Đầu tư", Type: CategoryTypeIncome, Description: strPtr("Lợi nhuận từ cổ phiếu, tiền gửi tiết kiệm")},
+		{Name: "Khác", Type: CategoryTypeIncome, Description: strPtr("Các nguồn thu nhập vãng lai khác")},
+	}
+
+	for _, cat := range defaultCategories {
+		cat.UserID = u.ID
+		if err := tx.Create(&cat).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func strPtr(s string) *string {
+	return &s
+}

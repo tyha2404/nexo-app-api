@@ -1162,7 +1162,8 @@ const docTemplate = `{
         "dto.CreateCategoryRequest": {
             "type": "object",
             "required": [
-                "name"
+                "name",
+                "type"
             ],
             "properties": {
                 "description": {
@@ -1175,6 +1176,14 @@ const docTemplate = `{
                     "maxLength": 50,
                     "minLength": 1,
                     "example": "Food"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "INCOME",
+                        "EXPENSE"
+                    ],
+                    "example": "EXPENSE"
                 }
             }
         },
@@ -1406,6 +1415,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "type": {
+                    "$ref": "#/definitions/model.CategoryType"
+                },
                 "updatedAt": {
                     "type": "string"
                 },
@@ -1416,6 +1428,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "model.CategoryType": {
+            "type": "string",
+            "enum": [
+                "INCOME",
+                "EXPENSE"
+            ],
+            "x-enum-varnames": [
+                "CategoryTypeIncome",
+                "CategoryTypeExpense"
+            ]
         },
         "model.Cost": {
             "type": "object",

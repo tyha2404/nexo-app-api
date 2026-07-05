@@ -50,6 +50,10 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		return nil, errors.New("unauthorized access to category")
 	}
 
+	if string(category.Type) != string(req.Type) {
+		return nil, errors.New("transaction type does not match category type")
+	}
+
 	transaction := &model.Transaction{
 		UserID:          userID,
 		CategoryID:      req.CategoryID,
@@ -120,8 +124,24 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 		if category.UserID != userID {
 			return nil, errors.New("unauthorized access to category")
 		}
+
+		expectedType := transaction.Type
+		if req.Type != nil {
+			expectedType = model.TransactionType(*req.Type)
+		}
+		if string(category.Type) != string(expectedType) {
+			return nil, errors.New("transaction type does not match category type")
+		}
+
 		transaction.CategoryID = *req.CategoryID
 		transaction.Category = category
+	} else if req.Type != nil {
+		category, err := s.categoryRepo.GetByID(ctx, transaction.CategoryID)
+		if err == nil {
+			if string(category.Type) != *req.Type {
+				return nil, errors.New("transaction type does not match category type")
+			}
+		}
 	}
 
 	if req.Amount != nil {

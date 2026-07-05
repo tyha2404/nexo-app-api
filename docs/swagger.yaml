@@ -11,8 +11,15 @@ definitions:
         maxLength: 50
         minLength: 1
         type: string
+      type:
+        enum:
+        - INCOME
+        - EXPENSE
+        example: EXPENSE
+        type: string
     required:
     - name
+    - type
     type: object
   dto.CreateCostRequest:
     type: object
@@ -180,6 +187,8 @@ definitions:
         type: string
       name:
         type: string
+      type:
+        $ref: '#/definitions/model.CategoryType'
       updatedAt:
         type: string
       user:
@@ -187,6 +196,14 @@ definitions:
       userId:
         type: string
     type: object
+  model.CategoryType:
+    enum:
+    - INCOME
+    - EXPENSE
+    type: string
+    x-enum-varnames:
+    - CategoryTypeIncome
+    - CategoryTypeExpense
   model.Cost:
     properties:
       amount:
