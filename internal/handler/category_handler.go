@@ -126,14 +126,24 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
+// @Param type query string false "Category Type (INCOME, EXPENSE)"
 // @Success 200 {array} model.Category
 // @Failure 500 {string} string "Failed to list categories"
 // @Router /categories [get]
 func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
+	// Get user from context
+	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+	if !ok || user.ID == uuid.Nil {
+		h.log.Error("User ID not found in context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	categoryType := r.URL.Query().Get("type")
 
-	limit := 10
+	limit := 0 // Default to 0 (no limit) to retrieve the full list
 	offset := 0
 
 	if limitStr != "" {
@@ -148,7 +158,7 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	categories, err := h.svc.List(r.Context(), limit, offset)
+	categories, err := h.svc.List(r.Context(), user.ID, categoryType, limit, offset)
 	if err != nil {
 		h.log.Error("failed to list categories", zap.Error(err))
 		http.Error(w, "Failed to list categories", http.StatusInternalServerError)

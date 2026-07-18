@@ -370,6 +370,10 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Category Type (INCOME, EXPENSE)
+        in: query
+        name: type
+        type: string
       produces:
       - application/json
       responses:

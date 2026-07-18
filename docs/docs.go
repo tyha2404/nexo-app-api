@@ -171,6 +171,12 @@ const docTemplate = `{
                         "description": "Offset",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category Type (INCOME, EXPENSE)",
+                        "name": "type",
+                        "in": "query"
                     }
                 ],
                 "responses": {
