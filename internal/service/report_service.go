@@ -57,10 +57,27 @@ func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startD
 		totalExpense += exp.Amount
 	}
 
+	// 3. Fetch Investment transactions
+	investmentFilters := map[string]interface{}{
+		"type":      string(model.TransactionTypeInvestment),
+		"startDate": startDate,
+		"endDate":   endDate,
+	}
+	investments, _, err := s.transactionRepo.ListByUserID(ctx, userID, 10000, 0, investmentFilters)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalInvestment float64
+	for _, inv := range investments {
+		totalInvestment += inv.Amount
+	}
+
 	return &dto.SummaryReport{
-		TotalIncome:  totalIncome,
-		TotalExpense: totalExpense,
-		NetBalance:   totalIncome - totalExpense,
+		TotalIncome:     totalIncome,
+		TotalExpense:    totalExpense,
+		TotalInvestment: totalInvestment,
+		NetBalance:      totalIncome - totalExpense,
 	}, nil
 }
 

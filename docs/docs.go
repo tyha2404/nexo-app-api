@@ -1187,7 +1187,8 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "INCOME",
-                        "EXPENSE"
+                        "EXPENSE",
+                        "INVESTMENT"
                     ],
                     "example": "EXPENSE"
                 }
@@ -1226,7 +1227,8 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "INCOME",
-                        "EXPENSE"
+                        "EXPENSE",
+                        "INVESTMENT"
                     ],
                     "example": "EXPENSE"
                 }
@@ -1372,7 +1374,8 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "INCOME",
-                        "EXPENSE"
+                        "EXPENSE",
+                        "INVESTMENT"
                     ],
                     "example": "INCOME"
                 }
@@ -1439,11 +1442,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "INCOME",
-                "EXPENSE"
+                "EXPENSE",
+                "INVESTMENT"
             ],
             "x-enum-varnames": [
                 "CategoryTypeIncome",
-                "CategoryTypeExpense"
+                "CategoryTypeExpense",
+                "CategoryTypeInvestment"
             ]
         },
         "model.Cost": {

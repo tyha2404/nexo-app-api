@@ -15,6 +15,7 @@ definitions:
         enum:
         - INCOME
         - EXPENSE
+        - INVESTMENT
         example: EXPENSE
         type: string
     required:
@@ -42,6 +43,7 @@ definitions:
         enum:
         - INCOME
         - EXPENSE
+        - INVESTMENT
         example: EXPENSE
         type: string
     required:
@@ -154,6 +156,7 @@ definitions:
         enum:
         - INCOME
         - EXPENSE
+        - INVESTMENT
         example: INCOME
         type: string
     type: object
@@ -200,10 +203,12 @@ definitions:
     enum:
     - INCOME
     - EXPENSE
+    - INVESTMENT
     type: string
     x-enum-varnames:
     - CategoryTypeIncome
     - CategoryTypeExpense
+    - CategoryTypeInvestment
   model.Cost:
     properties:
       amount:

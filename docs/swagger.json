@@ -1180,7 +1180,8 @@
                     "type": "string",
                     "enum": [
                         "INCOME",
-                        "EXPENSE"
+                        "EXPENSE",
+                        "INVESTMENT"
                     ],
                     "example": "EXPENSE"
                 }
@@ -1219,7 +1220,8 @@
                     "type": "string",
                     "enum": [
                         "INCOME",
-                        "EXPENSE"
+                        "EXPENSE",
+                        "INVESTMENT"
                     ],
                     "example": "EXPENSE"
                 }
@@ -1365,7 +1367,8 @@
                     "type": "string",
                     "enum": [
                         "INCOME",
-                        "EXPENSE"
+                        "EXPENSE",
+                        "INVESTMENT"
                     ],
                     "example": "INCOME"
                 }
@@ -1432,11 +1435,13 @@
             "type": "string",
             "enum": [
                 "INCOME",
-                "EXPENSE"
+                "EXPENSE",
+                "INVESTMENT"
             ],
             "x-enum-varnames": [
                 "CategoryTypeIncome",
-                "CategoryTypeExpense"
+                "CategoryTypeExpense",
+                "CategoryTypeInvestment"
             ]
         },
         "model.Cost": {

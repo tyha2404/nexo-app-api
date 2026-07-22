@@ -3,9 +3,10 @@ package dto
 import "github.com/google/uuid"
 
 type SummaryReport struct {
-	TotalIncome  float64 `json:"totalIncome"`
-	TotalExpense float64 `json:"totalExpense"`
-	NetBalance   float64 `json:"netBalance"`
+	TotalIncome      float64 `json:"totalIncome"`
+	TotalExpense     float64 `json:"totalExpense"`
+	TotalInvestment  float64 `json:"totalInvestment"`
+	NetBalance       float64 `json:"netBalance"`
 }
 
 type CategoryBreakdownItem struct {

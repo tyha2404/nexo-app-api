@@ -10,8 +10,9 @@ import (
 type TransactionType string
 
 const (
-	TransactionTypeIncome  TransactionType = "INCOME"
-	TransactionTypeExpense TransactionType = "EXPENSE"
+	TransactionTypeIncome     TransactionType = "INCOME"
+	TransactionTypeExpense    TransactionType = "EXPENSE"
+	TransactionTypeInvestment TransactionType = "INVESTMENT"
 )
 
 type Transaction struct {
@@ -19,7 +20,7 @@ type Transaction struct {
 	UserID          uuid.UUID       `gorm:"type:uuid;not null;index" json:"userId"`
 	CategoryID      uuid.UUID       `gorm:"type:uuid;not null;index" json:"categoryId"`
 	Amount          float64         `gorm:"type:numeric(15,2);not null" json:"amount"`
-	Type            TransactionType `gorm:"type:varchar(10);not null;check:type IN ('INCOME', 'EXPENSE')" json:"type"`
+	Type            TransactionType `gorm:"type:varchar(10);not null;check:type IN ('INCOME', 'EXPENSE', 'INVESTMENT')" json:"type"`
 	Description     *string         `gorm:"type:text" json:"description,omitempty"`
 	TransactionDate time.Time       `gorm:"type:date;not null;index:idx_user_transaction_date" json:"transactionDate"`
 	CreatedAt       time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
