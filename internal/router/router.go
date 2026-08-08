@@ -28,6 +28,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	budgetRouter := NewBudgetRouter(container.BudgetHandler)
 	alertRouter := NewAlertRouter(container.AlertHandler)
 	reportRouter := NewReportRouter(container.ReportHandler)
+	targetRouter := NewTargetRouter(container.TargetHandler)
 
 	// Register all routes
 	r.Route("/api/v1", func(apiRouter chi.Router) {
@@ -40,6 +41,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 		budgetRouter.RegisterRoutes(apiRouter)
 		alertRouter.RegisterRoutes(apiRouter)
 		reportRouter.RegisterRoutes(apiRouter)
+		targetRouter.RegisterRoutes(apiRouter)
 	})
 
 	// Register Swagger UI route
