@@ -12,6 +12,7 @@ type CategoryService interface {
 	Create(ctx context.Context, category *model.Category) (*model.Category, error)
 	Get(ctx context.Context, id uuid.UUID) (*model.Category, error)
 	List(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, error)
+	ListWithTotal(ctx context.Context, userID uuid.UUID, categoryType string, page, limit int) ([]model.Category, int64, error)
 	Update(ctx context.Context, category *model.Category) (*model.Category, error)
 	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -44,6 +45,14 @@ func (s *categoryService) Get(ctx context.Context, id uuid.UUID) (*model.Categor
 
 func (s *categoryService) List(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, error) {
 	return s.repo.List(ctx, userID, categoryType, limit, offset)
+}
+
+func (s *categoryService) ListWithTotal(ctx context.Context, userID uuid.UUID, categoryType string, page, limit int) ([]model.Category, int64, error) {
+	offset := 0
+	if page > 1 && limit > 0 {
+		offset = (page - 1) * limit
+	}
+	return s.repo.ListWithTotal(ctx, userID, categoryType, limit, offset)
 }
 
 func (s *categoryService) Update(ctx context.Context, category *model.Category) (*model.Category, error) {

@@ -139,26 +139,35 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limitStr := r.URL.Query().Get("limit")
-	offsetStr := r.URL.Query().Get("offset")
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	categoryType := r.URL.Query().Get("type")
 
-	limit := 0 // Default to 0 (no limit) to retrieve the full list
-	offset := 0
-
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	// If page or limit not provided, allow limit = 0 (fetch all) or handle default
+	if page < 1 && limit > 0 {
+		page = 1
 	}
 
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
+	var categories []model.Category
+	var total int64
+	var err error
+
+	if page > 0 || limit > 0 {
+		if page < 1 {
+			page = 1
 		}
+		if limit < 1 {
+			limit = 10
+		}
+		categories, total, err = h.svc.ListWithTotal(r.Context(), user.ID, categoryType, page, limit)
+	} else {
+		// Fallback for full list fetching without pagination parameters
+		categories, err = h.svc.List(r.Context(), user.ID, categoryType, 0, 0)
+		total = int64(len(categories))
+		page = 1
+		limit = len(categories)
 	}
 
-	categories, err := h.svc.List(r.Context(), user.ID, categoryType, limit, offset)
 	if err != nil {
 		h.log.Error("failed to list categories", zap.Error(err))
 		http.Error(w, "Failed to list categories", http.StatusInternalServerError)
@@ -170,8 +179,8 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 		Status:  http.StatusOK,
 		Success: true,
 		Items:   categories,
-		Total:   len(categories),
-		Page:    offset,
+		Total:   int(total),
+		Page:    page,
 		Limit:   limit,
 	}); err != nil {
 		h.log.Error("failed to encode response", zap.Error(err))

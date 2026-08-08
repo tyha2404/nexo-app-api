@@ -12,6 +12,7 @@ type CategoryRepo interface {
 	Create(ctx context.Context, category *model.Category) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Category, error)
 	List(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, error)
+	ListWithTotal(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, int64, error)
 	Update(ctx context.Context, category *model.Category) error
 	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -52,6 +53,26 @@ func (r *categoryRepo) List(ctx context.Context, userID uuid.UUID, categoryType 
 	}
 	err := query.Find(&categories).Error
 	return categories, err
+}
+
+func (r *categoryRepo) ListWithTotal(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, int64, error) {
+	var categories []model.Category
+	var total int64
+	query := r.db.WithContext(ctx).Model(&model.Category{}).Where("user_id = ?", userID)
+	if categoryType != "" {
+		query = query.Where("type = ?", categoryType)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	err := query.Find(&categories).Error
+	return categories, total, err
 }
 
 func (r *categoryRepo) Update(ctx context.Context, category *model.Category) error {
