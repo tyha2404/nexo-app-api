@@ -77,7 +77,7 @@ func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startD
 		TotalIncome:     totalIncome,
 		TotalExpense:    totalExpense,
 		TotalInvestment: totalInvestment,
-		NetBalance:      totalIncome - totalExpense,
+		NetBalance:      totalIncome - totalExpense - totalInvestment,
 	}, nil
 }
 

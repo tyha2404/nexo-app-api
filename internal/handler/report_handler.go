@@ -25,9 +25,10 @@ func (h *ReportHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 
 	startDate := r.URL.Query().Get("startDate")
 	endDate := r.URL.Query().Get("endDate")
+	rangeParam := r.URL.Query().Get("range")
+	allTime := r.URL.Query().Get("allTime")
 
-	if startDate == "" || endDate == "" {
-		rangeParam := r.URL.Query().Get("range")
+	if allTime != "true" && rangeParam != "all" && (startDate == "" || endDate == "") {
 		startDate, endDate = parseRange(rangeParam)
 	}
 
