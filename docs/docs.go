@@ -1198,41 +1198,7 @@ const docTemplate = `{
             "type": "object"
         },
         "dto.CreateTransactionRequest": {
-            "type": "object",
-            "required": [
-                "amount",
-                "categoryId",
-                "transactionDate",
-                "type"
-            ],
-            "properties": {
-                "amount": {
-                    "type": "number",
-                    "example": 100.5
-                },
-                "categoryId": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "example": "Grocery shopping"
-                },
-                "transactionDate": {
-                    "type": "string",
-                    "example": "2024-01-15T00:00:00Z"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "INCOME",
-                        "EXPENSE",
-                        "INVESTMENT"
-                    ],
-                    "example": "EXPENSE"
-                }
-            }
+            "type": "object"
         },
         "dto.CustomTime": {
             "type": "object",
@@ -1351,35 +1317,7 @@ const docTemplate = `{
             }
         },
         "dto.UpdateTransactionRequest": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number",
-                    "example": 150
-                },
-                "categoryId": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "example": "Updated description"
-                },
-                "transactionDate": {
-                    "type": "string",
-                    "example": "2024-01-20T00:00:00Z"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "INCOME",
-                        "EXPENSE",
-                        "INVESTMENT"
-                    ],
-                    "example": "INCOME"
-                }
-            }
+            "type": "object"
         },
         "dto.UserResponse": {
             "type": "object",

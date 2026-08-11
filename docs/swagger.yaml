@@ -25,32 +25,6 @@ definitions:
   dto.CreateCostRequest:
     type: object
   dto.CreateTransactionRequest:
-    properties:
-      amount:
-        example: 100.5
-        type: number
-      categoryId:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      description:
-        example: Grocery shopping
-        maxLength: 500
-        type: string
-      transactionDate:
-        example: "2024-01-15T00:00:00Z"
-        type: string
-      type:
-        enum:
-        - INCOME
-        - EXPENSE
-        - INVESTMENT
-        example: EXPENSE
-        type: string
-    required:
-    - amount
-    - categoryId
-    - transactionDate
-    - type
     type: object
   dto.CustomTime:
     properties:
@@ -138,27 +112,6 @@ definitions:
         type: string
     type: object
   dto.UpdateTransactionRequest:
-    properties:
-      amount:
-        example: 150
-        type: number
-      categoryId:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      description:
-        example: Updated description
-        maxLength: 500
-        type: string
-      transactionDate:
-        example: "2024-01-20T00:00:00Z"
-        type: string
-      type:
-        enum:
-        - INCOME
-        - EXPENSE
-        - INVESTMENT
-        example: INCOME
-        type: string
     type: object
   dto.UserResponse:
     properties:

@@ -60,7 +60,7 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		Amount:          req.Amount,
 		Type:            model.TransactionType(req.Type),
 		Description:     req.Description,
-		TransactionDate: req.TransactionDate,
+		TransactionDate: req.TransactionDate.Time,
 	}
 
 	if err := s.transactionRepo.Create(ctx, transaction); err != nil {
@@ -154,7 +154,7 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 		transaction.Description = req.Description
 	}
 	if req.TransactionDate != nil {
-		transaction.TransactionDate = *req.TransactionDate
+		transaction.TransactionDate = req.TransactionDate.Time
 	}
 
 	if err := s.transactionRepo.Update(ctx, transaction); err != nil {
