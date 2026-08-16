@@ -31,7 +31,7 @@ type Transaction struct {
 	Amount          float64          `gorm:"type:numeric(15,2);not null" json:"amount"`
 	Type            TransactionType  `gorm:"type:varchar(10);not null;check:type IN ('INCOME', 'EXPENSE', 'INVESTMENT')" json:"type"`
 	Status          *InvestmentStatus `gorm:"type:varchar(20);default:'HOLDING'" json:"status,omitempty"`
-	RealizedPnL     *float64         `gorm:"type:numeric(15,2);default:0.00" json:"realizedPnl,omitempty"`
+	RealizedPnL     *float64         `gorm:"column:realized_pnl;type:numeric(15,2);default:0.00" json:"realizedPnl,omitempty"`
 	Description     *string          `gorm:"type:text" json:"description,omitempty"`
 	TransactionDate time.Time        `gorm:"type:date;not null;index:idx_user_transaction_date" json:"transactionDate"`
 	CreatedAt       time.Time        `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`

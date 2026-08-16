@@ -45,7 +45,7 @@ type TransactionSummaryDTO struct {
 	Total         int64   `json:"total"`
 	HoldingAmount float64 `json:"holdingAmount"`
 	HoldingCount  int64   `json:"holdingCount"`
-	RealizedPnL   float64 `json:"realizedPnL"`
+	RealizedPnL   float64 `json:"realizedPnl"`
 }
 
 

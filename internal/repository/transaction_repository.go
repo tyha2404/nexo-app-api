@@ -54,7 +54,11 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 
 	// Filter by Status
 	if st, ok := filters["status"].(string); ok && st != "" {
-		query = query.Where("status = ?", st)
+		if st == string(model.InvestmentStatusHolding) {
+			query = query.Where("status IS NULL OR status = ?", st)
+		} else {
+			query = query.Where("status = ?", st)
+		}
 	}
 
 	// Filter by CategoryID
@@ -93,56 +97,68 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 }
 
 func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error) {
-	query := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
-
-	if t, ok := filters["type"].(string); ok && t != "" {
-		query = query.Where("type = ?", t)
+	buildBaseQuery := func() *gorm.DB {
+		q := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
+		if t, ok := filters["type"].(string); ok && t != "" {
+			q = q.Where("type = ?", t)
+		}
+		if c, ok := filters["categoryId"].(string); ok && c != "" {
+			if catID, err := uuid.Parse(c); err == nil {
+				q = q.Where("category_id = ?", catID)
+			}
+		}
+		if s, ok := filters["startDate"].(string); ok && s != "" {
+			if t, err := time.Parse("2006-01-02", s); err == nil {
+				q = q.Where("transaction_date >= ?", t)
+			}
+		}
+		if e, ok := filters["endDate"].(string); ok && e != "" {
+			if t, err := time.Parse("2006-01-02", e); err == nil {
+				q = q.Where("transaction_date <= ?", t)
+			}
+		}
+		return q
 	}
 
-	if st, ok := filters["status"].(string); ok && st != "" {
-		query = query.Where("status = ?", st)
-	}
+	st, filterStatus := filters["status"].(string)
 
-	if c, ok := filters["categoryId"].(string); ok && c != "" {
-		if catID, err := uuid.Parse(c); err == nil {
-			query = query.Where("category_id = ?", catID)
+	// 1. Calculate filtered total and sumAmount
+	listQuery := buildBaseQuery()
+	if filterStatus && st != "" {
+		if st == string(model.InvestmentStatusHolding) {
+			listQuery = listQuery.Where("status IS NULL OR status = ?", st)
+		} else {
+			listQuery = listQuery.Where("status = ?", st)
 		}
 	}
 
-	if s, ok := filters["startDate"].(string); ok && s != "" {
-		if t, err := time.Parse("2006-01-02", s); err == nil {
-			query = query.Where("transaction_date >= ?", t)
-		}
-	}
-
-	if e, ok := filters["endDate"].(string); ok && e != "" {
-		if t, err := time.Parse("2006-01-02", e); err == nil {
-			query = query.Where("transaction_date <= ?", t)
-		}
-	}
-
-	if err := query.Count(&total).Error; err != nil {
+	if err := listQuery.Count(&total).Error; err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 
-	row := query.Select("COALESCE(SUM(amount), 0)").Row()
+	row := listQuery.Select("COALESCE(SUM(amount), 0)").Row()
 	if err := row.Scan(&sumAmount); err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 
-	// Calculate Holding metrics (status is NULL or HOLDING)
-	holdingQuery := query.Session(&gorm.Session{}).Where("status IS NULL OR status = ?", model.InvestmentStatusHolding)
-	if err := holdingQuery.Count(&holdingCount).Error; err != nil {
-		return 0, 0, 0, 0, 0, err
+	// 2. Calculate Holding metrics:
+	if filterStatus && st != "" && st != string(model.InvestmentStatusHolding) {
+		holdingAmount = 0
+		holdingCount = 0
+	} else {
+		holdingQuery := buildBaseQuery().Where("status IS NULL OR status = ?", model.InvestmentStatusHolding)
+		if err := holdingQuery.Count(&holdingCount).Error; err != nil {
+			return 0, 0, 0, 0, 0, err
+		}
+		holdingRow := holdingQuery.Select("COALESCE(SUM(amount), 0)").Row()
+		if err := holdingRow.Scan(&holdingAmount); err != nil {
+			return 0, 0, 0, 0, 0, err
+		}
 	}
 
-	holdingRow := holdingQuery.Select("COALESCE(SUM(amount), 0)").Row()
-	if err := holdingRow.Scan(&holdingAmount); err != nil {
-		return 0, 0, 0, 0, 0, err
-	}
-
-	// Calculate Realized PnL (status IS NOT NULL and status != HOLDING)
-	pnlRow := query.Session(&gorm.Session{}).Where("status IS NOT NULL AND status != ?", model.InvestmentStatusHolding).Select("COALESCE(SUM(realized_pnl), 0)").Row()
+	// 3. Calculate Realized PnL:
+	// Sum realized_pnl for all transactions (including SOLD, MATURED, CANCELLED, or any status with realized_pnl)
+	pnlRow := buildBaseQuery().Where("(status IS NOT NULL AND status != ?) OR realized_pnl != 0", model.InvestmentStatusHolding).Select("COALESCE(SUM(realized_pnl), 0)").Row()
 	if err := pnlRow.Scan(&realizedPnL); err != nil {
 		return 0, 0, 0, 0, 0, err
 	}

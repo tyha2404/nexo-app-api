@@ -133,7 +133,7 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 		limit = 10
 	}
 
-	filters := BuildFilterMap(r, []string{"type", "categoryId", "startDate", "endDate"})
+	filters := BuildFilterMap(r, []string{"type", "status", "categoryId", "startDate", "endDate"})
 
 	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
 	transactions, total, summary, err := h.transactionService.ListTransactions(r.Context(), userID, page, limit, filters)
