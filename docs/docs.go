@@ -1298,6 +1298,14 @@ const docTemplate = `{
                     "type": "string",
                     "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
+                "realizedPnl": {
+                    "type": "number",
+                    "example": 50
+                },
+                "status": {
+                    "type": "string",
+                    "example": "HOLDING"
+                },
                 "transactionDate": {
                     "type": "string",
                     "example": "2024-01-15T00:00:00Z"

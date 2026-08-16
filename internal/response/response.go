@@ -8,11 +8,13 @@ type BaseResponse[T any] struct {
 }
 
 type PaginationResponse[T any] struct {
-	Status  int    `json:"status"`
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Items   []T    `json:"items"`
-	Total   int    `json:"total"`
-	Page    int    `json:"page"`
-	Limit   int    `json:"limit"`
+	Status  int         `json:"status"`
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Items   []T         `json:"items"`
+	Total   int         `json:"total"`
+	Page    int         `json:"page"`
+	Limit   int         `json:"limit"`
+	Summary interface{} `json:"summary,omitempty"`
 }
+

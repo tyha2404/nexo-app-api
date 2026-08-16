@@ -136,7 +136,7 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 	filters := BuildFilterMap(r, []string{"type", "categoryId", "startDate", "endDate"})
 
 	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
-	transactions, total, err := h.transactionService.ListTransactions(r.Context(), userID, page, limit, filters)
+	transactions, total, summary, err := h.transactionService.ListTransactions(r.Context(), userID, page, limit, filters)
 	if err != nil {
 		h.log.Error("failed to list transactions", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -151,6 +151,7 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 		Total:   int(total),
 		Page:    page,
 		Limit:   limit,
+		Summary: summary,
 	})
 }
 

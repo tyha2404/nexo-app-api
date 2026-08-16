@@ -13,6 +13,7 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *model.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Transaction, error)
 	ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
+	GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error)
 	Update(ctx context.Context, transaction *model.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -51,6 +52,11 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 		query = query.Where("type = ?", t)
 	}
 
+	// Filter by Status
+	if st, ok := filters["status"].(string); ok && st != "" {
+		query = query.Where("status = ?", st)
+	}
+
 	// Filter by CategoryID
 	if c, ok := filters["categoryId"].(string); ok && c != "" {
 		if catID, err := uuid.Parse(c); err == nil {
@@ -84,6 +90,64 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 		Find(&transactions).Error
 
 	return transactions, total, err
+}
+
+func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error) {
+	query := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
+
+	if t, ok := filters["type"].(string); ok && t != "" {
+		query = query.Where("type = ?", t)
+	}
+
+	if st, ok := filters["status"].(string); ok && st != "" {
+		query = query.Where("status = ?", st)
+	}
+
+	if c, ok := filters["categoryId"].(string); ok && c != "" {
+		if catID, err := uuid.Parse(c); err == nil {
+			query = query.Where("category_id = ?", catID)
+		}
+	}
+
+	if s, ok := filters["startDate"].(string); ok && s != "" {
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			query = query.Where("transaction_date >= ?", t)
+		}
+	}
+
+	if e, ok := filters["endDate"].(string); ok && e != "" {
+		if t, err := time.Parse("2006-01-02", e); err == nil {
+			query = query.Where("transaction_date <= ?", t)
+		}
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+
+	row := query.Select("COALESCE(SUM(amount), 0)").Row()
+	if err := row.Scan(&sumAmount); err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+
+	// Calculate Holding metrics (status is NULL or HOLDING)
+	holdingQuery := query.Session(&gorm.Session{}).Where("status IS NULL OR status = ?", model.InvestmentStatusHolding)
+	if err := holdingQuery.Count(&holdingCount).Error; err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+
+	holdingRow := holdingQuery.Select("COALESCE(SUM(amount), 0)").Row()
+	if err := holdingRow.Scan(&holdingAmount); err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+
+	// Calculate Realized PnL (status IS NOT NULL and status != HOLDING)
+	pnlRow := query.Session(&gorm.Session{}).Where("status IS NOT NULL AND status != ?", model.InvestmentStatusHolding).Select("COALESCE(SUM(realized_pnl), 0)").Row()
+	if err := pnlRow.Scan(&realizedPnL); err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+
+	return sumAmount, total, holdingAmount, holdingCount, realizedPnL, nil
 }
 
 func (r *transactionRepository) Update(ctx context.Context, transaction *model.Transaction) error {

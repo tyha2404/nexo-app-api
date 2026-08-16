@@ -14,7 +14,7 @@ import (
 type TransactionService interface {
 	CreateTransaction(ctx context.Context, userID uuid.UUID, req dto.CreateTransactionRequest) (*dto.TransactionResponse, error)
 	GetTransaction(ctx context.Context, userID, id uuid.UUID) (*dto.TransactionResponse, error)
-	ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, error)
+	ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, *dto.TransactionSummaryDTO, error)
 	UpdateTransaction(ctx context.Context, userID, id uuid.UUID, req dto.UpdateTransactionRequest) (*dto.TransactionResponse, error)
 	DeleteTransaction(ctx context.Context, userID, id uuid.UUID) error
 }
@@ -67,13 +67,12 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		return nil, err
 	}
 
-	// Trigger budget limit verification if transaction is an Expense
-	if transaction.Type == model.TransactionTypeExpense {
-		s.checkBudgetLimit(ctx, userID, transaction.CategoryID, transaction.TransactionDate)
-	}
-
-	// Reload to get associations if needed (though we already have category)
 	transaction.Category = category
+
+	// Auto check budget alert if transaction is Expense
+	if transaction.Type == model.TransactionTypeExpense {
+		s.checkBudgetLimit(ctx, userID, req.CategoryID, req.TransactionDate.Time)
+	}
 
 	return s.toResponse(transaction), nil
 }
@@ -91,11 +90,16 @@ func (s *transactionService) GetTransaction(ctx context.Context, userID, id uuid
 	return s.toResponse(transaction), nil
 }
 
-func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, error) {
+func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, *dto.TransactionSummaryDTO, error) {
 	offset := (page - 1) * limit
 	transactions, total, err := s.transactionRepo.ListByUserID(ctx, userID, limit, offset, filters)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
+	}
+
+	sumAmount, count, holdingAmount, holdingCount, realizedPnL, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
+	if err != nil {
+		return nil, 0, nil, err
 	}
 
 	var responses []dto.TransactionResponse
@@ -103,7 +107,15 @@ func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.U
 		responses = append(responses, *s.toResponse(&t))
 	}
 
-	return responses, total, nil
+	summary := &dto.TransactionSummaryDTO{
+		SumAmount:     sumAmount,
+		Total:         count,
+		HoldingAmount: holdingAmount,
+		HoldingCount:  holdingCount,
+		RealizedPnL:   realizedPnL,
+	}
+
+	return responses, total, summary, nil
 }
 
 func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id uuid.UUID, req dto.UpdateTransactionRequest) (*dto.TransactionResponse, error) {
@@ -150,6 +162,13 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 	if req.Type != nil {
 		transaction.Type = model.TransactionType(*req.Type)
 	}
+	if req.Status != nil {
+		st := model.InvestmentStatus(*req.Status)
+		transaction.Status = &st
+	}
+	if req.RealizedPnL != nil {
+		transaction.RealizedPnL = req.RealizedPnL
+	}
 	if req.Description != nil {
 		transaction.Description = req.Description
 	}
@@ -194,6 +213,12 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		deletedAt = &formatted
 	}
 
+	var statusStr *string
+	if t.Status != nil {
+		st := string(*t.Status)
+		statusStr = &st
+	}
+
 	return &dto.TransactionResponse{
 		ID:              t.ID,
 		UserID:          t.UserID,
@@ -201,6 +226,8 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		CategoryName:    categoryName,
 		Amount:          t.Amount,
 		Type:            string(t.Type),
+		Status:          statusStr,
+		RealizedPnL:     t.RealizedPnL,
 		Description:     t.Description,
 		TransactionDate: t.TransactionDate.Format("2006-01-02"),
 		CreatedAt:       t.CreatedAt.Format(time.RFC3339),

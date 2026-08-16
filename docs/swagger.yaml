@@ -98,6 +98,12 @@ definitions:
       id:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
+      realizedPnl:
+        example: 50
+        type: number
+      status:
+        example: HOLDING
+        type: string
       transactionDate:
         example: "2024-01-15T00:00:00Z"
         type: string

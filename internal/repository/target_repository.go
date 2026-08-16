@@ -47,11 +47,15 @@ func (r *targetRepository) GetTarget(ctx context.Context, userID uuid.UUID, targ
 
 func (r *targetRepository) GetMonthlyTotalByCategoryType(ctx context.Context, userID uuid.UUID, catType model.CategoryType, startDate, endDate time.Time) (float64, error) {
 	var total float64
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Model(&model.Transaction{}).
 		Joins("JOIN categories ON categories.id = transactions.category_id").
-		Where("transactions.user_id = ? AND categories.type = ? AND transactions.transaction_date >= ? AND transactions.transaction_date <= ?", userID, catType, startDate, endDate).
-		Select("COALESCE(SUM(transactions.amount), 0)").
-		Scan(&total).Error
+		Where("transactions.user_id = ? AND categories.type = ? AND transactions.transaction_date >= ? AND transactions.transaction_date <= ?", userID, catType, startDate, endDate)
+
+	if catType == model.CategoryTypeInvestment {
+		query = query.Where("transactions.status IS NULL OR transactions.status = ?", model.InvestmentStatusHolding)
+	}
+
+	err := query.Select("COALESCE(SUM(transactions.amount), 0)").Scan(&total).Error
 	return total, err
 }

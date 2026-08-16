@@ -8,6 +8,8 @@ type CreateTransactionRequest struct {
 	CategoryID      uuid.UUID  `json:"categoryId" example:"550e8400-e29b-41d4-a716-446655440000" validate:"required,uuid"`
 	Amount          float64    `json:"amount" example:"100.50" validate:"required,gt=0"`
 	Type            string     `json:"type" example:"EXPENSE" validate:"required,oneof=INCOME EXPENSE INVESTMENT"`
+	Status          *string    `json:"status,omitempty" example:"HOLDING" validate:"omitempty,oneof=HOLDING SOLD MATURED CANCELLED"`
+	RealizedPnL     *float64   `json:"realizedPnl,omitempty" example:"50.00"`
 	Description     *string    `json:"description" example:"Grocery shopping" validate:"omitempty,max=500"`
 	TransactionDate CustomTime `json:"transactionDate" example:"2024-01-15T00:00:00Z" validate:"required"`
 }
@@ -16,6 +18,8 @@ type UpdateTransactionRequest struct {
 	CategoryID      *uuid.UUID  `json:"categoryId,omitempty" example:"550e8400-e29b-41d4-a716-446655440000" validate:"omitempty,uuid"`
 	Amount          *float64    `json:"amount,omitempty" example:"150.00" validate:"omitempty,gt=0"`
 	Type            *string     `json:"type,omitempty" example:"INCOME" validate:"omitempty,oneof=INCOME EXPENSE INVESTMENT"`
+	Status          *string     `json:"status,omitempty" example:"HOLDING" validate:"omitempty,oneof=HOLDING SOLD MATURED CANCELLED"`
+	RealizedPnL     *float64    `json:"realizedPnl,omitempty" example:"50.00"`
 	Description     *string     `json:"description,omitempty" example:"Updated description" validate:"omitempty,max=500"`
 	TransactionDate *CustomTime `json:"transactionDate,omitempty" example:"2024-01-20T00:00:00Z"`
 }
@@ -27,9 +31,21 @@ type TransactionResponse struct {
 	CategoryName    string     `json:"categoryName,omitempty" example:"Food"`
 	Amount          float64    `json:"amount" example:"100.50"`
 	Type            string     `json:"type" example:"EXPENSE"`
+	Status          *string    `json:"status,omitempty" example:"HOLDING"`
+	RealizedPnL     *float64   `json:"realizedPnl,omitempty" example:"50.00"`
 	Description     *string    `json:"description,omitempty" example:"Grocery shopping"`
 	TransactionDate string     `json:"transactionDate" example:"2024-01-15T00:00:00Z"`
 	CreatedAt       string     `json:"createdAt" example:"2024-01-15T00:00:00Z"`
 	UpdatedAt       string     `json:"updatedAt" example:"2024-01-15T00:00:00Z"`
 	DeletedAt       *string    `json:"deletedAt,omitempty" example:"2024-01-20T00:00:00Z"`
 }
+
+type TransactionSummaryDTO struct {
+	SumAmount     float64 `json:"sumAmount"`
+	Total         int64   `json:"total"`
+	HoldingAmount float64 `json:"holdingAmount"`
+	HoldingCount  int64   `json:"holdingCount"`
+	RealizedPnL   float64 `json:"realizedPnL"`
+}
+
+

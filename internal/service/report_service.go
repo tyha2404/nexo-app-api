@@ -70,7 +70,10 @@ func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startD
 
 	var totalInvestment float64
 	for _, inv := range investments {
-		totalInvestment += inv.Amount
+		// Only count HOLDING (or empty/legacy) as currently active invested money
+		if inv.Status == nil || *inv.Status == model.InvestmentStatusHolding {
+			totalInvestment += inv.Amount
+		}
 	}
 
 	return &dto.SummaryReport{
