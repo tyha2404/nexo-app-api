@@ -19,9 +19,10 @@ type Category struct {
 	ID          uuid.UUID    `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID      uuid.UUID    `gorm:"type:uuid;not null;index" json:"userId"`
 	Name        string       `gorm:"type:varchar(50);not null;index:idx_user_category_name,unique" json:"name"`
-	Type        CategoryType `gorm:"type:varchar(10);not null;default:'EXPENSE';check:type IN ('INCOME', 'EXPENSE', 'INVESTMENT')" json:"type"`
-	Description *string      `gorm:"type:text" json:"description,omitempty"`
-	CreatedAt   time.Time    `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	Type                    CategoryType `gorm:"type:varchar(10);not null;default:'EXPENSE';check:type IN ('INCOME', 'EXPENSE', 'INVESTMENT')" json:"type"`
+	Description             *string      `gorm:"type:text" json:"description,omitempty"`
+	ExcludeFromAverageDaily bool         `gorm:"type:boolean;not null;default:false" json:"excludeFromAverageDaily"`
+	CreatedAt               time.Time    `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt   time.Time    `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
 	DeletedAt   DeletedAt    `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 

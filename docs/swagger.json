@@ -1170,6 +1170,10 @@
                     "maxLength": 500,
                     "example": "Food and groceries"
                 },
+                "excludeFromAverageDaily": {
+                    "type": "boolean",
+                    "example": false
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 50,
@@ -1356,6 +1360,9 @@
                 },
                 "description": {
                     "type": "string"
+                },
+                "excludeFromAverageDaily": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "string"

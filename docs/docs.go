@@ -1177,6 +1177,10 @@ const docTemplate = `{
                     "maxLength": 500,
                     "example": "Food and groceries"
                 },
+                "excludeFromAverageDaily": {
+                    "type": "boolean",
+                    "example": false
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 50,
@@ -1363,6 +1367,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "excludeFromAverageDaily": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "string"

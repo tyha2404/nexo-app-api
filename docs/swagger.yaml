@@ -6,6 +6,9 @@ definitions:
         example: Food and groceries
         maxLength: 500
         type: string
+      excludeFromAverageDaily:
+        example: false
+        type: boolean
       name:
         example: Food
         maxLength: 50
@@ -145,6 +148,8 @@ definitions:
         type: string
       description:
         type: string
+      excludeFromAverageDaily:
+        type: boolean
       id:
         type: string
       name:

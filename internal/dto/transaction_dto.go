@@ -41,11 +41,12 @@ type TransactionResponse struct {
 }
 
 type TransactionSummaryDTO struct {
-	SumAmount     float64 `json:"sumAmount"`
-	Total         int64   `json:"total"`
-	HoldingAmount float64 `json:"holdingAmount"`
-	HoldingCount  int64   `json:"holdingCount"`
-	RealizedPnL   float64 `json:"realizedPnl"`
+	SumAmount            float64 `json:"sumAmount"`
+	SumAmountForAverage  float64 `json:"sumAmountForAverage"`
+	Total                int64   `json:"total"`
+	HoldingAmount        float64 `json:"holdingAmount"`
+	HoldingCount         int64   `json:"holdingCount"`
+	RealizedPnL          float64 `json:"realizedPnl"`
 }
 
 

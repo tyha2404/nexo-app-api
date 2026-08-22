@@ -58,6 +58,9 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 		UserID:      user.ID,
 	}
+	if req.ExcludeFromAverageDaily != nil {
+		category.ExcludeFromAverageDaily = *req.ExcludeFromAverageDaily
+	}
 
 	category, err := h.svc.Create(r.Context(), category)
 	if err != nil {
@@ -226,6 +229,9 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Description != nil {
 		updates["description"] = *req.Description
+	}
+	if req.ExcludeFromAverageDaily != nil {
+		updates["exclude_from_average_daily"] = *req.ExcludeFromAverageDaily
 	}
 
 	if len(updates) == 0 {

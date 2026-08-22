@@ -97,7 +97,7 @@ func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.U
 		return nil, 0, nil, err
 	}
 
-	sumAmount, count, holdingAmount, holdingCount, realizedPnL, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
+	sumAmount, sumAmountForAverage, count, holdingAmount, holdingCount, realizedPnL, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -108,11 +108,12 @@ func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.U
 	}
 
 	summary := &dto.TransactionSummaryDTO{
-		SumAmount:     sumAmount,
-		Total:         count,
-		HoldingAmount: holdingAmount,
-		HoldingCount:  holdingCount,
-		RealizedPnL:   realizedPnL,
+		SumAmount:           sumAmount,
+		SumAmountForAverage: sumAmountForAverage,
+		Total:               count,
+		HoldingAmount:       holdingAmount,
+		HoldingCount:        holdingCount,
+		RealizedPnL:         realizedPnL,
 	}
 
 	return responses, total, summary, nil
