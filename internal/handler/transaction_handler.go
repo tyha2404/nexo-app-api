@@ -18,13 +18,15 @@ import (
 
 type TransactionHandler struct {
 	transactionService service.TransactionService
+	nlpHandler         *NLPHandler
 	validator          *validator.Validate
 	log                *zap.Logger
 }
 
-func NewTransactionHandler(transactionService service.TransactionService, log *zap.Logger) *TransactionHandler {
+func NewTransactionHandler(transactionService service.TransactionService, nlpHandler *NLPHandler, log *zap.Logger) *TransactionHandler {
 	return &TransactionHandler{
 		transactionService: transactionService,
+		nlpHandler:         nlpHandler,
 		validator:          validator.New(),
 		log:                log,
 	}
@@ -70,6 +72,15 @@ func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Re
 		Success: true,
 		Data:    *transaction,
 	})
+}
+
+// ParseNLP parses natural language transaction input
+func (h *TransactionHandler) ParseNLP(w http.ResponseWriter, r *http.Request) {
+	if h.nlpHandler != nil {
+		h.nlpHandler.ParseNLP(w, r)
+	} else {
+		http.Error(w, "NLP Service not available", http.StatusNotImplemented)
+	}
 }
 
 // GetTransaction returns a single transaction

@@ -17,7 +17,7 @@ const (
 
 type Category struct {
 	ID          uuid.UUID    `gorm:"type:uuid;primaryKey" json:"id"`
-	UserID      uuid.UUID    `gorm:"type:uuid;not null;index" json:"userId"`
+	UserID      uuid.UUID    `gorm:"type:uuid;not null;index;index:idx_user_category_name,unique" json:"userId"`
 	Name        string       `gorm:"type:varchar(50);not null;index:idx_user_category_name,unique" json:"name"`
 	Type                    CategoryType `gorm:"type:varchar(10);not null;default:'EXPENSE';check:type IN ('INCOME', 'EXPENSE', 'INVESTMENT')" json:"type"`
 	Description             *string      `gorm:"type:text" json:"description,omitempty"`

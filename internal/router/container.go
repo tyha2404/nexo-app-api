@@ -22,6 +22,7 @@ type Container struct {
 	AlertRepo       repository.AlertRepository
 	TargetRepo      repository.TargetRepository
 	DebtRepo        repository.DebtRepository
+	PresetRepo      repository.PresetRepository
 
 	// Services
 	AuthService        service.AuthService
@@ -29,11 +30,13 @@ type Container struct {
 	CategoryService    service.CategoryService
 	CostService        service.CostService
 	TransactionService service.TransactionService
+	NLPService         service.NLPService
 	BudgetService      service.BudgetService
 	AlertService       service.AlertService
 	ReportService      service.ReportService
 	TargetService      service.TargetService
 	DebtService        service.DebtService
+	PresetService      service.PresetService
 
 	// Handlers
 	HealthHandler      *handler.HealthHandler
@@ -42,11 +45,13 @@ type Container struct {
 	CategoryHandler    *handler.CategoryHandler
 	CostHandler        *handler.CostHandler
 	TransactionHandler *handler.TransactionHandler
+	NLPHandler         *handler.NLPHandler
 	BudgetHandler      *handler.BudgetHandler
 	AlertHandler       *handler.AlertHandler
 	ReportHandler      *handler.ReportHandler
 	TargetHandler      *handler.TargetHandler
 	DebtHandler        *handler.DebtHandler
+	PresetHandler      *handler.PresetHandler
 }
 
 // NewContainer initializes and wires all dependencies
@@ -60,6 +65,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	alertRepo := repository.NewAlertRepository(db)
 	targetRepo := repository.NewTargetRepository(db)
 	debtRepo := repository.NewDebtRepository(db)
+	presetRepo := repository.NewPresetRepository(db)
 
 	// 2. Initialize Services
 	authService := service.NewAuthService(userRepo)
@@ -67,11 +73,13 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	categoryService := service.NewCategoryService(categoryRepo)
 	costService := service.NewCostService(costRepo)
 	transactionService := service.NewTransactionService(transactionRepo, categoryRepo, budgetRepo, alertRepo)
+	nlpService := service.NewNLPService(categoryRepo)
 	budgetService := service.NewBudgetService(budgetRepo, categoryRepo)
 	alertService := service.NewAlertService(alertRepo)
 	reportService := service.NewReportService(transactionRepo)
 	targetService := service.NewTargetService(targetRepo)
 	debtService := service.NewDebtService(debtRepo)
+	presetService := service.NewPresetService(presetRepo, categoryRepo)
 
 	// 3. Initialize Handlers
 	healthHandler := handler.NewHealthHandler(db, logger)
@@ -79,12 +87,14 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
 	costHandler := handler.NewCostHandler(costService, logger)
-	transactionHandler := handler.NewTransactionHandler(transactionService, logger)
+	nlpHandler := handler.NewNLPHandler(nlpService, logger)
+	transactionHandler := handler.NewTransactionHandler(transactionService, nlpHandler, logger)
 	budgetHandler := handler.NewBudgetHandler(budgetService, logger)
 	alertHandler := handler.NewAlertHandler(alertService)
 	reportHandler := handler.NewReportHandler(reportService)
 	targetHandler := handler.NewTargetHandler(targetService, logger)
 	debtHandler := handler.NewDebtHandler(debtService, logger)
+	presetHandler := handler.NewPresetHandler(presetService, logger)
 
 	return &Container{
 		DB:                 db,
@@ -97,26 +107,31 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		AlertRepo:          alertRepo,
 		TargetRepo:         targetRepo,
 		DebtRepo:           debtRepo,
+		PresetRepo:         presetRepo,
 		AuthService:        authService,
 		UserService:        userService,
 		CategoryService:    categoryService,
 		CostService:        costService,
 		TransactionService: transactionService,
+		NLPService:         nlpService,
 		BudgetService:      budgetService,
 		AlertService:       alertService,
 		ReportService:      reportService,
 		TargetService:      targetService,
 		DebtService:        debtService,
+		PresetService:      presetService,
 		HealthHandler:      healthHandler,
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
 		CategoryHandler:    categoryHandler,
 		CostHandler:        costHandler,
 		TransactionHandler: transactionHandler,
+		NLPHandler:         nlpHandler,
 		BudgetHandler:      budgetHandler,
 		AlertHandler:       alertHandler,
 		ReportHandler:      reportHandler,
 		TargetHandler:      targetHandler,
 		DebtHandler:        debtHandler,
+		PresetHandler:      presetHandler,
 	}
 }

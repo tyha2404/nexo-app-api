@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -17,8 +18,13 @@ type Validator struct {
 
 // NewValidator creates a new validator instance
 func NewValidator() *Validator {
+	v := validator.New()
+	v.RegisterValidation("username", func(fl validator.FieldLevel) bool {
+		matched, _ := regexp.MatchString("^[a-zA-Z0-9_-]+$", fl.Field().String())
+		return matched
+	})
 	return &Validator{
-		validate: validator.New(),
+		validate: v,
 	}
 }
 
@@ -61,6 +67,8 @@ func (v *Validator) getErrorMessage(e validator.FieldError) string {
 		return fmt.Sprintf("%s must be exactly %s characters", field, param)
 	case "alphanum":
 		return fmt.Sprintf("%s must contain only alphanumeric characters", field)
+	case "username":
+		return fmt.Sprintf("%s must contain only letters, numbers, underscores or hyphens", field)
 	case "gt":
 		return fmt.Sprintf("%s must be greater than %s", field, param)
 	case "gte":
