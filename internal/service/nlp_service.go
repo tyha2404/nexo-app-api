@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
@@ -59,11 +60,13 @@ func (s *nlpService) ParseTransaction(ctx context.Context, userID uuid.UUID, tex
 	if trimmedText == "" {
 		return &dto.ParseNLPResponse{
 			Type:            "EXPENSE",
+			TransactionDate: time.Now().Format("2006-01-02"),
 			ConfidenceScore: 0,
 		}, nil
 	}
 
 	amount, matchRange := parseAmount(trimmedText)
+	txDate, dateRange := parseDate(trimmedText)
 
 	// Determine transaction type
 	lowerText := strings.ToLower(trimmedText)
@@ -75,12 +78,23 @@ func (s *nlpService) ParseTransaction(ctx context.Context, userID uuid.UUID, tex
 		}
 	}
 
-	// Clean description by removing extracted amount substring if present
+	// Clean description by removing extracted amount and date substrings if present
 	description := trimmedText
 	if matchRange[0] != -1 && matchRange[1] != -1 {
 		before := trimmedText[:matchRange[0]]
 		after := trimmedText[matchRange[1]:]
 		description = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(before+" "+after, " "))
+	}
+	if dateRange[0] != -1 && dateRange[1] != -1 {
+		// Clean date keyword from description as well
+		lowerDesc := strings.ToLower(description)
+		matchedKw := strings.ToLower(trimmedText[dateRange[0]:dateRange[1]])
+		idx := strings.Index(lowerDesc, matchedKw)
+		if idx != -1 {
+			before := description[:idx]
+			after := description[idx+len(matchedKw):]
+			description = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(before+" "+after, " "))
+		}
 	}
 	if description == "" {
 		description = trimmedText
@@ -154,8 +168,73 @@ func (s *nlpService) ParseTransaction(ctx context.Context, userID uuid.UUID, tex
 		CategoryName:    matchedCategoryName,
 		Type:            txType,
 		Description:     description,
+		TransactionDate: txDate,
 		ConfidenceScore: confidenceScore,
 	}, nil
+}
+
+func parseDate(text string) (string, [2]int) {
+	now := time.Now()
+	lower := strings.ToLower(text)
+	noMatch := [2]int{-1, -1}
+
+	// Relative keywords
+	relKeywords := []struct {
+		kw     string
+		offset int
+	}{
+		{"hôm kia", -2},
+		{"hom kia", -2},
+		{"hôm qua", -1},
+		{"hom qua", -1},
+		{"hôm nay", 0},
+		{"hom nay", 0},
+		{"ngày mai", 1},
+		{"ngay mai", 1},
+	}
+
+	for _, item := range relKeywords {
+		idx := strings.Index(lower, item.kw)
+		if idx != -1 {
+			targetDate := now.AddDate(0, 0, item.offset).Format("2006-01-02")
+			return targetDate, [2]int{idx, idx + len(item.kw)}
+		}
+	}
+
+	// DD/MM/YYYY or DD-MM-YYYY
+	fullDateRegex := regexp.MustCompile(`\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b`)
+	if match := fullDateRegex.FindStringSubmatchIndex(text); match != nil {
+		day, _ := strconv.Atoi(text[match[2]:match[3]])
+		month, _ := strconv.Atoi(text[match[4]:match[5]])
+		year, _ := strconv.Atoi(text[match[6]:match[7]])
+		if month >= 1 && month <= 12 && day >= 1 && day <= 31 {
+			t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
+			return t.Format("2006-01-02"), [2]int{match[0], match[1]}
+		}
+	}
+
+	// DD/MM or DD-MM
+	shortDateRegex := regexp.MustCompile(`\b(\d{1,2})[/.-](\d{1,2})\b`)
+	if match := shortDateRegex.FindStringSubmatchIndex(text); match != nil {
+		day, _ := strconv.Atoi(text[match[2]:match[3]])
+		month, _ := strconv.Atoi(text[match[4]:match[5]])
+		if month >= 1 && month <= 12 && day >= 1 && day <= 31 {
+			t := time.Date(now.Year(), time.Month(month), day, 0, 0, 0, 0, time.Local)
+			return t.Format("2006-01-02"), [2]int{match[0], match[1]}
+		}
+	}
+
+	// "ngày DD" or "ngay DD"
+	dayOnlyRegex := regexp.MustCompile(`(?i)\b(?:ngày|ngay)\s+(\d{1,2})\b`)
+	if match := dayOnlyRegex.FindStringSubmatchIndex(text); match != nil {
+		day, _ := strconv.Atoi(text[match[2]:match[3]])
+		if day >= 1 && day <= 31 {
+			t := time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, time.Local)
+			return t.Format("2006-01-02"), [2]int{match[0], match[1]}
+		}
+	}
+
+	return now.Format("2006-01-02"), noMatch
 }
 
 type amountSuffixRule struct {

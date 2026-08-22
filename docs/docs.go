@@ -1324,6 +1324,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "transactionDate": {
+                    "type": "string"
+                },
                 "type": {
                     "description": "INCOME or EXPENSE",
                     "type": "string"

@@ -12,5 +12,6 @@ type ParseNLPResponse struct {
 	CategoryName    string     `json:"categoryName,omitempty"`
 	Type            string     `json:"type"` // INCOME or EXPENSE
 	Description     string     `json:"description"`
+	TransactionDate string     `json:"transactionDate,omitempty"`
 	ConfidenceScore float64    `json:"confidenceScore"`
 }
