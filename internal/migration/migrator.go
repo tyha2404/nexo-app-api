@@ -37,6 +37,8 @@ func (m *Migrator) AutoMigrate() error {
 		&model.MonthlyTarget{},
 		&model.Debt{},
 		&model.Repayment{},
+		&model.Wallet{},
+		&model.WalletTransfer{},
 	)
 }
 

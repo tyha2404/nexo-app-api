@@ -57,6 +57,7 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 	transaction := &model.Transaction{
 		UserID:          userID,
 		CategoryID:      req.CategoryID,
+		WalletID:        req.WalletID,
 		Amount:          req.Amount,
 		Type:            model.TransactionType(req.Type),
 		Description:     req.Description,
@@ -157,6 +158,9 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 		}
 	}
 
+	if req.WalletID != nil {
+		transaction.WalletID = req.WalletID
+	}
 	if req.Amount != nil {
 		transaction.Amount = *req.Amount
 	}
@@ -225,6 +229,7 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		UserID:          t.UserID,
 		CategoryID:      t.CategoryID,
 		CategoryName:    categoryName,
+		WalletID:        t.WalletID,
 		Amount:          t.Amount,
 		Type:            string(t.Type),
 		Status:          statusStr,

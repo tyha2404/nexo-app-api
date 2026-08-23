@@ -1206,9 +1206,462 @@
                     }
                 }
             }
+        },
+        "/wallets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve summary and all wallets of the user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "List user wallets",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.WalletSummaryResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new wallet for the user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Create a wallet",
+                "parameters": [
+                    {
+                        "description": "Create wallet payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateWalletRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/auto-allocate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Automatically divide income amount into allocation wallets",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Auto allocate income to wallets",
+                "parameters": [
+                    {
+                        "description": "Auto allocate payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AutoAllocateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AutoAllocateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/transfer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Transfer funds from one wallet to another",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Transfer money between wallets",
+                "parameters": [
+                    {
+                        "description": "Transfer money payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TransferMoneyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.WalletTransferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get details of a specific wallet",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Get wallet details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing wallet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Update wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update wallet payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateWalletRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a wallet by ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Delete wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "dto.AllocatedWalletDetail": {
+            "type": "object",
+            "properties": {
+                "allocatedAmount": {
+                    "type": "number"
+                },
+                "allocationPercent": {
+                    "type": "number"
+                },
+                "newBalance": {
+                    "type": "number"
+                },
+                "walletId": {
+                    "type": "string"
+                },
+                "walletName": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AutoAllocateRequest": {
+            "type": "object",
+            "required": [
+                "incomeAmount"
+            ],
+            "properties": {
+                "incomeAmount": {
+                    "type": "number"
+                },
+                "preset": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.AllocationPreset"
+                        }
+                    ],
+                    "example": "50_30_20"
+                },
+                "sourceWalletId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AutoAllocateResponse": {
+            "type": "object",
+            "properties": {
+                "allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AllocatedWalletDetail"
+                    }
+                },
+                "incomeAmount": {
+                    "type": "number"
+                },
+                "sourceWalletId": {
+                    "type": "string"
+                },
+                "totalAllocated": {
+                    "type": "number"
+                }
+            }
+        },
         "dto.CreateCategoryRequest": {
             "type": "object",
             "required": [
@@ -1247,6 +1700,62 @@
         },
         "dto.CreateTransactionRequest": {
             "type": "object"
+        },
+        "dto.CreateWalletRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "type"
+            ],
+            "properties": {
+                "allocationPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "example": 50
+                },
+                "balance": {
+                    "type": "number",
+                    "example": 1000000
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "VND"
+                },
+                "icon": {
+                    "type": "string",
+                    "example": "💵"
+                },
+                "isIncludedInTotal": {
+                    "type": "boolean"
+                },
+                "jarCategory": {
+                    "type": "string",
+                    "example": "NEC"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "example": "Ví Tiền mặt"
+                },
+                "type": {
+                    "enum": [
+                        "CASH",
+                        "BANK",
+                        "E_WALLET",
+                        "SAVINGS",
+                        "CREDIT",
+                        "JAR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.WalletType"
+                        }
+                    ],
+                    "example": "CASH"
+                }
+            }
         },
         "dto.CustomTime": {
             "type": "object",
@@ -1407,11 +1916,96 @@
                 "userId": {
                     "type": "string",
                     "example": "550e8400-e29b-41d4-a716-446655440001"
+                },
+                "walletId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "dto.TransferMoneyRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "fromWalletId",
+                "toWalletId"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "fee": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "fromWalletId": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "toWalletId": {
+                    "type": "string"
+                },
+                "transferDate": {
+                    "$ref": "#/definitions/dto.CustomTime"
                 }
             }
         },
         "dto.UpdateTransactionRequest": {
             "type": "object"
+        },
+        "dto.UpdateWalletRequest": {
+            "type": "object",
+            "properties": {
+                "allocationPercent": {
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "example": 50
+                },
+                "balance": {
+                    "type": "number",
+                    "example": 1000000
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "VND"
+                },
+                "icon": {
+                    "type": "string",
+                    "example": "💵"
+                },
+                "isIncludedInTotal": {
+                    "type": "boolean"
+                },
+                "jarCategory": {
+                    "type": "string",
+                    "example": "NEC"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "example": "Ví Tiền mặt"
+                },
+                "type": {
+                    "enum": [
+                        "CASH",
+                        "BANK",
+                        "E_WALLET",
+                        "SAVINGS",
+                        "CREDIT",
+                        "JAR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.WalletType"
+                        }
+                    ],
+                    "example": "CASH"
+                }
+            }
         },
         "dto.UserResponse": {
             "type": "object",
@@ -1437,6 +2031,109 @@
                     "example": "johndoe"
                 }
             }
+        },
+        "dto.WalletResponse": {
+            "type": "object",
+            "properties": {
+                "allocationPercent": {
+                    "type": "number"
+                },
+                "balance": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isIncludedInTotal": {
+                    "type": "boolean"
+                },
+                "jarCategory": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/model.WalletType"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.WalletSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "totalBalance": {
+                    "type": "number"
+                },
+                "totalWallets": {
+                    "type": "integer"
+                },
+                "wallets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.WalletResponse"
+                    }
+                }
+            }
+        },
+        "dto.WalletTransferResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "fee": {
+                    "type": "number"
+                },
+                "fromWalletId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "toWalletId": {
+                    "type": "string"
+                },
+                "transferDate": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.AllocationPreset": {
+            "type": "string",
+            "enum": [
+                "50_30_20",
+                "6_JARS",
+                "CUSTOM"
+            ],
+            "x-enum-varnames": [
+                "AllocationPreset503020",
+                "AllocationPreset6Jars",
+                "AllocationPresetCustom"
+            ]
         },
         "model.Category": {
             "type": "object",
@@ -1564,6 +2261,25 @@
                     "minLength": 3
                 }
             }
+        },
+        "model.WalletType": {
+            "type": "string",
+            "enum": [
+                "CASH",
+                "BANK",
+                "E_WALLET",
+                "SAVINGS",
+                "CREDIT",
+                "JAR"
+            ],
+            "x-enum-varnames": [
+                "WalletTypeCash",
+                "WalletTypeBank",
+                "WalletTypeEWallet",
+                "WalletTypeSavings",
+                "WalletTypeCredit",
+                "WalletTypeJar"
+            ]
         },
         "response.ErrorResponse": {
             "type": "object",

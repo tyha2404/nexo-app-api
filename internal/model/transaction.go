@@ -28,6 +28,7 @@ type Transaction struct {
 	ID              uuid.UUID        `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID          uuid.UUID        `gorm:"type:uuid;not null;index" json:"userId"`
 	CategoryID      uuid.UUID        `gorm:"type:uuid;not null;index" json:"categoryId"`
+	WalletID        *uuid.UUID       `gorm:"type:uuid;index" json:"walletId,omitempty"`
 	Amount          float64          `gorm:"type:numeric(15,2);not null" json:"amount"`
 	Type            TransactionType  `gorm:"type:varchar(10);not null;check:type IN ('INCOME', 'EXPENSE', 'INVESTMENT')" json:"type"`
 	Status          *InvestmentStatus `gorm:"type:varchar(20);default:'HOLDING'" json:"status,omitempty"`
@@ -40,6 +41,7 @@ type Transaction struct {
 
 	User     *User     `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Category *Category `gorm:"foreignKey:CategoryID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Wallet   *Wallet   `gorm:"foreignKey:WalletID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
 
 // BeforeCreate GORM Hook to generate UUID v7

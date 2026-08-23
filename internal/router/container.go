@@ -23,6 +23,7 @@ type Container struct {
 	TargetRepo      repository.TargetRepository
 	DebtRepo        repository.DebtRepository
 	PresetRepo      repository.PresetRepository
+	WalletRepo      repository.WalletRepository
 
 	// Services
 	AuthService        service.AuthService
@@ -37,6 +38,7 @@ type Container struct {
 	TargetService      service.TargetService
 	DebtService        service.DebtService
 	PresetService      service.PresetService
+	WalletService      service.WalletService
 
 	// Handlers
 	HealthHandler      *handler.HealthHandler
@@ -52,6 +54,7 @@ type Container struct {
 	TargetHandler      *handler.TargetHandler
 	DebtHandler        *handler.DebtHandler
 	PresetHandler      *handler.PresetHandler
+	WalletHandler      *handler.WalletHandler
 }
 
 // NewContainer initializes and wires all dependencies
@@ -66,6 +69,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	targetRepo := repository.NewTargetRepository(db)
 	debtRepo := repository.NewDebtRepository(db)
 	presetRepo := repository.NewPresetRepository(db)
+	walletRepo := repository.NewWalletRepository(db)
 
 	// 2. Initialize Services
 	authService := service.NewAuthService(userRepo)
@@ -80,6 +84,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	targetService := service.NewTargetService(targetRepo)
 	debtService := service.NewDebtService(debtRepo)
 	presetService := service.NewPresetService(presetRepo, categoryRepo)
+	walletService := service.NewWalletService(walletRepo)
 
 	// 3. Initialize Handlers
 	healthHandler := handler.NewHealthHandler(db, logger)
@@ -95,6 +100,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	targetHandler := handler.NewTargetHandler(targetService, logger)
 	debtHandler := handler.NewDebtHandler(debtService, logger)
 	presetHandler := handler.NewPresetHandler(presetService, logger)
+	walletHandler := handler.NewWalletHandler(walletService, logger)
 
 	return &Container{
 		DB:                 db,
@@ -108,6 +114,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		TargetRepo:         targetRepo,
 		DebtRepo:           debtRepo,
 		PresetRepo:         presetRepo,
+		WalletRepo:         walletRepo,
 		AuthService:        authService,
 		UserService:        userService,
 		CategoryService:    categoryService,
@@ -120,6 +127,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		TargetService:      targetService,
 		DebtService:        debtService,
 		PresetService:      presetService,
+		WalletService:      walletService,
 		HealthHandler:      healthHandler,
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
@@ -133,5 +141,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		TargetHandler:      targetHandler,
 		DebtHandler:        debtHandler,
 		PresetHandler:      presetHandler,
+		WalletHandler:      walletHandler,
 	}
 }

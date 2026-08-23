@@ -1,5 +1,44 @@
 basePath: /api/v1
 definitions:
+  dto.AllocatedWalletDetail:
+    properties:
+      allocatedAmount:
+        type: number
+      allocationPercent:
+        type: number
+      newBalance:
+        type: number
+      walletId:
+        type: string
+      walletName:
+        type: string
+    type: object
+  dto.AutoAllocateRequest:
+    properties:
+      incomeAmount:
+        type: number
+      preset:
+        allOf:
+        - $ref: '#/definitions/model.AllocationPreset'
+        example: "50_30_20"
+      sourceWalletId:
+        type: string
+    required:
+    - incomeAmount
+    type: object
+  dto.AutoAllocateResponse:
+    properties:
+      allocations:
+        items:
+          $ref: '#/definitions/dto.AllocatedWalletDetail'
+        type: array
+      incomeAmount:
+        type: number
+      sourceWalletId:
+        type: string
+      totalAllocated:
+        type: number
+    type: object
   dto.CreateCategoryRequest:
     properties:
       description:
@@ -28,6 +67,47 @@ definitions:
   dto.CreateCostRequest:
     type: object
   dto.CreateTransactionRequest:
+    type: object
+  dto.CreateWalletRequest:
+    properties:
+      allocationPercent:
+        example: 50
+        maximum: 100
+        minimum: 0
+        type: number
+      balance:
+        example: 1000000
+        type: number
+      currency:
+        example: VND
+        type: string
+      icon:
+        example: "\U0001F4B5"
+        type: string
+      isIncludedInTotal:
+        type: boolean
+      jarCategory:
+        example: NEC
+        type: string
+      name:
+        example: Ví Tiền mặt
+        maxLength: 100
+        minLength: 1
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/model.WalletType'
+        enum:
+        - CASH
+        - BANK
+        - E_WALLET
+        - SAVINGS
+        - CREDIT
+        - JAR
+        example: CASH
+    required:
+    - name
+    - type
     type: object
   dto.CustomTime:
     properties:
@@ -144,8 +224,69 @@ definitions:
       userId:
         example: 550e8400-e29b-41d4-a716-446655440001
         type: string
+      walletId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  dto.TransferMoneyRequest:
+    properties:
+      amount:
+        type: number
+      fee:
+        minimum: 0
+        type: number
+      fromWalletId:
+        type: string
+      note:
+        type: string
+      toWalletId:
+        type: string
+      transferDate:
+        $ref: '#/definitions/dto.CustomTime'
+    required:
+    - amount
+    - fromWalletId
+    - toWalletId
     type: object
   dto.UpdateTransactionRequest:
+    type: object
+  dto.UpdateWalletRequest:
+    properties:
+      allocationPercent:
+        example: 50
+        maximum: 100
+        minimum: 0
+        type: number
+      balance:
+        example: 1000000
+        type: number
+      currency:
+        example: VND
+        type: string
+      icon:
+        example: "\U0001F4B5"
+        type: string
+      isIncludedInTotal:
+        type: boolean
+      jarCategory:
+        example: NEC
+        type: string
+      name:
+        example: Ví Tiền mặt
+        maxLength: 100
+        minLength: 1
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/model.WalletType'
+        enum:
+        - CASH
+        - BANK
+        - E_WALLET
+        - SAVINGS
+        - CREDIT
+        - JAR
+        example: CASH
     type: object
   dto.UserResponse:
     properties:
@@ -165,6 +306,75 @@ definitions:
         example: johndoe
         type: string
     type: object
+  dto.WalletResponse:
+    properties:
+      allocationPercent:
+        type: number
+      balance:
+        type: number
+      createdAt:
+        type: string
+      currency:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      isIncludedInTotal:
+        type: boolean
+      jarCategory:
+        type: string
+      name:
+        type: string
+      type:
+        $ref: '#/definitions/model.WalletType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  dto.WalletSummaryResponse:
+    properties:
+      totalBalance:
+        type: number
+      totalWallets:
+        type: integer
+      wallets:
+        items:
+          $ref: '#/definitions/dto.WalletResponse'
+        type: array
+    type: object
+  dto.WalletTransferResponse:
+    properties:
+      amount:
+        type: number
+      createdAt:
+        type: string
+      fee:
+        type: number
+      fromWalletId:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      toWalletId:
+        type: string
+      transferDate:
+        type: string
+      userId:
+        type: string
+    type: object
+  model.AllocationPreset:
+    enum:
+    - "50_30_20"
+    - 6_JARS
+    - CUSTOM
+    type: string
+    x-enum-varnames:
+    - AllocationPreset503020
+    - AllocationPreset6Jars
+    - AllocationPresetCustom
   model.Category:
     properties:
       createdAt:
@@ -252,6 +462,22 @@ definitions:
     - email
     - username
     type: object
+  model.WalletType:
+    enum:
+    - CASH
+    - BANK
+    - E_WALLET
+    - SAVINGS
+    - CREDIT
+    - JAR
+    type: string
+    x-enum-varnames:
+    - WalletTypeCash
+    - WalletTypeBank
+    - WalletTypeEWallet
+    - WalletTypeSavings
+    - WalletTypeCredit
+    - WalletTypeJar
   response.ErrorResponse:
     properties:
       error:
@@ -1039,6 +1265,255 @@ paths:
       summary: Update a user
       tags:
       - users
+  /wallets:
+    get:
+      description: Retrieve summary and all wallets of the user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.WalletSummaryResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List user wallets
+      tags:
+      - Wallets
+    post:
+      consumes:
+      - application/json
+      description: Create a new wallet for the user
+      parameters:
+      - description: Create wallet payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateWalletRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.WalletResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a wallet
+      tags:
+      - Wallets
+  /wallets/{id}:
+    delete:
+      description: Delete a wallet by ID
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete wallet
+      tags:
+      - Wallets
+    get:
+      description: Get details of a specific wallet
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.WalletResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get wallet details
+      tags:
+      - Wallets
+    put:
+      consumes:
+      - application/json
+      description: Update an existing wallet
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update wallet payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateWalletRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.WalletResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update wallet
+      tags:
+      - Wallets
+  /wallets/auto-allocate:
+    post:
+      consumes:
+      - application/json
+      description: Automatically divide income amount into allocation wallets
+      parameters:
+      - description: Auto allocate payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AutoAllocateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AutoAllocateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Auto allocate income to wallets
+      tags:
+      - Wallets
+  /wallets/transfer:
+    post:
+      consumes:
+      - application/json
+      description: Transfer funds from one wallet to another
+      parameters:
+      - description: Transfer money payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TransferMoneyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.WalletTransferResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Transfer money between wallets
+      tags:
+      - Wallets
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer" followed by a space and JWT token.

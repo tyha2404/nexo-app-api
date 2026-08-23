@@ -73,6 +73,23 @@ func (u *User) AfterCreate(tx *gorm.DB) error {
 			return err
 		}
 	}
+
+	defaultWallets := []Wallet{
+		{Name: "Ví Tiền mặt", Type: WalletTypeCash, Icon: "💵", Balance: 0, IsIncludedInTotal: true},
+		{Name: "Tài khoản Ngân hàng", Type: WalletTypeBank, Icon: "🏦", Balance: 0, IsIncludedInTotal: true},
+		{Name: "Ví Điện tử", Type: WalletTypeEWallet, Icon: "📱", Balance: 0, IsIncludedInTotal: true},
+		{Name: "Hũ Thiết yếu (50%)", Type: WalletTypeJar, JarCategory: strPtr("NEC"), AllocationPercent: 50.0, Icon: "🏠", IsIncludedInTotal: true},
+		{Name: "Hũ Đầu tư & Tiết kiệm (30%)", Type: WalletTypeJar, JarCategory: strPtr("INVEST"), AllocationPercent: 30.0, Icon: "📈", IsIncludedInTotal: true},
+		{Name: "Hũ Giải trí & Cá nhân (20%)", Type: WalletTypeJar, JarCategory: strPtr("PLAY"), AllocationPercent: 20.0, Icon: "🎯", IsIncludedInTotal: true},
+	}
+
+	for _, wallet := range defaultWallets {
+		wallet.UserID = u.ID
+		if err := tx.Create(&wallet).Error; err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
