@@ -66,14 +66,15 @@ func (m *ChatMessage) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type FinancialKnowledge struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	Topic     string    `gorm:"type:varchar(100);not null;index" json:"topic"`
-	Title     string    `gorm:"type:varchar(255);not null" json:"title"`
-	Content   string    `gorm:"type:text;not null" json:"content"`
-	Embedding string    `gorm:"type:text;not null" json:"embedding"` // JSON string representation of []float32
-	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
-	DeletedAt DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	Topic       string    `gorm:"type:varchar(100);not null;index" json:"topic"`
+	Title       string    `gorm:"type:varchar(255);not null" json:"title"`
+	Content     string    `gorm:"type:text;not null" json:"content"`
+	ContentHash string    `gorm:"type:varchar(64);not null;default:''" json:"contentHash"` // SHA-256 of the source document content, used for sync detection
+	Embedding   string    `gorm:"type:text;not null" json:"embedding"`                     // JSON string representation of []float32
+	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	DeletedAt   DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 }
 
 func (k *FinancialKnowledge) BeforeCreate(tx *gorm.DB) (err error) {

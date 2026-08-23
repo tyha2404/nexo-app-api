@@ -16,6 +16,7 @@ type KnowledgeRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.FinancialKnowledge, error)
 	Update(ctx context.Context, knowledge *model.FinancialKnowledge) error
 	DeleteByTopic(ctx context.Context, topic string) error
+	ReplaceByTopic(ctx context.Context, topic string, docs []*model.FinancialKnowledge) error
 }
 
 type knowledgeRepository struct {
@@ -36,6 +37,20 @@ func (r *knowledgeRepository) Update(ctx context.Context, knowledge *model.Finan
 
 func (r *knowledgeRepository) DeleteByTopic(ctx context.Context, topic string) error {
 	return r.db.WithContext(ctx).Where("topic = ?", topic).Delete(&model.FinancialKnowledge{}).Error
+}
+
+// ReplaceByTopic atomically deletes all existing chunks of a topic and inserts
+// the new set in a single transaction, so readers never observe a partial topic.
+func (r *knowledgeRepository) ReplaceByTopic(ctx context.Context, topic string, docs []*model.FinancialKnowledge) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("topic = ?", topic).Delete(&model.FinancialKnowledge{}).Error; err != nil {
+			return err
+		}
+		if len(docs) == 0 {
+			return nil
+		}
+		return tx.Create(&docs).Error
+	})
 }
 
 func (r *knowledgeRepository) ListAll(ctx context.Context) ([]model.FinancialKnowledge, error) {

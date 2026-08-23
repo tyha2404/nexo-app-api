@@ -27,4 +27,13 @@ func TestGetFinancialToolDefinitions(t *testing.T) {
 	assert.True(t, toolNames["get_debt_summary"])
 	assert.True(t, toolNames["list_wallets"])
 	assert.True(t, toolNames["get_spending_by_category"])
+
+	// Read-only generic tools
+	assert.True(t, toolNames["search_transactions"])
+	assert.True(t, toolNames["list_categories"])
+	assert.True(t, toolNames["get_monthly_trend"])
+	assert.True(t, toolNames["get_wallet_detail"])
+	assert.True(t, toolNames["get_debt_detail"])
+	assert.True(t, toolNames["get_investment_summary"])
+	assert.True(t, toolNames["search_financial_knowledge"])
 }

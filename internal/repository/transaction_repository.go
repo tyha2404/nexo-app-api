@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,7 +14,8 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *model.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Transaction, error)
 	ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
-GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, sumAmountForAverage float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error)
+	GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, sumAmountForAverage float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error)
+	SearchByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
 	Update(ctx context.Context, transaction *model.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -175,6 +177,80 @@ func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID u
 
 func (r *transactionRepository) Update(ctx context.Context, transaction *model.Transaction) error {
 	return r.db.WithContext(ctx).Save(transaction).Error
+}
+
+// SearchByUserID is a read-only search with extended filters (wallet, amount range,
+// keyword in description) used by the AI financial tools. All conditions are ANDed
+// and always scoped to userID.
+func (r *transactionRepository) SearchByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error) {
+	var transactions []model.Transaction
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
+
+	if t, ok := filters["type"].(string); ok && t != "" && t != "ALL" {
+		query = query.Where("type = ?", t)
+	}
+
+	if c, ok := filters["categoryId"].(string); ok && c != "" {
+		if catID, err := uuid.Parse(c); err == nil {
+			query = query.Where("category_id = ?", catID)
+		}
+	}
+
+	if w, ok := filters["walletId"].(string); ok && w != "" {
+		if walletID, err := uuid.Parse(w); err == nil {
+			query = query.Where("wallet_id = ?", walletID)
+		}
+	}
+
+	if s, ok := filters["startDate"].(string); ok && s != "" {
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			query = query.Where("transaction_date >= ?", t)
+		}
+	}
+
+	if e, ok := filters["endDate"].(string); ok && e != "" {
+		if t, err := time.Parse("2006-01-02", e); err == nil {
+			query = query.Where("transaction_date <= ?", t)
+		}
+	}
+
+	if minA, ok := filters["minAmount"].(float64); ok && minA > 0 {
+		query = query.Where("amount >= ?", minA)
+	}
+
+	if maxA, ok := filters["maxAmount"].(float64); ok && maxA > 0 {
+		query = query.Where("amount <= ?", maxA)
+	}
+
+	if kw, ok := filters["keyword"].(string); ok && kw != "" {
+		pattern := "%" + strings.ToLower(kw) + "%"
+		query = query.Where("LOWER(description) LIKE ?", pattern)
+	}
+
+	sortBy := "transaction_date desc, created_at desc"
+	switch sort, _ := filters["sortBy"].(string); sort {
+	case "amount_asc":
+		sortBy = "amount asc"
+	case "amount_desc":
+		sortBy = "amount desc"
+	case "date_asc":
+		sortBy = "transaction_date asc, created_at asc"
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.
+		Preload("Category").
+		Order(sortBy).
+		Limit(limit).
+		Offset(offset).
+		Find(&transactions).Error
+
+	return transactions, total, err
 }
 
 func (r *transactionRepository) Delete(ctx context.Context, id uuid.UUID) error {

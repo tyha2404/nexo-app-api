@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/data"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -16,10 +19,11 @@ import (
 )
 
 type KnowledgeSearchResult struct {
-	Topic   string  `json:"topic"`
-	Title   string  `json:"title"`
-	Content string  `json:"content"`
-	Score   float32 `json:"score"`
+	Topic    string  `json:"topic"`
+	Title    string  `json:"title"`
+	Content  string  `json:"content"`
+	Score    float32 `json:"score"`
+	Fallback bool    `json:"fallback,omitempty"`
 }
 
 type RAGService interface {
@@ -28,11 +32,18 @@ type RAGService interface {
 	AddKnowledge(ctx context.Context, topic, title, content string) error
 }
 
+type cachedDocEmbedding struct {
+	embJSON string
+	vec     []float32
+}
+
 type ragService struct {
 	knowledgeRepo   repository.KnowledgeRepository
 	requestyService RequestyService
 	logger          *zap.Logger
-	mu              sync.Mutex
+	mu              sync.RWMutex
+	cacheMu         sync.RWMutex
+	localEmbCache   map[uuid.UUID]cachedDocEmbedding
 }
 
 func NewRAGService(knowledgeRepo repository.KnowledgeRepository, requestyService RequestyService, logger *zap.Logger) RAGService {
@@ -40,6 +51,7 @@ func NewRAGService(knowledgeRepo repository.KnowledgeRepository, requestyService
 		knowledgeRepo:   knowledgeRepo,
 		requestyService: requestyService,
 		logger:          logger,
+		localEmbCache:   make(map[uuid.UUID]cachedDocEmbedding),
 	}
 
 	// Seed knowledge asynchronously in background
@@ -51,6 +63,11 @@ func NewRAGService(knowledgeRepo repository.KnowledgeRepository, requestyService
 	}()
 
 	return s
+}
+
+func hashKnowledgeContent(content string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(content)))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *ragService) generateEmbedding(ctx context.Context, text string) []float32 {
@@ -96,21 +113,28 @@ func (s *ragService) SeedDefaultKnowledge(ctx context.Context) error {
 			continue
 		}
 
-		// Check if any chunk has empty/invalid embedding
-		hasEmptyEmb := false
-		for _, chunk := range existingChunks {
-			var emb []float32
-			if err := json.Unmarshal([]byte(chunk.Embedding), &emb); err != nil || len(emb) == 0 {
-				hasEmptyEmb = true
-				break
+		docHash := hashKnowledgeContent(doc.Content)
+		expectedChunks := util.ChunkText(doc.Content, util.DefaultChunkOptions)
+
+		// Resync when the source content changed (hash mismatch, or legacy rows
+		// carrying no hash yet), when a chunk lost its embedding, or when the
+		// chunker settings would produce a different number of chunks.
+		needsResync := len(existingChunks) != len(expectedChunks)
+		if !needsResync {
+			for _, chunk := range existingChunks {
+				if chunk.ContentHash == "" || chunk.ContentHash != docHash {
+					needsResync = true
+					break
+				}
+				var emb []float32
+				if err := json.Unmarshal([]byte(chunk.Embedding), &emb); err != nil || len(emb) == 0 {
+					needsResync = true
+					break
+				}
 			}
 		}
 
-		// Check if chunk count differs from expected chunks
-		expectedChunks := util.ChunkText(doc.Content, util.DefaultChunkOptions)
-		hasChunkMismatch := len(existingChunks) != len(expectedChunks)
-
-		if hasEmptyEmb || hasChunkMismatch {
+		if needsResync {
 			s.logger.Info("re-chunking and syncing knowledge doc", zap.String("topic", doc.Topic), zap.String("title", doc.Title))
 			if err := s.addKnowledgeLocked(ctx, doc.Topic, doc.Title, doc.Content); err != nil {
 				s.logger.Warn("failed to update chunked knowledge doc", zap.String("topic", doc.Topic), zap.Error(err))
@@ -133,11 +157,9 @@ func (s *ragService) addKnowledgeLocked(ctx context.Context, topic, title, conte
 		return nil
 	}
 
-	// Delete old chunks for this topic to prevent orphaned duplicates
-	if err := s.knowledgeRepo.DeleteByTopic(ctx, topic); err != nil {
-		s.logger.Warn("failed to delete old chunks before re-inserting", zap.String("topic", topic), zap.Error(err))
-	}
-
+	// Generate all embeddings BEFORE opening the transaction to keep it short.
+	docHash := hashKnowledgeContent(content)
+	docs := make([]*model.FinancialKnowledge, 0, len(chunks))
 	for _, chunk := range chunks {
 		// Context-enhanced chunk text for embedding
 		fullChunkText := title + "\n" + chunk.Content
@@ -149,23 +171,26 @@ func (s *ragService) addKnowledgeLocked(ctx context.Context, topic, title, conte
 			chunkTitle = fmt.Sprintf("%s (Phần %d/%d)", title, chunk.Index+1, chunk.Total)
 		}
 
-		doc := &model.FinancialKnowledge{
-			Topic:     topic,
-			Title:     chunkTitle,
-			Content:   chunk.Content,
-			Embedding: string(embBytes),
-		}
-
-		if err := s.knowledgeRepo.Create(ctx, doc); err != nil {
-			return err
-		}
+		docs = append(docs, &model.FinancialKnowledge{
+			Topic:       topic,
+			Title:       chunkTitle,
+			Content:     chunk.Content,
+			ContentHash: docHash,
+			Embedding:   string(embBytes),
+		})
 	}
 
-	return nil
+	// Atomically swap the whole topic so a crash or failed insert never leaves
+	// the topic partially written (old chunks are only removed on success).
+	return s.knowledgeRepo.ReplaceByTopic(ctx, topic, docs)
 }
 
 func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit int) ([]KnowledgeSearchResult, error) {
+	// Take a consistent snapshot while seeding/upserts may be running in the
+	// background; release the lock before the expensive similarity pass.
+	s.mu.RLock()
 	allDocs, err := s.knowledgeRepo.ListAll(ctx)
+	s.mu.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +207,33 @@ func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit in
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
 
+	// Lazily computed once per search when a dimension mismatch forces the
+	// local fallback vectorizer.
+	var queryLocal []float32
+	getQueryLocal := func() []float32 {
+		if queryLocal == nil {
+			queryLocal = util.GenerateLocalEmbedding(query, 256)
+		}
+		return queryLocal
+	}
+
+	// Doc-side local embeddings are cached by ID and invalidated whenever the
+	// stored embedding JSON changes (re-embed), instead of being recomputed
+	// for every doc on every mismatched-dimension query.
+	getDocLocal := func(doc model.FinancialKnowledge) []float32 {
+		s.cacheMu.RLock()
+		cached, ok := s.localEmbCache[doc.ID]
+		s.cacheMu.RUnlock()
+		if ok && cached.embJSON == doc.Embedding {
+			return cached.vec
+		}
+		vec := util.GenerateLocalEmbedding(doc.Title+"\n"+doc.Content, 256)
+		s.cacheMu.Lock()
+		s.localEmbCache[doc.ID] = cachedDocEmbedding{embJSON: doc.Embedding, vec: vec}
+		s.cacheMu.Unlock()
+		return vec
+	}
+
 	var results []KnowledgeSearchResult
 	for _, doc := range allDocs {
 		var docEmb []float32
@@ -191,10 +243,7 @@ func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit in
 			if len(queryEmb) == len(docEmb) {
 				score = ComputeCosineSimilarity(queryEmb, docEmb)
 			} else {
-				// Dimension fallback
-				localQ := util.GenerateLocalEmbedding(query, 256)
-				localD := util.GenerateLocalEmbedding(doc.Title+"\n"+doc.Content, 256)
-				score = ComputeCosineSimilarity(localQ, localD)
+				score = ComputeCosineSimilarity(getQueryLocal(), getDocLocal(doc))
 			}
 		}
 
@@ -234,16 +283,18 @@ func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit in
 		}
 	}
 
-	// Fallback to top general rules if no high match
+	// Fallback to top general rules if no high match — flagged explicitly so
+	// the LLM knows these results are NOT verified relevant (no fake score).
 	if len(distinctResults) == 0 && len(allDocs) > 0 {
 		for i := 0; i < len(allDocs) && len(distinctResults) < limit; i++ {
 			if !seenTopic[allDocs[i].Topic] {
 				seenTopic[allDocs[i].Topic] = true
 				distinctResults = append(distinctResults, KnowledgeSearchResult{
-					Topic:   allDocs[i].Topic,
-					Title:   allDocs[i].Title,
-					Content: allDocs[i].Content,
-					Score:   0.5,
+					Topic:    allDocs[i].Topic,
+					Title:    allDocs[i].Title,
+					Content:  allDocs[i].Content,
+					Score:    0,
+					Fallback: true,
 				})
 			}
 		}

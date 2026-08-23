@@ -149,6 +149,82 @@ func (s *chatService) ClearSessions(ctx context.Context, userID uuid.UUID) error
 	return s.chatRepo.ClearUserSessions(ctx, userID)
 }
 
+const (
+	// ragAutoInjectTopK is the number of knowledge docs auto-injected per turn.
+	ragAutoInjectTopK = 2
+	// ragAutoInjectMinScore filters out weak semantic matches; fallback-flagged
+	// results are always excluded regardless of this threshold.
+	ragAutoInjectMinScore = 0.30
+)
+
+// autoInjectKnowledge grounds the system prompt with internal knowledge that
+// semantically matches the user's message, avoiding a tool round-trip for
+// general financial-advice questions. Failures never block the chat flow.
+// Returns the injected docs so the caller can render a citation card.
+func (s *chatService) autoInjectKnowledge(ctx context.Context, userMessage string, systemPrompt *string, sessionID uuid.UUID) []KnowledgeSearchResult {
+	if s.ragService == nil || strings.TrimSpace(userMessage) == "" {
+		return nil
+	}
+
+	results, err := s.ragService.SearchKnowledge(ctx, userMessage, ragAutoInjectTopK)
+	if err != nil {
+		s.logger.Warn("rag auto-inject search failed", zap.Error(err))
+		return nil
+	}
+
+	confident := make([]KnowledgeSearchResult, 0, len(results))
+	for _, r := range results {
+		if !r.Fallback && r.Score >= ragAutoInjectMinScore {
+			confident = append(confident, r)
+		}
+	}
+	if len(confident) == 0 {
+		return nil
+	}
+
+	var kb strings.Builder
+	kb.WriteString("\n\nKIẾN THỨC NỘI BỘ LIÊN QUAN (tra cứu tự động theo câu hỏi, ưu tiên dùng nếu phù hợp):\n")
+	for _, r := range confident {
+		fmt.Fprintf(&kb, "- [%s] %s\n%s\n", r.Topic, r.Title, r.Content)
+	}
+
+	*systemPrompt += kb.String()
+	s.logger.Info("rag auto-injected knowledge into system prompt",
+		zap.String("session_id", sessionID.String()),
+		zap.Int("docs", len(confident)),
+	)
+	return confident
+}
+
+// knowledgeAutoInjectCard builds the citation card shown for silently
+// auto-injected knowledge, mirroring the tool's KNOWLEDGE_SOURCE card.
+func knowledgeAutoInjectCard(query string, docs []KnowledgeSearchResult) *dto.ActionCard {
+	return &dto.ActionCard{
+		ActionType:  "KNOWLEDGE_SOURCE",
+		Title:       "Nguồn tri thức nội bộ",
+		Description: fmt.Sprintf("Tự động tra cứu: %d tài liệu liên quan tới \"%s\"", len(docs), query),
+		Data: map[string]interface{}{
+			"query":   query,
+			"results": docs,
+			"source":  "auto_inject",
+		},
+	}
+}
+
+// withoutKnowledgeSearchTool removes the retrieval tool from the definitions
+// for a turn where knowledge was already auto-injected, making the
+// "don't re-lookup" rule structural instead of prompt-dependent.
+func withoutKnowledgeSearchTool(defs []ToolDefinition) []ToolDefinition {
+	filtered := make([]ToolDefinition, 0, len(defs))
+	for _, d := range defs {
+		if d.Function.Name == "search_financial_knowledge" {
+			continue
+		}
+		filtered = append(filtered, d)
+	}
+	return filtered
+}
+
 func (s *chatService) ProcessMessageStream(ctx context.Context, userID uuid.UUID, req dto.SendMessageRequest, eventChan chan<- dto.ChatStreamEvent) error {
 	defer close(eventChan)
 
@@ -238,17 +314,36 @@ Hôm nay là: %s.
 Bạn có các công cụ tài chính mạnh mẽ của hệ thống Nexo để tra cứu dữ liệu thực tế và thực hiện tác vụ cho người dùng:
 1. Khi người dùng hỏi về tình hình tài chính tổng quan, thu/chi/tiết kiệm -> gọi tool "get_financial_overview".
 2. Khi người dùng hỏi về danh mục chi tiêu, cơ cấu chi tiêu -> gọi tool "get_spending_by_category".
-3. Khi người dùng muốn xem lịch sử giao dịch -> gọi tool "list_recent_transactions".
+3. Khi người dùng muốn xem lịch sử giao dịch đơn giản (mới nhất) -> gọi tool "list_recent_transactions"; nếu cần tìm kiếm/lọc phức tạp theo danh mục, ví, số tiền, từ khóa hoặc sắp xếp -> gọi tool "search_transactions".
 4. Khi người dùng yêu cầu ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: "vừa ăn phở 50k", "thêm chi tiêu 100k tiền cafe", "nhận lương 25tr") -> hãy chủ động gọi tool "create_transaction".
 5. Khi người dùng hỏi về ngân sách, hạn mức chi tiêu -> gọi tool "get_budget_status".
-6. Khi người dùng hỏi về các khoản nợ hoặc cho vay -> gọi tool "get_debt_summary".
-7. Khi người dùng hỏi về số dư các ví, tài khoản -> gọi tool "list_wallets".
+6. Khi người dùng hỏi về các khoản nợ hoặc cho vay -> gọi tool "get_debt_summary"; khi cần chi tiết một khoản nợ cụ thể kèm lịch sử thanh toán -> gọi tool "get_debt_detail".
+7. Khi người dùng hỏi về số dư các ví, tài khoản -> gọi tool "list_wallets"; khi cần xem chi tiết một ví cụ thể và giao dịch trên ví đó -> gọi tool "get_wallet_detail".
+8. Khi người dùng cần liệt kê danh mục thu/chi (kèm mức chi tháng này) -> gọi tool "list_categories".
+9. Khi người dùng hỏi về xu hướng nhiều tháng, trung bình chi tiêu/thu nhập qua các tháng -> gọi tool "get_monthly_trend".
+10. Khi người dùng hỏi về đầu tư, tài sản đang nắm giữ, lãi lỗ -> gọi tool "get_investment_summary".
+11. Lời khuyên về nguyên tắc quản lý tiền, chiến lược tiết kiệm/đầu tư dựa trên kho tri thức nội bộ: NẾU trong ngữ cảnh đã có phần "KIẾN THỨC NỘI BỘ LIÊN QUAN" và nó bao phủ được câu hỏi -> trả lời NGAY từ phần đó và KHÔNG gọi "search_financial_knowledge"; CHỈ gọi tool này khi phần đó bị thiếu hoặc không liên quan tới câu hỏi.
 
 Quy tắc trả lời:
 - Luôn chủ động gọi công cụ thích hợp khi người dùng yêu cầu thao tác hoặc hỏi dữ liệu tài chính cá nhân.
 - Sau khi có kết quả từ công cụ, trả lời người dùng bằng tiếng Việt tự nhiên, ngắn gọn, súc tích và chuyên nghiệp, sử dụng định dạng Markdown (bullet points, in đậm số tiền, bảng nếu cần).
 - Luôn định dạng tiền tệ rõ ràng theo chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).
-- Đưa ra lời khuyên thực tế, hữu ích giúp người dùng quản lý tài chính hiệu quả hơn.`, nowStr)
+- Đưa ra lời khuyên thực tế, hữu ích giúp người dùng quản lý tài chính hiệu quả hơn.
+- Nếu hệ thống đã cung cấp sẵn phần "KIẾN THỨC NỘI BỘ LIÊN QUAN" và nó trả lời được câu hỏi, dùng ngay phần đó và không tra cứu lại để tránh trùng lặp.`, nowStr)
+
+	// 4b. Auto-inject relevant internal knowledge (RAG) into the system prompt
+	// so general financial-advice questions are grounded without a tool round-trip.
+	injectedDocs := s.autoInjectKnowledge(ctx, req.Message, &systemPrompt, session.ID)
+	if len(injectedDocs) > 0 {
+		// Citation card so the user sees which internal docs ground the answer.
+		eventChan <- dto.ChatStreamEvent{
+			Type:       "action_card",
+			ActionCard: knowledgeAutoInjectCard(req.Message, injectedDocs),
+			SessionID:  &session.ID,
+			MessageID:  &aiMsg.ID,
+			Status:     "STREAMING",
+		}
+	}
 
 	// 5. Load recent conversation history
 	recentMessages, err := s.chatRepo.ListMessagesBySessionID(ctx, session.ID, 8)
@@ -277,7 +372,12 @@ Quy tắc trả lời:
 	}
 
 	// 6. Check for Tool Calling
+	// If knowledge was already auto-injected, hide the retrieval tool for this
+	// turn so the model cannot duplicate the lookup (next turn re-injects).
 	tools := GetFinancialToolDefinitions()
+	if len(injectedDocs) > 0 {
+		tools = withoutKnowledgeSearchTool(tools)
+	}
 	toolChatResp, err := s.requestyService.ChatCompletion(ctx, requestyMessages, tools)
 
 	var fullAIResponse strings.Builder

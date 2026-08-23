@@ -16,7 +16,7 @@ import (
 
 // GetFinancialToolDefinitions returns the schema for all financial tools the AI model can call
 func GetFinancialToolDefinitions() []ToolDefinition {
-	return []ToolDefinition{
+	defs := []ToolDefinition{
 		{
 			Type: "function",
 			Function: ToolFunction{
@@ -363,6 +363,8 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			},
 		},
 	}
+
+	return append(defs, getReadOnlyToolDefinitions()...)
 }
 
 // FinancialToolResult represents the execution outcome of a financial tool
@@ -379,6 +381,10 @@ func (s *chatService) executeFinancialTool(ctx context.Context, userID uuid.UUID
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
 		args = make(map[string]interface{})
+	}
+
+	if res, handled := s.executeReadOnlyFinancialTool(ctx, userID, name, args); handled {
+		return res, nil
 	}
 
 	switch name {

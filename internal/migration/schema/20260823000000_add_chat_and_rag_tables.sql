@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
 
 -- 3. Bảng kho tri thức RAG (Financial Knowledge Chunks)
-CREATE TABLE IF NOT EXISTS financial_knowledge (
+-- Lưu ý: tên bảng phải là `financial_knowledges` (số nhiều) khớp với GORM
+-- NamingStrategy của model.FinancialKnowledge. Bản cũ dùng `financial_knowledge`
+-- (số ít) khiến tạo ra một bảng mồ côi lệch schema với model.
+CREATE TABLE IF NOT EXISTS financial_knowledges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     topic VARCHAR(100) NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -33,9 +36,9 @@ CREATE TABLE IF NOT EXISTS financial_knowledge (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_financial_knowledge_topic ON financial_knowledge(topic);
+CREATE INDEX IF NOT EXISTS idx_financial_knowledges_topic ON financial_knowledges(topic);
 
 -- +goose Down
-DROP TABLE IF EXISTS financial_knowledge;
+DROP TABLE IF EXISTS financial_knowledges;
 DROP TABLE IF EXISTS chat_messages;
 DROP TABLE IF EXISTS chat_sessions;

@@ -31,6 +31,11 @@ func (m *MockKnowledgeRepo) DeleteByTopic(ctx context.Context, topic string) err
 	return args.Error(0)
 }
 
+func (m *MockKnowledgeRepo) ReplaceByTopic(ctx context.Context, topic string, docs []*model.FinancialKnowledge) error {
+	args := m.Called(ctx, topic, docs)
+	return args.Error(0)
+}
+
 func (m *MockKnowledgeRepo) ListAll(ctx context.Context) ([]model.FinancialKnowledge, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]model.FinancialKnowledge), args.Error(1)
@@ -115,6 +120,8 @@ func TestRAGService_SearchKnowledge(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
+	// Background seeding goroutine may upsert any embedded knowledge topic
+	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockAI.On("IsConfigured").Return(true)
 	mockAI.On("EmbedText", mock.Anything, mock.Anything).Return([]float32{0.1, 0.2, 0.3}, nil)
 
@@ -146,11 +153,46 @@ func TestRAGService_BackfillEmptyEmbedding(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockAI.On("IsConfigured").Return(false)
 
 	ragSvc := service.NewRAGService(mockRepo, mockAI, logger)
 	err := ragSvc.SeedDefaultKnowledge(context.Background())
 	assert.NoError(t, err)
+}
+
+func TestRAGService_SearchKnowledge_FallbackFlaggedNotFaked(t *testing.T) {
+	mockRepo := new(MockKnowledgeRepo)
+	mockAI := new(MockRequestyService)
+	logger := zap.NewNop()
+
+	// Doc with an empty embedding can never match semantically, and the query
+	// shares no keywords -> the search must fall back WITHOUT faking a score.
+	docList := []model.FinancialKnowledge{
+		{
+			ID:        uuid.New(),
+			Topic:     "emergency_fund",
+			Title:     "Quỹ dự khẩn",
+			Content:   "Cần tích lũy quỹ dự phòng tối thiểu sáu tháng chi tiêu.",
+			Embedding: "[]",
+		},
+	}
+
+	mockRepo.On("ListAll", mock.Anything).Return(docList, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockAI.On("IsConfigured").Return(true)
+	mockAI.On("EmbedText", mock.Anything, mock.Anything).Return([]float32{0.1, 0.2, 0.3}, nil)
+
+	ragSvc := service.NewRAGService(mockRepo, mockAI, logger)
+
+	results, err := ragSvc.SearchKnowledge(context.Background(), "xyzzy unrelated query words", 2)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, results, "fallback should still return general docs")
+	assert.True(t, results[0].Fallback, "fallback docs must be flagged")
+	assert.Equal(t, float32(0), results[0].Score, "fallback docs must not carry a fake relevance score")
 }
 
 func TestRAGService_AddKnowledge_Chunking(t *testing.T) {
@@ -162,6 +204,18 @@ func TestRAGService_AddKnowledge_Chunking(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.On("ReplaceByTopic", mock.Anything, "long_topic", mock.Anything).
+		Run(func(args mock.Arguments) {
+			docs := args.Get(2).([]*model.FinancialKnowledge)
+			assert.GreaterOrEqual(t, len(docs), 2, "long content must be split into multiple chunks")
+			for _, d := range docs {
+				assert.NotEmpty(t, d.Embedding)
+				assert.Equal(t, "long_topic", d.Topic)
+			}
+		}).
+		Return(nil).Once()
+	// Background seeding goroutine may upsert any embedded knowledge topic
+	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockAI.On("IsConfigured").Return(false)
 
 	ragSvc := service.NewRAGService(mockRepo, mockAI, logger)
@@ -176,4 +230,5 @@ Mỗi khoản chi tiêu cần được phân loại chính xác vào danh mục 
 
 	err := ragSvc.AddKnowledge(context.Background(), "long_topic", "Cẩm nang Tài chính", longContent)
 	assert.NoError(t, err)
+	mockRepo.AssertExpectations(t)
 }
