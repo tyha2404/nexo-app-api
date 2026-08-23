@@ -170,6 +170,198 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "transfer_between_wallets",
+				Description: "Thực hiện chuyển tiền nội bộ giữa 2 ví/tài khoản (ví dụ rút tiền từ ngân hàng về tiền mặt, chuyển từ Techcombank sang MoMo).",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"amount", "fromWalletName", "toWalletName"},
+					"properties": map[string]interface{}{
+						"amount": map[string]interface{}{
+							"type":        "number",
+							"description": "Số tiền cần chuyển (VND)",
+						},
+						"fromWalletName": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên ví nguồn chuyển đi (ví dụ: Techcombank, VPBank, Tiền mặt, v.v.)",
+						},
+						"toWalletName": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên ví đích nhận tiền (ví dụ: MoMo, Tiền mặt, ZaloPay, v.v.)",
+						},
+						"fee": map[string]interface{}{
+							"type":        "number",
+							"description": "Phí chuyển khoản nếu có (VND, mặc định 0)",
+						},
+						"notes": map[string]interface{}{
+							"type":        "string",
+							"description": "Ghi chú chuyển khoản",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "create_debt",
+				Description: "Ghi nhận một khoản nợ mới (nợ phải trả PAYABLE hoặc cho người khác vay mượn RECEIVABLE).",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"title", "totalAmount", "type"},
+					"properties": map[string]interface{}{
+						"title": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên khoản nợ/người vay (ví dụ: Cho Nam mượn tiền, Vay anh Tuấn, Mua trả góp iPhone)",
+						},
+						"totalAmount": map[string]interface{}{
+							"type":        "number",
+							"description": "Tổng số tiền nợ (VND)",
+						},
+						"type": map[string]interface{}{
+							"type":        "string",
+							"enum":        []string{"PAYABLE", "RECEIVABLE"},
+							"description": "Loại nợ: PAYABLE (mình nợ người khác / phải trả), RECEIVABLE (người khác nợ mình / cần thu hồi)",
+						},
+						"dueDate": map[string]interface{}{
+							"type":        "string",
+							"description": "Hạn trả nợ (YYYY-MM-DD)",
+						},
+						"notes": map[string]interface{}{
+							"type":        "string",
+							"description": "Ghi chú thêm về khoản nợ",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "record_debt_repayment",
+				Description: "Ghi nhận một lần trả nợ hoặc thu hồi nợ (toàn phần hoặc một phần) cho một khoản nợ hiện có.",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"debtTitle", "amount"},
+					"properties": map[string]interface{}{
+						"debtTitle": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên khoản nợ cần trả hoặc tên người trả nợ (ví dụ: Nam, Anh Tuấn)",
+						},
+						"amount": map[string]interface{}{
+							"type":        "number",
+							"description": "Số tiền trả nợ đợt này (VND)",
+						},
+						"walletName": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên ví nhận tiền thu hồi hoặc ví dùng để trả nợ",
+						},
+						"notes": map[string]interface{}{
+							"type":        "string",
+							"description": "Ghi chú thanh toán",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "set_budget",
+				Description: "Tạo mới hoặc điều chỉnh hạn mức ngân sách chi tiêu hàng tháng cho một danh mục.",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"categoryName", "amount"},
+					"properties": map[string]interface{}{
+						"categoryName": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên danh mục cần đặt ngân sách (ví dụ: Ăn uống, Mua sắm, Di chuyển)",
+						},
+						"amount": map[string]interface{}{
+							"type":        "number",
+							"description": "Hạn mức ngân sách (VND)",
+						},
+						"periodStart": map[string]interface{}{
+							"type":        "string",
+							"description": "Ngày bắt đầu chu kỳ (YYYY-MM-DD), mặc định ngày 1 đầu tháng",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "compare_financial_periods",
+				Description: "So sánh tình hình thu/chi giữa 2 tháng khác nhau để xem biến động tăng giảm các danh mục.",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"firstMonth", "secondMonth"},
+					"properties": map[string]interface{}{
+						"firstMonth": map[string]interface{}{
+							"type":        "string",
+							"description": "Tháng thứ nhất cần so sánh (YYYY-MM, ví dụ 2026-07)",
+						},
+						"secondMonth": map[string]interface{}{
+							"type":        "string",
+							"description": "Tháng thứ hai cần so sánh (YYYY-MM, ví dụ 2026-08)",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "get_financial_targets",
+				Description: "Kiểm tra tiến độ thực hiện các mục tiêu tài chính tháng (hạn mức chi tiêu tối đa hoặc mục tiêu tiết kiệm, số tiền đã đạt, tỷ lệ hoàn thành).",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"month": map[string]interface{}{
+							"type":        "integer",
+							"description": "Tháng (1-12), mặc định là tháng hiện tại",
+						},
+						"year": map[string]interface{}{
+							"type":        "integer",
+							"description": "Năm (YYYY), mặc định là năm hiện tại",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "set_financial_target",
+				Description: "Thiết lập hoặc cập nhật mục tiêu tài chính cho tháng (Mục tiêu tiết kiệm SAVINGS hoặc Hạn mức chi tiêu SPENDING_LIMIT).",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"targetType", "targetAmount"},
+					"properties": map[string]interface{}{
+						"targetType": map[string]interface{}{
+							"type":        "string",
+							"enum":        []string{"SAVINGS", "SPENDING_LIMIT"},
+							"description": "Loại mục tiêu: SAVINGS (tiết kiệm tích lũy) hoặc SPENDING_LIMIT (hạn mức chi tiêu tối đa)",
+						},
+						"targetAmount": map[string]interface{}{
+							"type":        "number",
+							"description": "Số tiền mục tiêu (VND)",
+						},
+						"month": map[string]interface{}{
+							"type":        "integer",
+							"description": "Tháng áp dụng (1-12), mặc định tháng hiện tại",
+						},
+						"year": map[string]interface{}{
+							"type":        "integer",
+							"description": "Năm áp dụng (YYYY), mặc định năm hiện tại",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -204,6 +396,20 @@ func (s *chatService) executeFinancialTool(ctx context.Context, userID uuid.UUID
 		return s.toolListWallets(ctx, userID, args)
 	case "get_spending_by_category":
 		return s.toolGetSpendingByCategory(ctx, userID, args)
+	case "transfer_between_wallets":
+		return s.toolTransferBetweenWallets(ctx, userID, args)
+	case "create_debt":
+		return s.toolCreateDebt(ctx, userID, args)
+	case "record_debt_repayment":
+		return s.toolRecordDebtRepayment(ctx, userID, args)
+	case "set_budget":
+		return s.toolSetBudget(ctx, userID, args)
+	case "compare_financial_periods":
+		return s.toolCompareFinancialPeriods(ctx, userID, args)
+	case "get_financial_targets":
+		return s.toolGetFinancialTargets(ctx, userID, args)
+	case "set_financial_target":
+		return s.toolSetFinancialTarget(ctx, userID, args)
 	default:
 		return &FinancialToolResult{
 			ToolTitle:  fmt.Sprintf("Thực thi công cụ %s...", name),
@@ -608,6 +814,421 @@ func (s *chatService) toolGetSpendingByCategory(ctx context.Context, userID uuid
 	return &FinancialToolResult{
 		ToolTitle:  "Đang phân tích cơ cấu chi tiêu...",
 		ResultJSON: string(resultBytes),
+	}, nil
+}
+
+func (s *chatService) toolTransferBetweenWallets(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	amount, _ := args["amount"].(float64)
+	if amount <= 0 {
+		return &FinancialToolResult{
+			ToolTitle:  "Lỗi tham số chuyển tiền",
+			ResultJSON: `{"error": "Số tiền chuyển phải lớn hơn 0"}`,
+		}, nil
+	}
+
+	fromName, _ := args["fromWalletName"].(string)
+	toName, _ := args["toWalletName"].(string)
+	notes, _ := args["notes"].(string)
+	fee, _ := args["fee"].(float64)
+
+	wallets, err := s.walletRepo.ListByUserID(ctx, userID)
+	if err != nil || len(wallets) == 0 {
+		return nil, fmt.Errorf("không tìm thấy danh sách ví của bạn")
+	}
+
+	var fromWallet, toWallet *model.Wallet
+	for i := range wallets {
+		w := &wallets[i]
+		if fromWallet == nil && fromName != "" && (strings.EqualFold(w.Name, fromName) || strings.Contains(strings.ToLower(w.Name), strings.ToLower(fromName))) {
+			fromWallet = w
+		}
+		if toWallet == nil && toName != "" && (strings.EqualFold(w.Name, toName) || strings.Contains(strings.ToLower(w.Name), strings.ToLower(toName))) {
+			toWallet = w
+		}
+	}
+
+	if fromWallet == nil || toWallet == nil {
+		return &FinancialToolResult{
+			ToolTitle:  "Chuyển tiền nội bộ",
+			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy ví nguồn '%s' hoặc ví đích '%s' trong hệ thống."}`, fromName, toName),
+		}, nil
+	}
+
+	var notePtr *string
+	if notes != "" {
+		notePtr = &notes
+	}
+
+	transferReq := dto.TransferMoneyRequest{
+		FromWalletID: fromWallet.ID,
+		ToWalletID:   toWallet.ID,
+		Amount:       amount,
+		Fee:          fee,
+		Note:         notePtr,
+	}
+
+	res, err := s.walletService.TransferMoney(ctx, userID, transferReq)
+	if err != nil {
+		return &FinancialToolResult{
+			ToolTitle:  "Chuyển tiền nội bộ thất bại",
+			ResultJSON: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
+		}, nil
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "WALLET_TRANSFER",
+		Title:       "Chuyển tiền thành công",
+		Description: fmt.Sprintf("Đã chuyển %s ₫ từ ví %s sang ví %s", formatVND(amount), fromWallet.Name, toWallet.Name),
+		Data:        res,
+	}
+
+	resultBytes, _ := json.Marshal(res)
+	return &FinancialToolResult{
+		ToolTitle:  "Đang thực hiện chuyển tiền...",
+		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
+	}, nil
+}
+
+func (s *chatService) toolCreateDebt(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	title, _ := args["title"].(string)
+	amount, _ := args["totalAmount"].(float64)
+	typeStr, _ := args["type"].(string)
+	notes, _ := args["notes"].(string)
+	dueDateStr, _ := args["dueDate"].(string)
+
+	if title == "" || amount <= 0 {
+		return &FinancialToolResult{
+			ToolTitle:  "Lỗi tham số khoản nợ",
+			ResultJSON: `{"error": "Cần cung cấp tên khoản nợ và số tiền lớn hơn 0"}`,
+		}, nil
+	}
+
+	debtType := model.DebtTypePayable
+	if strings.ToUpper(typeStr) == "RECEIVABLE" {
+		debtType = model.DebtTypeReceivable
+	}
+
+	var dueDate *time.Time
+	if dueDateStr != "" {
+		if t, err := time.Parse("2006-01-02", dueDateStr); err == nil {
+			dueDate = &t
+		}
+	}
+
+	req := dto.CreateDebtRequest{
+		Type:        debtType,
+		Title:       title,
+		TotalAmount: amount,
+		DueDate:     dueDate,
+		Notes:       notes,
+	}
+
+	createdDebt, err := s.debtService.CreateDebt(ctx, userID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	typeVi := "Khoản nợ phải trả"
+	if debtType == model.DebtTypeReceivable {
+		typeVi = "Khoản cho vay (cần thu)"
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "DEBT_CREATED",
+		Title:       fmt.Sprintf("Đã ghi nhận %s", typeVi),
+		Description: fmt.Sprintf("%s ₫ - %s", formatVND(amount), title),
+		Data:        createdDebt,
+	}
+
+	resultBytes, _ := json.Marshal(createdDebt)
+	return &FinancialToolResult{
+		ToolTitle:  "Đang ghi nhận khoản nợ...",
+		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
+	}, nil
+}
+
+func (s *chatService) toolRecordDebtRepayment(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	debtTitle, _ := args["debtTitle"].(string)
+	amount, _ := args["amount"].(float64)
+	notes, _ := args["notes"].(string)
+
+	if debtTitle == "" || amount <= 0 {
+		return &FinancialToolResult{
+			ToolTitle:  "Lỗi tham số trả nợ",
+			ResultJSON: `{"error": "Cần cung cấp tên khoản nợ và số tiền trả nợ"}`,
+		}, nil
+	}
+
+	debts, err := s.debtService.GetDebts(ctx, userID, "", "")
+	if err != nil || len(debts) == 0 {
+		return &FinancialToolResult{
+			ToolTitle:  "Ghi nhận trả nợ",
+			ResultJSON: `{"error": "Bạn không có khoản nợ nào trong hệ thống."}`,
+		}, nil
+	}
+
+	var matchedDebt *dto.DebtResponse
+	for i := range debts {
+		d := &debts[i]
+		if strings.Contains(strings.ToLower(d.Title), strings.ToLower(debtTitle)) || strings.Contains(strings.ToLower(debtTitle), strings.ToLower(d.Title)) {
+			matchedDebt = d
+			break
+		}
+	}
+
+	if matchedDebt == nil {
+		return &FinancialToolResult{
+			ToolTitle:  "Ghi nhận trả nợ",
+			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy khoản nợ khớp với '%s'"}`, debtTitle),
+		}, nil
+	}
+
+	repayReq := dto.AddRepaymentRequest{
+		Amount: amount,
+		Notes:  notes,
+	}
+
+	updatedDebt, err := s.debtService.AddRepayment(ctx, userID, matchedDebt.ID, repayReq)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "DEBT_REPAID",
+		Title:       "Đã ghi nhận thanh toán nợ",
+		Description: fmt.Sprintf("Đã trả %s ₫ cho '%s' (Còn lại: %s ₫)", formatVND(amount), updatedDebt.Title, formatVND(updatedDebt.Remaining)),
+		Data:        updatedDebt,
+	}
+
+	resultBytes, _ := json.Marshal(updatedDebt)
+	return &FinancialToolResult{
+		ToolTitle:  "Đang cập nhật thanh toán nợ...",
+		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
+	}, nil
+}
+
+func (s *chatService) toolSetBudget(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	categoryName, _ := args["categoryName"].(string)
+	amount, _ := args["amount"].(float64)
+	periodStartStr, _ := args["periodStart"].(string)
+
+	if categoryName == "" || amount <= 0 {
+		return &FinancialToolResult{
+			ToolTitle:  "Lỗi đặt hạn mức ngân sách",
+			ResultJSON: `{"error": "Cần cung cấp tên danh mục và hạn mức ngân sách hợp lệ"}`,
+		}, nil
+	}
+
+	categories, err := s.categoryRepo.List(ctx, userID, "", 100, 0)
+	if err != nil || len(categories) == 0 {
+		return nil, fmt.Errorf("không tìm thấy danh mục nào")
+	}
+
+	var targetCategory *model.Category
+	for i := range categories {
+		c := &categories[i]
+		if strings.EqualFold(c.Name, categoryName) || strings.Contains(strings.ToLower(c.Name), strings.ToLower(categoryName)) {
+			targetCategory = c
+			break
+		}
+	}
+
+	if targetCategory == nil {
+		return &FinancialToolResult{
+			ToolTitle:  "Đặt ngân sách",
+			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy danh mục '%s' trong hệ thống của bạn"}`, categoryName),
+		}, nil
+	}
+
+	periodStart := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
+	if periodStartStr != "" {
+		if t, err := time.Parse("2006-01-02", periodStartStr); err == nil {
+			periodStart = t
+		}
+	}
+
+	req := dto.CreateBudgetRequest{
+		CategoryID:  targetCategory.ID,
+		Amount:      amount,
+		PeriodType:  "MONTHLY",
+		PeriodStart: periodStart,
+	}
+
+	budgetRes, err := s.budgetService.CreateBudget(ctx, userID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "BUDGET_SET",
+		Title:       "Đã thiết lập ngân sách",
+		Description: fmt.Sprintf("Hạn mức danh mục %s: %s ₫/tháng", targetCategory.Name, formatVND(amount)),
+		Data:        budgetRes,
+	}
+
+	resultBytes, _ := json.Marshal(budgetRes)
+	return &FinancialToolResult{
+		ToolTitle:  "Đang thiết lập ngân sách...",
+		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
+	}, nil
+}
+
+func (s *chatService) toolCompareFinancialPeriods(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	m1, _ := args["firstMonth"].(string)
+	m2, _ := args["secondMonth"].(string)
+
+	now := time.Now()
+	if m1 == "" {
+		m1 = now.AddDate(0, -1, 0).Format("2006-01")
+	}
+	if m2 == "" {
+		m2 = now.Format("2006-01")
+	}
+
+	s1, e1 := resolveDateRange(map[string]interface{}{"month": m1})
+	s2, e2 := resolveDateRange(map[string]interface{}{"month": m2})
+
+	sum1, err1 := s.reportService.GetSummary(ctx, userID, s1, e1)
+	sum2, err2 := s.reportService.GetSummary(ctx, userID, s2, e2)
+	if err1 != nil || err2 != nil {
+		return nil, fmt.Errorf("không thể lấy dữ liệu so sánh giữa 2 tháng")
+	}
+
+	diffExpense := sum2.TotalExpense - sum1.TotalExpense
+	diffIncome := sum2.TotalIncome - sum1.TotalIncome
+
+	resultMap := map[string]interface{}{
+		"first_month": map[string]interface{}{
+			"month":         m1,
+			"total_income":  sum1.TotalIncome,
+			"total_expense": sum1.TotalExpense,
+			"net_savings":   sum1.TotalIncome - sum1.TotalExpense,
+		},
+		"second_month": map[string]interface{}{
+			"month":         m2,
+			"total_income":  sum2.TotalIncome,
+			"total_expense": sum2.TotalExpense,
+			"net_savings":   sum2.TotalIncome - sum2.TotalExpense,
+		},
+		"difference": map[string]interface{}{
+			"expense_change": diffExpense,
+			"income_change":  diffIncome,
+		},
+	}
+
+	resultBytes, _ := json.Marshal(resultMap)
+	return &FinancialToolResult{
+		ToolTitle:  fmt.Sprintf("Đang so sánh tài chính tháng %s và %s...", m1, m2),
+		ResultJSON: string(resultBytes),
+	}, nil
+}
+
+func (s *chatService) toolGetFinancialTargets(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	now := time.Now()
+	month := int(now.Month())
+	year := now.Year()
+
+	if mVal, ok := args["month"].(float64); ok && mVal > 0 {
+		month = int(mVal)
+	}
+	if yVal, ok := args["year"].(float64); ok && yVal > 0 {
+		year = int(yVal)
+	}
+
+	summary, err := s.targetService.GetSummary(ctx, userID, month, year)
+	if err != nil {
+		return nil, err
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "TARGET_STATUS",
+		Title:       fmt.Sprintf("Mục tiêu tài chính Tháng %d/%d", month, year),
+		Description: fmt.Sprintf("Chi tiêu: %s ₫ (Hạn mức: %s ₫) | Đầu tư: %s ₫", formatVND(summary.Expense.SpentAmount), formatVND(summary.Expense.TargetAmount), formatVND(summary.Investment.InvestedAmount)),
+		Data:        summary,
+	}
+
+	resultBytes, _ := json.Marshal(summary)
+	return &FinancialToolResult{
+		ToolTitle:  "Đang kiểm tra mục tiêu tài chính...",
+		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
+	}, nil
+}
+
+func (s *chatService) toolSetFinancialTarget(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	targetType, _ := args["targetType"].(string)
+	amount, _ := args["targetAmount"].(float64)
+
+	if targetType == "" || amount <= 0 {
+		return &FinancialToolResult{
+			ToolTitle:  "Lỗi thiết lập mục tiêu",
+			ResultJSON: `{"error": "Cần cung cấp loại mục tiêu (EXPENSE/INVESTMENT) và số tiền lớn hơn 0"}`,
+		}, nil
+	}
+
+	// Normalize target type
+	if strings.ToUpper(targetType) == "SPENDING_LIMIT" || strings.ToUpper(targetType) == "SPENDING" {
+		targetType = "EXPENSE"
+	} else if strings.ToUpper(targetType) == "SAVINGS" {
+		targetType = "INVESTMENT"
+	}
+
+	now := time.Now()
+	month := int(now.Month())
+	year := now.Year()
+
+	if mVal, ok := args["month"].(float64); ok && mVal > 0 {
+		month = int(mVal)
+	}
+	if yVal, ok := args["year"].(float64); ok && yVal > 0 {
+		year = int(yVal)
+	}
+
+	req := &dto.UpsertTargetRequest{
+		TargetType:   targetType,
+		TargetAmount: amount,
+		Month:        month,
+		Year:         year,
+	}
+
+	if err := s.targetService.UpsertTarget(ctx, userID, req); err != nil {
+		return nil, err
+	}
+
+	typeVi := "Hạn mức chi tiêu tối đa"
+	if targetType == "INVESTMENT" {
+		typeVi = "Mục tiêu đầu tư / tiết kiệm"
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "TARGET_SET",
+		Title:       "Đã lưu mục tiêu tài chính",
+		Description: fmt.Sprintf("%s Tháng %d/%d: %s ₫", typeVi, month, year, formatVND(amount)),
+		Data: map[string]interface{}{
+			"targetType":   targetType,
+			"targetAmount": amount,
+			"month":        month,
+			"year":         year,
+		},
+	}
+
+	resultBytes, _ := json.Marshal(map[string]interface{}{
+		"success":      true,
+		"targetType":   targetType,
+		"targetAmount": amount,
+		"month":        month,
+		"year":         year,
+		"message":      "Mục tiêu tài chính đã được thiết lập thành công.",
+	})
+
+	return &FinancialToolResult{
+		ToolTitle:  "Đang lưu mục tiêu tài chính...",
+		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
 	}, nil
 }
 

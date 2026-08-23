@@ -110,6 +110,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		budgetService,
 		debtService,
 		walletService,
+		targetService,
 		categoryRepo,
 		transactionRepo,
 		walletRepo,

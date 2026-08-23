@@ -31,6 +31,7 @@ type chatService struct {
 	budgetService      BudgetService
 	debtService        DebtService
 	walletService      WalletService
+	targetService      TargetService
 	categoryRepo       repository.CategoryRepo
 	transactionRepo    repository.TransactionRepository
 	walletRepo         repository.WalletRepository
@@ -46,6 +47,7 @@ func NewChatService(
 	budgetService BudgetService,
 	debtService DebtService,
 	walletService WalletService,
+	targetService TargetService,
 	categoryRepo repository.CategoryRepo,
 	transactionRepo repository.TransactionRepository,
 	walletRepo repository.WalletRepository,
@@ -60,6 +62,7 @@ func NewChatService(
 		budgetService:      budgetService,
 		debtService:        debtService,
 		walletService:      walletService,
+		targetService:      targetService,
 		categoryRepo:       categoryRepo,
 		transactionRepo:    transactionRepo,
 		walletRepo:         walletRepo,
