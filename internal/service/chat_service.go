@@ -347,14 +347,24 @@ Quy tắc trả lời:
 				return nil
 			})
 		} else if choice.Message.Content != "" {
-			// Model responded directly with text
+			// Model responded directly with text - stream it token-by-token for silky smooth UX
 			fullAIResponse.WriteString(choice.Message.Content)
-			eventChan <- dto.ChatStreamEvent{
-				Type:      "text_delta",
-				Delta:     choice.Message.Content,
-				SessionID: &session.ID,
-				MessageID: &aiMsg.ID,
-				Status:    "STREAMING",
+			runes := []rune(choice.Message.Content)
+			chunkSize := 4
+			for i := 0; i < len(runes); i += chunkSize {
+				end := i + chunkSize
+				if end > len(runes) {
+					end = len(runes)
+				}
+				delta := string(runes[i:end])
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "text_delta",
+					Delta:     delta,
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+				time.Sleep(15 * time.Millisecond)
 			}
 		} else {
 			// Fallback to stream completions
