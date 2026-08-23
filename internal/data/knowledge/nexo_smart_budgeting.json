@@ -1,0 +1,5 @@
+{
+  "topic": "nexo_smart_budgeting",
+  "title": "Hướng dẫn Sử dụng Nexo để Tối ưu Hạn mức Ngân sách",
+  "content": "Cách thiết lập hệ thống quản lý tài chính chuẩn trên Nexo:\n1. Tạo đầy đủ các Ví (Wallets): Ví Tiền mặt, Ví Ngân hàng chính (nhận lương), Ví Chi tiêu (Momo/ZaloPay), Ví Tiết kiệm khẩn cấp.\n2. Thiết lập Ngân sách (Budgets) đầu tháng: Gán ngân sách tối đa cho các danh mục dễ vượt chi như \"Ăn uống\", \"Mua sắm\", \"Giải trí\".\n3. Ghi chép tức thì: Nhập ngay sau khi phát sinh chi tiêu hoặc nhắn tin cho Nexo AI Copilot để ghi chép tự động chỉ trong vài giây.\n4. Theo dõi Cảnh báo: Nexo sẽ tự động cảnh báo khi chi tiêu danh mục chạm mốc 80% và 100% ngân sách đã đặt ra."
+}

@@ -39,6 +39,10 @@ func (m *Migrator) AutoMigrate() error {
 		&model.Repayment{},
 		&model.Wallet{},
 		&model.WalletTransfer{},
+		&model.Preset{},
+		&model.ChatSession{},
+		&model.ChatMessage{},
+		&model.FinancialKnowledge{},
 	)
 }
 

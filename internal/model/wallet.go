@@ -54,6 +54,8 @@ type WalletTransfer struct {
 	Note         *string   `gorm:"type:text" json:"note,omitempty"`
 	TransferDate time.Time `gorm:"type:date;not null" json:"transferDate"`
 	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	DeletedAt    DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 
 	FromWallet *Wallet `gorm:"foreignKey:FromWalletID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	ToWallet   *Wallet `gorm:"foreignKey:ToWalletID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`

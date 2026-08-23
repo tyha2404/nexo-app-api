@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/tyha2404/nexo-app-api/internal/config"
 	"github.com/tyha2404/nexo-app-api/internal/handler"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"github.com/tyha2404/nexo-app-api/internal/service"
@@ -24,6 +25,8 @@ type Container struct {
 	DebtRepo        repository.DebtRepository
 	PresetRepo      repository.PresetRepository
 	WalletRepo      repository.WalletRepository
+	ChatRepo        repository.ChatRepository
+	KnowledgeRepo   repository.KnowledgeRepository
 
 	// Services
 	AuthService        service.AuthService
@@ -39,6 +42,9 @@ type Container struct {
 	DebtService        service.DebtService
 	PresetService      service.PresetService
 	WalletService      service.WalletService
+	GLMService         service.GLMService
+	RAGService         service.RAGService
+	ChatService        service.ChatService
 
 	// Handlers
 	HealthHandler      *handler.HealthHandler
@@ -55,6 +61,7 @@ type Container struct {
 	DebtHandler        *handler.DebtHandler
 	PresetHandler      *handler.PresetHandler
 	WalletHandler      *handler.WalletHandler
+	ChatHandler        *handler.ChatHandler
 }
 
 // NewContainer initializes and wires all dependencies
@@ -70,6 +77,13 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	debtRepo := repository.NewDebtRepository(db)
 	presetRepo := repository.NewPresetRepository(db)
 	walletRepo := repository.NewWalletRepository(db)
+	chatRepo := repository.NewChatRepository(db)
+	knowledgeRepo := repository.NewKnowledgeRepository(db)
+
+	cfg, _ := config.LoadConfig()
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 
 	// 2. Initialize Services
 	authService := service.NewAuthService(userRepo)
@@ -85,6 +99,14 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	debtService := service.NewDebtService(debtRepo)
 	presetService := service.NewPresetService(presetRepo, categoryRepo)
 	walletService := service.NewWalletService(walletRepo)
+	glmService := service.NewGLMService(cfg, logger)
+	ragService := service.NewRAGService(knowledgeRepo, glmService, logger)
+	chatService := service.NewChatService(
+		chatRepo,
+		glmService,
+		ragService,
+		logger,
+	)
 
 	// 3. Initialize Handlers
 	healthHandler := handler.NewHealthHandler(db, logger)
@@ -101,6 +123,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	debtHandler := handler.NewDebtHandler(debtService, logger)
 	presetHandler := handler.NewPresetHandler(presetService, logger)
 	walletHandler := handler.NewWalletHandler(walletService, logger)
+	chatHandler := handler.NewChatHandler(chatService, logger)
 
 	return &Container{
 		DB:                 db,
@@ -115,6 +138,8 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		DebtRepo:           debtRepo,
 		PresetRepo:         presetRepo,
 		WalletRepo:         walletRepo,
+		ChatRepo:           chatRepo,
+		KnowledgeRepo:      knowledgeRepo,
 		AuthService:        authService,
 		UserService:        userService,
 		CategoryService:    categoryService,
@@ -128,6 +153,9 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		DebtService:        debtService,
 		PresetService:      presetService,
 		WalletService:      walletService,
+		GLMService:         glmService,
+		RAGService:         ragService,
+		ChatService:        chatService,
 		HealthHandler:      healthHandler,
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
@@ -142,5 +170,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		DebtHandler:        debtHandler,
 		PresetHandler:      presetHandler,
 		WalletHandler:      walletHandler,
+		ChatHandler:        chatHandler,
 	}
 }

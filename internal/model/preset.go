@@ -19,6 +19,7 @@ type Preset struct {
 	SortOrder   int             `gorm:"default:0" json:"sortOrder"`
 	CreatedAt   time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt   time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	DeletedAt   DeletedAt       `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 
 	User     User     `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Category Category `gorm:"foreignKey:CategoryID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`

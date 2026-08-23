@@ -16,24 +16,37 @@ type Config struct {
 	DBSSL     string
 	Port      string
 	LogLevel  string
-	JwtSecret string
-	AppEnv    string
+	JwtSecret         string
+	AppEnv            string
+	GlmApiKey         string
+	GlmBaseURL        string
+	GlmModel          string
+	GlmEmbeddingModel string
 }
 
 func LoadConfig() (*Config, error) {
 	_ = godotenv.Load()
 
+	glmKey := getEnv("GLM_API_KEY", "")
+	if glmKey == "" {
+		glmKey = getEnv("AI_API_KEY", "")
+	}
+
 	c := &Config{
-		DBHost:    getEnv("DB_HOST", "localhost"),
-		DBPort:    getEnv("DB_PORT", "5432"),
-		DBUser:    getEnv("DB_USER", "postgres"),
-		DBPass:    getEnv("DB_PASS", "postgres"),
-		DBName:    getEnv("DB_NAME", "costdb"),
-		DBSSL:     getEnv("DB_SSLMODE", "disable"),
-		Port:      getEnv("APP_PORT", "3001"),
-		LogLevel:  getEnv("LOG_LEVEL", "info"),
-		JwtSecret: getEnv("JWT_SECRET", "secret"),
-		AppEnv:    getEnv("APP_ENV", "dev"),
+		DBHost:            getEnv("DB_HOST", "localhost"),
+		DBPort:            getEnv("DB_PORT", "5432"),
+		DBUser:            getEnv("DB_USER", "postgres"),
+		DBPass:            getEnv("DB_PASS", "postgres"),
+		DBName:            getEnv("DB_NAME", "costdb"),
+		DBSSL:             getEnv("DB_SSLMODE", "disable"),
+		Port:              getEnv("APP_PORT", "3001"),
+		LogLevel:          getEnv("LOG_LEVEL", "info"),
+		JwtSecret:         getEnv("JWT_SECRET", "secret"),
+		AppEnv:            getEnv("APP_ENV", "dev"),
+		GlmApiKey:         glmKey,
+		GlmBaseURL:        getEnv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/"),
+		GlmModel:          getEnv("GLM_MODEL", "glm-4-flash"),
+		GlmEmbeddingModel: getEnv("GLM_EMBEDDING_MODEL", "embedding-3"),
 	}
 
 	// Security validations

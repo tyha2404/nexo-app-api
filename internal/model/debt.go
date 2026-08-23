@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type DebtType string
@@ -35,6 +36,14 @@ type Debt struct {
 	Repayments  []Repayment `gorm:"foreignKey:DebtID;constraint:OnDelete:CASCADE" json:"repayments,omitempty"`
 	CreatedAt   time.Time   `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt   time.Time   `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	DeletedAt   DeletedAt   `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
+}
+
+func (d *Debt) BeforeCreate(tx *gorm.DB) (err error) {
+	if d.ID == uuid.Nil {
+		d.ID, err = uuid.NewV7()
+	}
+	return err
 }
 
 type Repayment struct {
@@ -44,4 +53,13 @@ type Repayment struct {
 	PaidAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"paidAt"`
 	Notes     string    `gorm:"type:text" json:"notes"`
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	DeletedAt DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
+}
+
+func (r *Repayment) BeforeCreate(tx *gorm.DB) (err error) {
+	if r.ID == uuid.Nil {
+		r.ID, err = uuid.NewV7()
+	}
+	return err
 }

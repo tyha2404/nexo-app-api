@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tyha2404/nexo-app-api/internal/logger"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -53,7 +54,7 @@ func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{})
 	}
 }
 
-// Trace logs SQL queries with execution time
+// Trace logs SQL queries with fine-grained syntax highlighting and execution metrics
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	if l.level <= gormlogger.Silent {
 		return
@@ -61,31 +62,56 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql 
 
 	elapsed := time.Since(begin)
 	sql, rows := fc()
+	nowStr := fmt.Sprintf("%s%s%s", logger.HiBlack, time.Now().Format("15:04:05.000"), logger.Reset)
+	highlightedSQL := logger.HighlightSQL(sql)
 
-	// Always log SQL queries to console for debugging
-	fmt.Printf("\n[SQL] %s\n", sql)
-	fmt.Printf("[Duration] %v\n", elapsed)
-	fmt.Printf("[Rows Affected] %d\n", rows)
-	if err != nil {
-		fmt.Printf("[Error] %v\n", err)
-	}
-	fmt.Println("----------------------------------------")
-
-	fields := []zap.Field{
-		zap.String("sql", sql),
-		zap.Duration("duration", elapsed),
-		zap.Int64("rows_affected", rows),
-	}
+	rowsStr := fmt.Sprintf("%s[%d %s]%s", logger.Magenta, rows, func() string {
+		if rows == 1 {
+			return "row"
+		}
+		return "rows"
+	}(), logger.Reset)
 
 	switch {
 	case err != nil && l.level >= gormlogger.Error && (!errors.Is(err, gorm.ErrRecordNotFound)):
-		l.logger.Error("SQL Error", append(fields, zap.Error(err))...)
+		fmt.Printf("%s%s[SQL ✖ ERR]%s %s | %s | %s\n      ↳ %sError:%s %v\n",
+			logger.BgRed, logger.White, logger.Reset,
+			nowStr,
+			logger.ColorDuration(elapsed),
+			highlightedSQL,
+			logger.Red+logger.Bold, logger.Reset, err,
+		)
+		l.logger.Error("SQL Error",
+			zap.String("sql", sql),
+			zap.Duration("duration", elapsed),
+			zap.Error(err),
+		)
 	case elapsed > 200*time.Millisecond && l.level >= gormlogger.Warn:
-		l.logger.Warn("Slow SQL", append(fields, zap.String("threshold", "200ms"))...)
+		fmt.Printf("%s%s[SQL ⚠️ SLOW]%s %s | %s | %s %s\n",
+			logger.BgYellow, logger.White, logger.Reset,
+			nowStr,
+			logger.ColorDuration(elapsed),
+			rowsStr,
+			highlightedSQL,
+		)
+		l.logger.Warn("Slow SQL",
+			zap.String("sql", sql),
+			zap.Duration("duration", elapsed),
+			zap.Int64("rows_affected", rows),
+		)
 	case l.level >= gormlogger.Info:
-		l.logger.Info("SQL Trace", fields...)
+		fmt.Printf("%s%s[SQL 🗄️]%s %s | %s | %s %s\n",
+			logger.BgBlue, logger.White, logger.Reset,
+			nowStr,
+			logger.ColorDuration(elapsed),
+			rowsStr,
+			highlightedSQL,
+		)
 	default:
-		// Always log SQL queries regardless of log level
-		l.logger.Debug("SQL Query", fields...)
+		l.logger.Debug("SQL Query",
+			zap.String("sql", sql),
+			zap.Duration("duration", elapsed),
+			zap.Int64("rows_affected", rows),
+		)
 	}
 }

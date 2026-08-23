@@ -33,7 +33,7 @@ func main() {
 	// Initialize JWT before using it
 	util.InitJWT(cfg)
 
-	logg, err := logger.New(cfg.LogLevel)
+	logg, err := logger.New(cfg.LogLevel, cfg.AppEnv)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
