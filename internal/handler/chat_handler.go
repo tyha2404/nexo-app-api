@@ -28,7 +28,7 @@ func NewChatHandler(chatService service.ChatService, log *zap.Logger) *ChatHandl
 
 // StreamMessage handles sending a message and streaming AI response via Server-Sent Events (SSE)
 // @Summary Send message and stream AI response
-// @Description Stream financial advisory and knowledge responses using GLM-4 (Zhipu AI) and RAG
+// @Description Stream financial advisory and tool responses using Requesty AI (OpenAI Compatible)
 // @Tags chat
 // @Accept json
 // @Produce text/event-stream

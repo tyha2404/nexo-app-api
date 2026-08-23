@@ -54,21 +54,29 @@ func (m *MockKnowledgeRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.F
 	return args.Get(0).(*model.FinancialKnowledge), args.Error(1)
 }
 
-type MockGLMService struct {
+type MockRequestyService struct {
 	mock.Mock
 }
 
-func (m *MockGLMService) IsConfigured() bool {
+func (m *MockRequestyService) IsConfigured() bool {
 	args := m.Called()
 	return args.Bool(0)
 }
 
-func (m *MockGLMService) StreamChatCompletions(ctx context.Context, messages []service.GLMMessage, onChunk func(delta string) error) error {
+func (m *MockRequestyService) ChatCompletion(ctx context.Context, messages []service.RequestyMessage, tools []service.ToolDefinition) (*service.RequestyChatResponse, error) {
+	args := m.Called(ctx, messages, tools)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.RequestyChatResponse), args.Error(1)
+}
+
+func (m *MockRequestyService) StreamChatCompletions(ctx context.Context, messages []service.RequestyMessage, onChunk func(delta string) error) error {
 	args := m.Called(ctx, messages, onChunk)
 	return args.Error(0)
 }
 
-func (m *MockGLMService) EmbedText(ctx context.Context, text string) ([]float32, error) {
+func (m *MockRequestyService) EmbedText(ctx context.Context, text string) ([]float32, error) {
 	args := m.Called(ctx, text)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -90,7 +98,7 @@ func TestComputeCosineSimilarity(t *testing.T) {
 
 func TestRAGService_SearchKnowledge(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockGLM := new(MockGLMService)
+	mockAI := new(MockRequestyService)
 	logger := zap.NewNop()
 
 	docList := []model.FinancialKnowledge{
@@ -107,10 +115,10 @@ func TestRAGService_SearchKnowledge(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockGLM.On("IsConfigured").Return(true)
-	mockGLM.On("EmbedText", mock.Anything, mock.Anything).Return([]float32{0.1, 0.2, 0.3}, nil)
+	mockAI.On("IsConfigured").Return(true)
+	mockAI.On("EmbedText", mock.Anything, mock.Anything).Return([]float32{0.1, 0.2, 0.3}, nil)
 
-	ragSvc := service.NewRAGService(mockRepo, mockGLM, logger)
+	ragSvc := service.NewRAGService(mockRepo, mockAI, logger)
 
 	results, err := ragSvc.SearchKnowledge(context.Background(), "tư vấn 50/30/20", 2)
 	assert.NoError(t, err)
@@ -121,7 +129,7 @@ func TestRAGService_SearchKnowledge(t *testing.T) {
 
 func TestRAGService_BackfillEmptyEmbedding(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockGLM := new(MockGLMService)
+	mockAI := new(MockRequestyService)
 	logger := zap.NewNop()
 
 	docWithEmptyEmb := []model.FinancialKnowledge{
@@ -138,25 +146,25 @@ func TestRAGService_BackfillEmptyEmbedding(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockGLM.On("IsConfigured").Return(false)
+	mockAI.On("IsConfigured").Return(false)
 
-	ragSvc := service.NewRAGService(mockRepo, mockGLM, logger)
+	ragSvc := service.NewRAGService(mockRepo, mockAI, logger)
 	err := ragSvc.SeedDefaultKnowledge(context.Background())
 	assert.NoError(t, err)
 }
 
 func TestRAGService_AddKnowledge_Chunking(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockGLM := new(MockGLMService)
+	mockAI := new(MockRequestyService)
 	logger := zap.NewNop()
 
 	mockRepo.On("ListAll", mock.Anything).Return([]model.FinancialKnowledge{}, nil).Maybe()
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockGLM.On("IsConfigured").Return(false)
+	mockAI.On("IsConfigured").Return(false)
 
-	ragSvc := service.NewRAGService(mockRepo, mockGLM, logger)
+	ragSvc := service.NewRAGService(mockRepo, mockAI, logger)
 
 	longContent := `Đoạn 1: Nội dung chi tiết về phân bổ tài chính và nguyên lý cơ bản của quản lý dòng tiền cá nhân.
 Nội dung này rất dài và cần được phân tách thành nhiều đoạn nhỏ để tối ưu hóa quá trình tính vector và tìm kiếm thông tin theo ngữ cảnh.

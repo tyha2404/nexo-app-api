@@ -540,7 +540,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stream financial advisory and knowledge responses using GLM-4 (Zhipu AI) and RAG",
+                "description": "Stream financial advisory and tool responses using Requesty AI (OpenAI Compatible)",
                 "consumes": [
                     "application/json"
                 ],

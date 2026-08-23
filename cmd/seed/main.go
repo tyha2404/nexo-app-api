@@ -38,8 +38,8 @@ func main() {
 	}
 
 	knowledgeRepo := repository.NewKnowledgeRepository(gormDB)
-	glmService := service.NewGLMService(cfg, logg)
-	ragService := service.NewRAGService(knowledgeRepo, glmService, logg)
+	requestyService := service.NewRequestyService(cfg, logg)
+	ragService := service.NewRAGService(knowledgeRepo, requestyService, logg)
 
 	ctx := context.Background()
 
@@ -51,7 +51,7 @@ func main() {
 	fmt.Printf("\n🚀 Nexo Knowledge Base Seeder\n")
 	fmt.Printf("------------------------------------------------------------------\n")
 	fmt.Printf("Loaded %d knowledge files from internal/data/knowledge/\n", len(fileDocs))
-	fmt.Printf("Force re-embed: %v | GLM Configured: %v\n\n", *forceFlag, glmService.IsConfigured())
+	fmt.Printf("Force re-embed: %v | Requesty AI Configured: %v\n\n", *forceFlag, requestyService.IsConfigured())
 
 	if *forceFlag {
 		for _, doc := range fileDocs {

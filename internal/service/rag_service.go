@@ -29,17 +29,17 @@ type RAGService interface {
 }
 
 type ragService struct {
-	knowledgeRepo repository.KnowledgeRepository
-	glmService    GLMService
-	logger        *zap.Logger
-	mu            sync.Mutex
+	knowledgeRepo   repository.KnowledgeRepository
+	requestyService RequestyService
+	logger          *zap.Logger
+	mu              sync.Mutex
 }
 
-func NewRAGService(knowledgeRepo repository.KnowledgeRepository, glmService GLMService, logger *zap.Logger) RAGService {
+func NewRAGService(knowledgeRepo repository.KnowledgeRepository, requestyService RequestyService, logger *zap.Logger) RAGService {
 	s := &ragService{
-		knowledgeRepo: knowledgeRepo,
-		glmService:    glmService,
-		logger:        logger,
+		knowledgeRepo:   knowledgeRepo,
+		requestyService: requestyService,
+		logger:          logger,
 	}
 
 	// Seed knowledge asynchronously in background
@@ -54,12 +54,12 @@ func NewRAGService(knowledgeRepo repository.KnowledgeRepository, glmService GLMS
 }
 
 func (s *ragService) generateEmbedding(ctx context.Context, text string) []float32 {
-	if s.glmService != nil && s.glmService.IsConfigured() {
-		emb, err := s.glmService.EmbedText(ctx, text)
+	if s.requestyService != nil && s.requestyService.IsConfigured() {
+		emb, err := s.requestyService.EmbedText(ctx, text)
 		if err == nil && len(emb) > 0 {
 			return emb
 		}
-		s.logger.Warn("GLM embed failed or unavailable, falling back to local semantic vectorizer", zap.Error(err))
+		s.logger.Warn("Requesty embed failed or unavailable, falling back to local semantic vectorizer", zap.Error(err))
 	}
 	return util.GenerateLocalEmbedding(text, 256)
 }

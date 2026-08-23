@@ -23,23 +23,47 @@ type ChatService interface {
 }
 
 type chatService struct {
-	chatRepo   repository.ChatRepository
-	glmService GLMService
-	ragService RAGService
-	logger     *zap.Logger
+	chatRepo           repository.ChatRepository
+	requestyService    RequestyService
+	ragService         RAGService
+	transactionService TransactionService
+	reportService      ReportService
+	budgetService      BudgetService
+	debtService        DebtService
+	walletService      WalletService
+	categoryRepo       repository.CategoryRepo
+	transactionRepo    repository.TransactionRepository
+	walletRepo         repository.WalletRepository
+	logger             *zap.Logger
 }
 
 func NewChatService(
 	chatRepo repository.ChatRepository,
-	glmService GLMService,
+	requestyService RequestyService,
 	ragService RAGService,
+	transactionService TransactionService,
+	reportService ReportService,
+	budgetService BudgetService,
+	debtService DebtService,
+	walletService WalletService,
+	categoryRepo repository.CategoryRepo,
+	transactionRepo repository.TransactionRepository,
+	walletRepo repository.WalletRepository,
 	logger *zap.Logger,
 ) ChatService {
 	return &chatService{
-		chatRepo:   chatRepo,
-		glmService: glmService,
-		ragService: ragService,
-		logger:     logger,
+		chatRepo:           chatRepo,
+		requestyService:    requestyService,
+		ragService:         ragService,
+		transactionService: transactionService,
+		reportService:      reportService,
+		budgetService:      budgetService,
+		debtService:        debtService,
+		walletService:      walletService,
+		categoryRepo:       categoryRepo,
+		transactionRepo:    transactionRepo,
+		walletRepo:         walletRepo,
+		logger:             logger,
 	}
 }
 
@@ -168,9 +192,9 @@ func (s *chatService) ProcessMessageStream(ctx context.Context, userID uuid.UUID
 		s.logger.Warn("failed to save user chat message", zap.Error(err))
 	}
 
-	// 3. Fallback if GLM is not configured
-	if s.glmService == nil || !s.glmService.IsConfigured() {
-		fallbackMsg := "⚠️ **Chưa cấu hình GLM_API_KEY.**\nVui lòng cấu hình biến môi trường `GLM_API_KEY` trong file `.env` của backend `nexo-app-api` để sử dụng mô hình `glm-4-flash` (Zhipu AI)!"
+	// 3. Fallback if AI is not configured
+	if s.requestyService == nil || !s.requestyService.IsConfigured() {
+		fallbackMsg := "⚠️ **Chưa cấu hình API Key.**\nVui lòng cấu hình biến môi trường `REQUESTY_API_KEY` trong file `.env` của backend `nexo-app-api` để sử dụng trợ lý AI!"
 		aiMsg := &model.ChatMessage{
 			SessionID: session.ID,
 			Role:      model.ChatRoleModel,
@@ -203,74 +227,34 @@ func (s *chatService) ProcessMessageStream(ctx context.Context, userID uuid.UUID
 		Status:    "STREAMING",
 	}
 
-	// 4. RAG Step: Search matching knowledge documents from Knowledge Base
-	eventChan <- dto.ChatStreamEvent{
-		Type:      "tool_start",
-		ToolTitle: "Đang tra cứu từ Kho tri thức Tài chính Nexo (RAG)...",
-		SessionID: &session.ID,
-		MessageID: &aiMsg.ID,
-		Status:    "STREAMING",
-	}
-
-	knowledgeResults, err := s.ragService.SearchKnowledge(ctx, req.Message, 3)
-	if err != nil {
-		s.logger.Warn("error searching knowledge base", zap.Error(err))
-	}
-
-	var knowledgeContext strings.Builder
-	if len(knowledgeResults) > 0 {
-		var titles []string
-		for idx, doc := range knowledgeResults {
-			titles = append(titles, doc.Title)
-			knowledgeContext.WriteString(fmt.Sprintf("\n--- TÀI LIỆU TRI THỨC [%d]: %s (Chủ đề: %s) ---\n%s\n", idx+1, doc.Title, doc.Topic, doc.Content))
-		}
-
-		eventChan <- dto.ChatStreamEvent{
-			Type: "action_card",
-			ActionCard: &dto.ActionCard{
-				ActionType:  "KNOWLEDGE_SOURCE",
-				Title:       "Kho Tri thức Tài chính Nexo RAG",
-				Description: fmt.Sprintf("Trích xuất %d nguồn: %s", len(knowledgeResults), strings.Join(titles, ", ")),
-				Data:        knowledgeResults,
-			},
-			SessionID: &session.ID,
-			MessageID: &aiMsg.ID,
-			Status:    "STREAMING",
-		}
-	} else {
-		knowledgeContext.WriteString("(Không có tài liệu nào trong cơ sở tri thức khớp với câu hỏi)")
-	}
-
-	eventChan <- dto.ChatStreamEvent{
-		Type:      "tool_done",
-		SessionID: &session.ID,
-		MessageID: &aiMsg.ID,
-		Status:    "STREAMING",
-	}
-
-	// 5. Build System Prompt & Messages for GLM-4
+	// 4. Build System Prompt & Messages directly for Model
 	nowStr := time.Now().Format("2006-01-02")
-	systemPrompt := fmt.Sprintf(`Bạn là Nexo AI Advisor - Trợ lý Cố vấn Tri thức Tài chính Cá nhân của Nexo.
+	systemPrompt := fmt.Sprintf(`Bạn là Nexo AI Advisor - Trợ lý Cố vấn & Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.
 Hôm nay là: %s.
 
-=== DỮ LIỆU TRI THỨC ĐƯỢC CUNG CẤP (RAG CONTEXT) ===
-%s
-=====================================================
+Bạn có các công cụ tài chính mạnh mẽ của hệ thống Nexo để tra cứu dữ liệu thực tế và thực hiện tác vụ cho người dùng:
+1. Khi người dùng hỏi về tình hình tài chính tổng quan, thu/chi/tiết kiệm -> gọi tool "get_financial_overview".
+2. Khi người dùng hỏi về danh mục chi tiêu, cơ cấu chi tiêu -> gọi tool "get_spending_by_category".
+3. Khi người dùng muốn xem lịch sử giao dịch -> gọi tool "list_recent_transactions".
+4. Khi người dùng yêu cầu ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: "vừa ăn phở 50k", "thêm chi tiêu 100k tiền cafe", "nhận lương 25tr") -> hãy chủ động gọi tool "create_transaction".
+5. Khi người dùng hỏi về ngân sách, hạn mức chi tiêu -> gọi tool "get_budget_status".
+6. Khi người dùng hỏi về các khoản nợ hoặc cho vay -> gọi tool "get_debt_summary".
+7. Khi người dùng hỏi về số dư các ví, tài khoản -> gọi tool "list_wallets".
 
-CÁC QUY TẮC BẮT BUỘC KHI TRẢ LỜI (GROUNDED RAG RULES):
-1. CHỈ TRẢ LỜI TRONG NGỮ CẢNH: Bạn CHỈ ĐƯỢC PHÉP trả lời dựa trên những thông tin, dữ liệu thực tế có trong phần "RAG CONTEXT" ở trên.
-2. TUYỆT ĐỐI KHÔNG BỊA ĐẶT (NO HALLUCINATION): Nghiêm cấm hoàn toàn việc tự suy diễn, phỏng đoán, thêm thắt hoặc bịa ra câu trả lời không có căn cứ trong tài liệu được cung cấp.
-3. NẾU KHÔNG CÓ THÔNG TIN: Nếu "RAG CONTEXT" trống hoặc không chứa thông tin để trả lời câu hỏi của người dùng, bạn PHẢI TRẢ LỜI DỨT KHOÁT: "Hiện tại trong cơ sở tri thức của hệ thống không có thông tin về vấn đề này. Tôi không thể cung cấp câu trả lời khi chưa có tài liệu xác thực." Tuyệt đối không cố gắng trả lời từ kiến thức bên ngoài.
-4. ĐỊNH DẠNG: Trình bày bằng tiếng Việt mạch lạc, chuyên nghiệp, sử dụng Markdown (bullet points, in đậm từ khóa quan trọng) và bám sát chính xác nội dung trong tài liệu trích xuất.`, nowStr, knowledgeContext.String())
+Quy tắc trả lời:
+- Luôn chủ động gọi công cụ thích hợp khi người dùng yêu cầu thao tác hoặc hỏi dữ liệu tài chính cá nhân.
+- Sau khi có kết quả từ công cụ, trả lời người dùng bằng tiếng Việt tự nhiên, ngắn gọn, súc tích và chuyên nghiệp, sử dụng định dạng Markdown (bullet points, in đậm số tiền, bảng nếu cần).
+- Luôn định dạng tiền tệ rõ ràng theo chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).
+- Đưa ra lời khuyên thực tế, hữu ích giúp người dùng quản lý tài chính hiệu quả hơn.`, nowStr)
 
-	// 6. Load recent conversation history
+	// 5. Load recent conversation history
 	recentMessages, err := s.chatRepo.ListMessagesBySessionID(ctx, session.ID, 8)
 	if err != nil {
 		s.logger.Warn("failed to list recent messages", zap.Error(err))
 	}
 
-	glmMessages := make([]GLMMessage, 0, len(recentMessages)+1)
-	glmMessages = append(glmMessages, GLMMessage{
+	requestyMessages := make([]RequestyMessage, 0, len(recentMessages)+1)
+	requestyMessages = append(requestyMessages, RequestyMessage{
 		Role:    "system",
 		Content: systemPrompt,
 	})
@@ -283,30 +267,130 @@ CÁC QUY TẮC BẮT BUỘC KHI TRẢ LỜI (GROUNDED RAG RULES):
 		if msg.Role == model.ChatRoleModel {
 			role = "assistant"
 		}
-		glmMessages = append(glmMessages, GLMMessage{
+		requestyMessages = append(requestyMessages, RequestyMessage{
 			Role:    role,
 			Content: msg.Content,
 		})
 	}
 
-	// 7. Stream generated answer tokens directly to user via GLM-4
+	// 6. Check for Tool Calling
+	tools := GetFinancialToolDefinitions()
+	toolChatResp, err := s.requestyService.ChatCompletion(ctx, requestyMessages, tools)
+
 	var fullAIResponse strings.Builder
-	err = s.glmService.StreamChatCompletions(ctx, glmMessages, func(delta string) error {
-		if delta != "" {
-			fullAIResponse.WriteString(delta)
+	if err == nil && toolChatResp != nil && len(toolChatResp.Choices) > 0 {
+		choice := toolChatResp.Choices[0]
+		if len(choice.Message.ToolCalls) > 0 {
+			// Append assistant tool_calls message
+			requestyMessages = append(requestyMessages, RequestyMessage{
+				Role:      "assistant",
+				Content:   choice.Message.Content,
+				ToolCalls: choice.Message.ToolCalls,
+			})
+
+			// Execute each tool call
+			for _, tc := range choice.Message.ToolCalls {
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "tool_start",
+					ToolName:  tc.Function.Name,
+					ToolTitle: fmt.Sprintf("Đang xử lý %s...", tc.Function.Name),
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+
+				toolRes, toolErr := s.executeFinancialTool(ctx, userID, tc)
+				if toolErr != nil {
+					s.logger.Error("tool execution error", zap.String("tool", tc.Function.Name), zap.Error(toolErr))
+					toolRes = &FinancialToolResult{
+						ToolTitle:  "Lỗi thực thi công cụ",
+						ResultJSON: fmt.Sprintf(`{"error": "%s"}`, toolErr.Error()),
+					}
+				}
+
+				if toolRes.ActionCard != nil {
+					eventChan <- dto.ChatStreamEvent{
+						Type:       "action_card",
+						ActionCard: toolRes.ActionCard,
+						SessionID:  &session.ID,
+						MessageID:  &aiMsg.ID,
+						Status:     "STREAMING",
+					}
+				}
+
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "tool_done",
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+
+				requestyMessages = append(requestyMessages, RequestyMessage{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    toolRes.ResultJSON,
+				})
+			}
+
+			// Stream final answer from model after tool outputs
+			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+				if delta != "" {
+					fullAIResponse.WriteString(delta)
+					eventChan <- dto.ChatStreamEvent{
+						Type:      "text_delta",
+						Delta:     delta,
+						SessionID: &session.ID,
+						MessageID: &aiMsg.ID,
+						Status:    "STREAMING",
+					}
+				}
+				return nil
+			})
+		} else if choice.Message.Content != "" {
+			// Model responded directly with text
+			fullAIResponse.WriteString(choice.Message.Content)
 			eventChan <- dto.ChatStreamEvent{
 				Type:      "text_delta",
-				Delta:     delta,
+				Delta:     choice.Message.Content,
 				SessionID: &session.ID,
 				MessageID: &aiMsg.ID,
 				Status:    "STREAMING",
 			}
+		} else {
+			// Fallback to stream completions
+			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+				if delta != "" {
+					fullAIResponse.WriteString(delta)
+					eventChan <- dto.ChatStreamEvent{
+						Type:      "text_delta",
+						Delta:     delta,
+						SessionID: &session.ID,
+						MessageID: &aiMsg.ID,
+						Status:    "STREAMING",
+					}
+				}
+				return nil
+			})
 		}
-		return nil
-	})
+	} else {
+		// Fallback to direct stream completions
+		err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+			if delta != "" {
+				fullAIResponse.WriteString(delta)
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "text_delta",
+					Delta:     delta,
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+			}
+			return nil
+		})
+	}
 
 	if err != nil {
-		s.logger.Error("failed to stream answer from GLM", zap.Error(err))
+		s.logger.Error("failed to stream answer from AI", zap.Error(err))
 		errorContent := "Có lỗi khi kết nối tới AI: " + err.Error()
 		if fullAIResponse.Len() > 0 {
 			errorContent = fullAIResponse.String() + "\n\n⚠️ " + errorContent
