@@ -23,7 +23,6 @@ func (r *TransactionRouter) RegisterRoutes(router chi.Router) {
 	router.Route("/transactions", func(router chi.Router) {
 		router.Use(r.authMiddleware)
 		router.Post("/", r.handler.CreateTransaction)
-		router.Post("/parse-nlp", r.handler.ParseNLP)
 		router.Get("/", r.handler.ListTransactions)
 		router.Get("/{id}", r.handler.GetTransaction)
 		router.Put("/{id}", r.handler.UpdateTransaction)

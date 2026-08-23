@@ -951,57 +951,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/transactions/parse-nlp": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Parse Vietnamese text input into structured transaction fields (amount, category, type, description)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "transactions"
-                ],
-                "summary": "Parse natural language transaction input",
-                "parameters": [
-                    {
-                        "description": "Parse NLP Request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.ParseNLPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ParseNLPResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/transactions/{id}": {
             "get": {
                 "security": [
@@ -2029,44 +1978,6 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/dto.UserResponse"
-                }
-            }
-        },
-        "dto.ParseNLPRequest": {
-            "type": "object",
-            "required": [
-                "text"
-            ],
-            "properties": {
-                "text": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ParseNLPResponse": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "categoryId": {
-                    "type": "string"
-                },
-                "categoryName": {
-                    "type": "string"
-                },
-                "confidenceScore": {
-                    "type": "number"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "transactionDate": {
-                    "type": "string"
-                },
-                "type": {
-                    "description": "INCOME or EXPENSE",
-                    "type": "string"
                 }
             }
         },

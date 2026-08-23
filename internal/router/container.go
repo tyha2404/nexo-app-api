@@ -34,7 +34,6 @@ type Container struct {
 	CategoryService    service.CategoryService
 	CostService        service.CostService
 	TransactionService service.TransactionService
-	NLPService         service.NLPService
 	BudgetService      service.BudgetService
 	AlertService       service.AlertService
 	ReportService      service.ReportService
@@ -53,7 +52,6 @@ type Container struct {
 	CategoryHandler    *handler.CategoryHandler
 	CostHandler        *handler.CostHandler
 	TransactionHandler *handler.TransactionHandler
-	NLPHandler         *handler.NLPHandler
 	BudgetHandler      *handler.BudgetHandler
 	AlertHandler       *handler.AlertHandler
 	ReportHandler      *handler.ReportHandler
@@ -91,7 +89,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	categoryService := service.NewCategoryService(categoryRepo)
 	costService := service.NewCostService(costRepo)
 	transactionService := service.NewTransactionService(transactionRepo, categoryRepo, budgetRepo, alertRepo)
-	nlpService := service.NewNLPService(categoryRepo)
 	budgetService := service.NewBudgetService(budgetRepo, categoryRepo)
 	alertService := service.NewAlertService(alertRepo)
 	reportService := service.NewReportService(transactionRepo)
@@ -123,8 +120,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)
 	costHandler := handler.NewCostHandler(costService, logger)
-	nlpHandler := handler.NewNLPHandler(nlpService, logger)
-	transactionHandler := handler.NewTransactionHandler(transactionService, nlpHandler, logger)
+	transactionHandler := handler.NewTransactionHandler(transactionService, logger)
 	budgetHandler := handler.NewBudgetHandler(budgetService, logger)
 	alertHandler := handler.NewAlertHandler(alertService)
 	reportHandler := handler.NewReportHandler(reportService)
@@ -154,7 +150,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		CategoryService:    categoryService,
 		CostService:        costService,
 		TransactionService: transactionService,
-		NLPService:         nlpService,
 		BudgetService:      budgetService,
 		AlertService:       alertService,
 		ReportService:      reportService,
@@ -171,7 +166,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		CategoryHandler:    categoryHandler,
 		CostHandler:        costHandler,
 		TransactionHandler: transactionHandler,
-		NLPHandler:         nlpHandler,
 		BudgetHandler:      budgetHandler,
 		AlertHandler:       alertHandler,
 		ReportHandler:      reportHandler,

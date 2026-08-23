@@ -171,31 +171,6 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResponse'
     type: object
-  dto.ParseNLPRequest:
-    properties:
-      text:
-        type: string
-    required:
-    - text
-    type: object
-  dto.ParseNLPResponse:
-    properties:
-      amount:
-        type: number
-      categoryId:
-        type: string
-      categoryName:
-        type: string
-      confidenceScore:
-        type: number
-      description:
-        type: string
-      transactionDate:
-        type: string
-      type:
-        description: INCOME or EXPENSE
-        type: string
-    type: object
   dto.RegisterRequest:
     properties:
       email:
@@ -1229,39 +1204,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Update a transaction
-      tags:
-      - transactions
-  /transactions/parse-nlp:
-    post:
-      consumes:
-      - application/json
-      description: Parse Vietnamese text input into structured transaction fields
-        (amount, category, type, description)
-      parameters:
-      - description: Parse NLP Request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.ParseNLPRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ParseNLPResponse'
-        "400":
-          description: Bad Request
-          schema:
-            type: string
-        "500":
-          description: Internal Server Error
-          schema:
-            type: string
-      security:
-      - BearerAuth: []
-      summary: Parse natural language transaction input
       tags:
       - transactions
   /users:
