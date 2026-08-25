@@ -23,6 +23,7 @@ func TestGetFinancialToolDefinitions(t *testing.T) {
 	assert.True(t, toolNames["get_financial_overview"])
 	assert.True(t, toolNames["list_recent_transactions"])
 	assert.True(t, toolNames["create_transaction"])
+	assert.True(t, toolNames["create_category"])
 	assert.True(t, toolNames["get_budget_status"])
 	assert.True(t, toolNames["get_debt_summary"])
 	assert.True(t, toolNames["list_wallets"])

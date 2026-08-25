@@ -111,6 +111,32 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        "create_category",
+				Description: "Tạo một danh mục thu/chi/đầu tư mới cho người dùng khi người dùng yêu cầu hoặc khi danh mục hiện có không đáp ứng được.",
+				Parameters: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"name"},
+					"properties": map[string]interface{}{
+						"name": map[string]interface{}{
+							"type":        "string",
+							"description": "Tên danh mục mới (ví dụ: Học tập, Thú cưng, Tiền điện, Thưởng dự án, v.v.)",
+						},
+						"type": map[string]interface{}{
+							"type":        "string",
+							"enum":        []string{"EXPENSE", "INCOME", "INVESTMENT"},
+							"description": "Loại danh mục: EXPENSE (chi tiêu - mặc định), INCOME (thu nhập), INVESTMENT (đầu tư)",
+						},
+						"description": map[string]interface{}{
+							"type":        "string",
+							"description": "Mô tả chi tiết về danh mục (tùy chọn)",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "get_budget_status",
 				Description: "Kiểm tra tiến độ thực hiện và tình hình các ngân sách chi tiêu trong tháng (hạn mức, số tiền đã chi, số tiền còn lại, cảnh báo vượt mức).",
 				Parameters: map[string]interface{}{
@@ -394,6 +420,8 @@ func (s *chatService) executeFinancialTool(ctx context.Context, userID uuid.UUID
 		return s.toolListRecentTransactions(ctx, userID, args)
 	case "create_transaction":
 		return s.toolCreateTransaction(ctx, userID, args)
+	case "create_category":
+		return s.toolCreateCategory(ctx, userID, args)
 	case "get_budget_status":
 		return s.toolGetBudgetStatus(ctx, userID, args)
 	case "get_debt_summary":
@@ -560,13 +588,14 @@ func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUI
 		}
 	}
 
-	// 1. Resolve Category
+	// 1. Resolve Category: Find existing or automatically create new category if not matched
 	categories, err := s.categoryRepo.List(ctx, userID, txnTypeStr, 100, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	var targetCategory *model.Category
+	var isNewCategoryCreated bool
 	if categoryName != "" {
 		for i := range categories {
 			if strings.EqualFold(categories[i].Name, categoryName) || strings.Contains(strings.ToLower(categories[i].Name), strings.ToLower(categoryName)) {
@@ -574,26 +603,37 @@ func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUI
 				break
 			}
 		}
-	}
 
-	// If not found, pick the first existing or create a new category
-	if targetCategory == nil {
-		if len(categories) > 0 {
-			targetCategory = &categories[0]
-		} else {
-			defaultName := "Khác"
-			if categoryName != "" {
-				defaultName = categoryName
-			}
+		// If user specified a category name but none matched, create it dynamically
+		if targetCategory == nil {
 			newCat := &model.Category{
 				UserID: userID,
-				Name:   defaultName,
+				Name:   strings.TrimSpace(categoryName),
 				Type:   model.CategoryType(txnTypeStr),
 			}
 			if err := s.categoryRepo.Create(ctx, newCat); err != nil {
 				return nil, err
 			}
 			targetCategory = newCat
+			isNewCategoryCreated = true
+		}
+	}
+
+	// If no category specified and none created, pick the first existing or create "Khác"
+	if targetCategory == nil {
+		if len(categories) > 0 {
+			targetCategory = &categories[0]
+		} else {
+			newCat := &model.Category{
+				UserID: userID,
+				Name:   "Khác",
+				Type:   model.CategoryType(txnTypeStr),
+			}
+			if err := s.categoryRepo.Create(ctx, newCat); err != nil {
+				return nil, err
+			}
+			targetCategory = newCat
+			isNewCategoryCreated = true
 		}
 	}
 
@@ -641,37 +681,163 @@ func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUI
 		typeNameVi = "Thu nhập"
 	}
 
+	cardDesc := fmt.Sprintf("%s ₫ - %s (%s)", formatVND(amount), description, targetCategory.Name)
+	if isNewCategoryCreated {
+		cardDesc = fmt.Sprintf("%s ₫ - %s (Tạo mới danh mục: %s)", formatVND(amount), description, targetCategory.Name)
+	}
+
 	actionCard := &dto.ActionCard{
 		ActionType:  "TRANSACTION_CREATED",
 		Title:       fmt.Sprintf("Đã ghi nhận %s", typeNameVi),
-		Description: fmt.Sprintf("%s ₫ - %s (%s)", formatVND(amount), description, targetCategory.Name),
+		Description: cardDesc,
 		Data: map[string]interface{}{
-			"id":          createdTx.ID,
-			"amount":      amount,
-			"type":        txnTypeStr,
-			"category":    targetCategory.Name,
-			"wallet":      targetWalletName,
-			"description": description,
-			"date":        txnDate.Format("2006-01-02"),
+			"id":                   createdTx.ID,
+			"amount":               amount,
+			"type":                 txnTypeStr,
+			"category":             targetCategory.Name,
+			"wallet":               targetWalletName,
+			"description":          description,
+			"date":                 txnDate.Format("2006-01-02"),
+			"isNewCategoryCreated": isNewCategoryCreated,
 		},
 	}
 
 	resultMap := map[string]interface{}{
-		"success":       true,
-		"transactionId": createdTx.ID,
-		"amount":        amount,
-		"type":          txnTypeStr,
-		"category":      targetCategory.Name,
-		"wallet":        targetWalletName,
-		"description":   description,
-		"date":          txnDate.Format("2006-01-02"),
-		"message":       "Giao dịch đã được lưu thành công vào hệ thống Nexo.",
+		"success":              true,
+		"transactionId":        createdTx.ID,
+		"amount":               amount,
+		"type":                 txnTypeStr,
+		"category":             targetCategory.Name,
+		"wallet":               targetWalletName,
+		"description":          description,
+		"date":                 txnDate.Format("2006-01-02"),
+		"isNewCategoryCreated": isNewCategoryCreated,
+		"message":              "Giao dịch đã được lưu thành công vào hệ thống Nexo.",
 	}
 	resultBytes, _ := json.Marshal(resultMap)
 
 	return &FinancialToolResult{
 		ToolTitle:  "Đang ghi nhận giao dịch mới...",
 		ResultJSON: string(resultBytes),
+		ActionCard: actionCard,
+	}, nil
+}
+
+func (s *chatService) toolCreateCategory(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
+	name, _ := args["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return &FinancialToolResult{
+			ToolTitle:  "Tạo danh mục mới",
+			ResultJSON: `{"error": "Tên danh mục (name) không được để trống"}`,
+		}, nil
+	}
+
+	catTypeStr := "EXPENSE"
+	if t, ok := args["type"].(string); ok && t != "" {
+		upper := strings.ToUpper(strings.TrimSpace(t))
+		if upper == "INCOME" || upper == "INVESTMENT" || upper == "EXPENSE" {
+			catTypeStr = upper
+		}
+	}
+
+	description, _ := args["description"].(string)
+	var descPtr *string
+	if strings.TrimSpace(description) != "" {
+		descTrimmed := strings.TrimSpace(description)
+		descPtr = &descTrimmed
+	}
+
+	// Check if existing category matches by name
+	existingCategories, err := s.categoryRepo.List(ctx, userID, catTypeStr, 200, 0)
+	if err == nil {
+		for _, cat := range existingCategories {
+			if strings.EqualFold(cat.Name, name) {
+				typeVi := "Chi tiêu"
+				if cat.Type == model.CategoryTypeIncome {
+					typeVi = "Thu nhập"
+				} else if cat.Type == model.CategoryTypeInvestment {
+					typeVi = "Đầu tư"
+				}
+
+				actionCard := &dto.ActionCard{
+					ActionType:  "CATEGORY_CREATED",
+					Title:       "Danh mục đã tồn tại",
+					Description: fmt.Sprintf("Danh mục \"%s\" (%s) đã có trong hệ thống", cat.Name, typeVi),
+					Data: map[string]interface{}{
+						"id":          cat.ID,
+						"name":        cat.Name,
+						"type":        string(cat.Type),
+						"isDuplicate": true,
+					},
+				}
+
+				resMap := map[string]interface{}{
+					"success":     true,
+					"categoryId":  cat.ID,
+					"name":        cat.Name,
+					"type":        string(cat.Type),
+					"isDuplicate": true,
+					"message":     fmt.Sprintf("Danh mục \"%s\" đã tồn tại sẵn trong hệ thống.", cat.Name),
+				}
+				resBytes, _ := json.Marshal(resMap)
+
+				return &FinancialToolResult{
+					ToolTitle:  "Đang kiểm tra danh mục...",
+					ResultJSON: string(resBytes),
+					ActionCard: actionCard,
+				}, nil
+			}
+		}
+	}
+
+	newCat := &model.Category{
+		UserID:      userID,
+		Name:        name,
+		Type:        model.CategoryType(catTypeStr),
+		Description: descPtr,
+	}
+
+	if err := s.categoryRepo.Create(ctx, newCat); err != nil {
+		s.logger.Error("failed to create category from AI tool", zap.Error(err))
+		return &FinancialToolResult{
+			ToolTitle:  "Tạo danh mục mới thất bại",
+			ResultJSON: fmt.Sprintf(`{"error": "Không thể tạo danh mục: %s"}`, err.Error()),
+		}, nil
+	}
+
+	typeVi := "Chi tiêu"
+	if newCat.Type == model.CategoryTypeIncome {
+		typeVi = "Thu nhập"
+	} else if newCat.Type == model.CategoryTypeInvestment {
+		typeVi = "Đầu tư"
+	}
+
+	actionCard := &dto.ActionCard{
+		ActionType:  "CATEGORY_CREATED",
+		Title:       "Đã tạo danh mục mới",
+		Description: fmt.Sprintf("Danh mục: %s (%s)", newCat.Name, typeVi),
+		Data: map[string]interface{}{
+			"id":          newCat.ID,
+			"name":        newCat.Name,
+			"type":        string(newCat.Type),
+			"description": description,
+		},
+	}
+
+	resMap := map[string]interface{}{
+		"success":     true,
+		"categoryId":  newCat.ID,
+		"name":        newCat.Name,
+		"type":        string(newCat.Type),
+		"description": description,
+		"message":     fmt.Sprintf("Đã tạo thành công danh mục \"%s\" (%s).", newCat.Name, typeVi),
+	}
+	resBytes, _ := json.Marshal(resMap)
+
+	return &FinancialToolResult{
+		ToolTitle:  "Đang tạo danh mục mới...",
+		ResultJSON: string(resBytes),
 		ActionCard: actionCard,
 	}, nil
 }
