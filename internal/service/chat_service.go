@@ -392,6 +392,9 @@ Quy tắc trả lời:
 				ToolCalls: choice.Message.ToolCalls,
 			})
 
+			// Collect tool results summary for fallback text if model returns empty response
+			var fallbackSummaries []string
+
 			// Execute each tool call
 			for _, tc := range choice.Message.ToolCalls {
 				eventChan <- dto.ChatStreamEvent{
@@ -413,6 +416,9 @@ Quy tắc trả lời:
 				}
 
 				if toolRes.ActionCard != nil {
+					if toolRes.ActionCard.Description != "" {
+						fallbackSummaries = append(fallbackSummaries, fmt.Sprintf("**%s**: %s", toolRes.ActionCard.Title, toolRes.ActionCard.Description))
+					}
 					eventChan <- dto.ChatStreamEvent{
 						Type:       "action_card",
 						ActionCard: toolRes.ActionCard,
@@ -450,6 +456,19 @@ Quy tắc trả lời:
 				}
 				return nil
 			})
+
+			// If AI model stream returned empty content after running tools, synthesize a fallback response from tool results
+			if fullAIResponse.Len() == 0 && len(fallbackSummaries) > 0 {
+				fallbackText := "Đã hoàn thành yêu cầu của bạn:\n\n" + strings.Join(fallbackSummaries, "\n")
+				fullAIResponse.WriteString(fallbackText)
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "text_delta",
+					Delta:     fallbackText,
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+			}
 		} else if choice.Message.Content != "" {
 			// Model responded directly with text - stream it token-by-token for silky smooth UX
 			fullAIResponse.WriteString(choice.Message.Content)

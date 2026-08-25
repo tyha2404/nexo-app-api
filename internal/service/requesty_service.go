@@ -131,7 +131,7 @@ func NewRequestyService(cfg *config.Config, logger *zap.Logger) RequestyService 
 		model:          modelName,
 		embeddingModel: embeddingModel,
 		httpClient: &http.Client{
-			Timeout:   120 * time.Second,
+			Timeout:   300 * time.Second,
 			Transport: httpclient.NewLoggingTransport("Requesty-AI", logger),
 		},
 		logger: logger,
