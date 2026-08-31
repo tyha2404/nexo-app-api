@@ -14,28 +14,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check Go & PM2 Environment
+      - name: Check Environment
         shell: bash
         run: |
           echo "=== Deploy API Info ==="
           echo "User: $(whoami)"
-          echo "Go: $(go version 2>/dev/null || echo 'Go not found directly in path')"
+          echo "Go: $(go version)"
           echo "PM2: $(pm2 -v)"
 
-      - name: Setup Go (Fallback if not in PATH)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-          cache: true
-
-      - name: Download Go Dependencies
+      - name: Download Dependencies & Build Go Binary
         shell: bash
         run: |
           go mod download
-
-      - name: Build Go Binary
-        shell: bash
-        run: |
           mkdir -p bin
           go build -ldflags="-w -s" -o bin/server cmd/server/main.go
           chmod +x bin/server
@@ -43,6 +33,5 @@ jobs:
       - name: Deploy / Reload PM2
         shell: bash
         run: |
-          # Reload nếu đang chạy, hoặc start mới
           pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
           pm2 save
