@@ -8,16 +8,16 @@ import (
 )
 
 type Config struct {
-	DBHost    string
-	DBPort    string
-	DBUser    string
-	DBPass    string
-	DBName    string
-	DBSSL     string
-	Port      string
-	LogLevel  string
-	JwtSecret         string
-	AppEnv            string
+	DBHost                 string
+	DBPort                 string
+	DBUser                 string
+	DBPass                 string
+	DBName                 string
+	DBSSL                  string
+	Port                   string
+	LogLevel               string
+	JwtSecret              string
+	AppEnv                 string
 	RequestyApiKey         string
 	RequestyBaseURL        string
 	RequestyModel          string
@@ -32,7 +32,7 @@ func LoadConfig() (*Config, error) {
 		apiKey = getEnv("AI_API_KEY", "")
 	}
 
-	baseURL := getEnv("REQUESTY_BASE_URL", "https://router.requesty.ai/v1/")
+	baseURL := getEnv("REQUESTY_BASE_URL", "https://api.groq.com/openai/v1/")
 	model := getEnv("REQUESTY_MODEL", "google/gemma-4-31b-it")
 	embeddingModel := getEnv("REQUESTY_EMBEDDING_MODEL", "embedding-3")
 

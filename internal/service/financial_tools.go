@@ -21,21 +21,21 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_financial_overview",
-				Description: "Lấy tổng quan tình hình tài chính của người dùng bao gồm tổng số dư ví, tổng thu nhập, tổng chi tiêu, tiền tiết kiệm ròng và tỷ lệ tiết kiệm theo tháng hoặc khoảng ngày.",
+				Description: "Lấy báo cáo tổng quan tình hình tài chính của người dùng (tổng số dư ví hiện tại, tổng thu nhập, tổng chi tiêu, tiền tiết kiệm ròng và tỷ lệ tiết kiệm). Hãy gọi tool này khi người dùng hỏi: 'tháng này tài chính thế nào?', 'tôi có bao nhiêu tiền?', 'tổng quan thu chi', 'tình hình tiết kiệm'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"month": map[string]interface{}{
 							"type":        "string",
-							"description": "Tháng cần tra cứu (định dạng YYYY-MM, ví dụ 2026-08). Mặc định là tháng hiện tại.",
+							"description": "Tháng cần tra cứu theo định dạng YYYY-MM (ví dụ: '2026-08'). Mặc định là tháng hiện tại.",
 						},
 						"startDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày bắt đầu (YYYY-MM-DD)",
+							"description": "Ngày bắt đầu theo định dạng YYYY-MM-DD nếu muốn lọc theo khoảng ngày cụ thể.",
 						},
 						"endDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày kết thúc (YYYY-MM-DD)",
+							"description": "Ngày kết thúc theo định dạng YYYY-MM-DD.",
 						},
 					},
 				},
@@ -45,26 +45,26 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "list_recent_transactions",
-				Description: "Tra cứu danh sách các giao dịch thu/chi gần đây của người dùng theo bộ lọc loại giao dịch hoặc khoảng thời gian.",
+				Description: "Lấy danh sách các giao dịch thu/chi mới nhất của người dùng. Hãy gọi tool này khi người dùng hỏi: 'các giao dịch gần đây', 'vừa chi tiêu những gì gần đây', 'lịch sử thu chi mới nhất'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"limit": map[string]interface{}{
 							"type":        "integer",
-							"description": "Số lượng giao dịch cần lấy (mặc định 5, tối đa 20)",
+							"description": "Số lượng giao dịch cần lấy (mặc định 5, tối đa 20).",
 						},
 						"type": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"INCOME", "EXPENSE", "INVESTMENT", "ALL"},
-							"description": "Loại giao dịch cần lọc: INCOME (thu nhập), EXPENSE (chi tiêu), INVESTMENT (đầu tư), ALL (tất cả)",
+							"description": "Loại giao dịch cần lọc: 'INCOME' (thu nhập), 'EXPENSE' (chi tiêu), 'INVESTMENT' (đầu tư), 'ALL' (tất cả). Mặc định là ALL.",
 						},
 						"startDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày bắt đầu (YYYY-MM-DD)",
+							"description": "Ngày bắt đầu (YYYY-MM-DD).",
 						},
 						"endDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày kết thúc (YYYY-MM-DD)",
+							"description": "Ngày kết thúc (YYYY-MM-DD).",
 						},
 					},
 				},
@@ -74,35 +74,35 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "create_transaction",
-				Description: "Ghi nhận một giao dịch thu chi mới vào hệ thống Nexo cho người dùng (tự động phân loại danh mục và ví).",
+				Description: "Tạo và ghi nhận một giao dịch thu nhập hoặc chi tiêu mới vào hệ thống Nexo. BẮT BUỘC gọi tool này khi người dùng nói: 'vừa ăn phở 50k', 'mua cafe 35k tiền mặt', 'vừa nhận lương 20 triệu', 'thêm khoản chi 100k'. Hệ thống sẽ tự động gán hoặc tạo danh mục phù hợp.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"amount", "type"},
 					"properties": map[string]interface{}{
 						"amount": map[string]interface{}{
 							"type":        "number",
-							"description": "Số tiền giao dịch (VND)",
+							"description": "Số tiền giao dịch thực tế bằng số nguyên (VND). Ví dụ: 50000, 35000, 20000000.",
 						},
 						"type": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"INCOME", "EXPENSE"},
-							"description": "Loại giao dịch: EXPENSE (chi tiêu) hoặc INCOME (thu nhập)",
+							"description": "Bắt buộc chọn: 'EXPENSE' nếu là chi tiêu/mua sắm/thanh toán, 'INCOME' nếu là thu nhập/nhận tiền/lương/thưởng.",
 						},
 						"categoryName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên danh mục (ví dụ: Ăn uống, Mua sắm, Di chuyển, Lương, Thưởng, v.v.)",
+							"description": "Tên danh mục chi tiêu/thu nhập (ví dụ: 'Ăn uống', 'Cafe', 'Mua sắm', 'Di chuyển', 'Lương', 'Thưởng').",
 						},
 						"walletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví sử dụng (ví dụ: Tiền mặt, Techcombank, MoMo, v.v.)",
+							"description": "Tên ví/tài khoản sử dụng (ví dụ: 'Tiền mặt', 'Techcombank', 'MoMo', 'Vietcombank'). Nếu người dùng không nhắc đến ví, hãy để trống để dùng ví mặc định.",
 						},
 						"description": map[string]interface{}{
 							"type":        "string",
-							"description": "Ghi chú/mô tả chi tiết giao dịch (ví dụ: Ăn trưa phở bò, Mua cà phê, v.v.)",
+							"description": "Mô tả/ghi chú chi tiết cho giao dịch (ví dụ: 'Ăn phở bò sáng', 'Cafe Highland', 'Lương tháng 8').",
 						},
 						"transactionDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày giao dịch (YYYY-MM-DD), mặc định là hôm nay",
+							"description": "Ngày thực hiện giao dịch (định dạng YYYY-MM-DD). Mặc định là ngày hôm nay nếu người dùng không nói rõ ngày khác.",
 						},
 					},
 				},
@@ -112,23 +112,23 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "create_category",
-				Description: "Tạo một danh mục thu/chi/đầu tư mới cho người dùng khi người dùng yêu cầu hoặc khi danh mục hiện có không đáp ứng được.",
+				Description: "Tạo một danh mục thu/chi/đầu tư mới trong hệ thống. Hãy gọi tool này khi người dùng chủ động yêu cầu: 'tạo danh mục Học tập', 'thêm category Tiền điện loại chi tiêu', 'tạo danh mục Freelance loại thu nhập'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"name"},
 					"properties": map[string]interface{}{
 						"name": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên danh mục mới (ví dụ: Học tập, Thú cưng, Tiền điện, Thưởng dự án, v.v.)",
+							"description": "Tên danh mục mới cần tạo (ví dụ: 'Học tập', 'Thú cưng', 'Tiền điện nước', 'Freelance').",
 						},
 						"type": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"EXPENSE", "INCOME", "INVESTMENT"},
-							"description": "Loại danh mục: EXPENSE (chi tiêu - mặc định), INCOME (thu nhập), INVESTMENT (đầu tư)",
+							"description": "Loại danh mục: 'EXPENSE' (chi tiêu - mặc định), 'INCOME' (thu nhập), 'INVESTMENT' (đầu tư).",
 						},
 						"description": map[string]interface{}{
 							"type":        "string",
-							"description": "Mô tả chi tiết về danh mục (tùy chọn)",
+							"description": "Mô tả ngắn gọn về danh mục mới (tùy chọn).",
 						},
 					},
 				},
@@ -138,13 +138,13 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_budget_status",
-				Description: "Kiểm tra tiến độ thực hiện và tình hình các ngân sách chi tiêu trong tháng (hạn mức, số tiền đã chi, số tiền còn lại, cảnh báo vượt mức).",
+				Description: "Kiểm tra tiến độ thực hiện ngân sách trong tháng: hạn mức đã đặt, số tiền đã chi, số tiền còn lại và cảnh báo nếu vượt ngân sách. Hãy gọi tool này khi người dùng hỏi: 'ngân sách tháng này thế nào?', 'tôi còn bao nhiêu tiền trong ngân sách ăn uống?', 'đã chi vượt ngân sách chưa?'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"month": map[string]interface{}{
 							"type":        "string",
-							"description": "Tháng cần kiểm tra (YYYY-MM), mặc định tháng hiện tại",
+							"description": "Tháng cần kiểm tra (định dạng YYYY-MM, ví dụ: '2026-08'). Mặc định là tháng hiện tại.",
 						},
 					},
 				},
@@ -154,7 +154,7 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_debt_summary",
-				Description: "Tra cứu báo cáo tổng quan về các khoản nợ phải trả (PAYABLE) và các khoản cho vay cần thu hồi (RECEIVABLE).",
+				Description: "Lấy báo cáo tổng quan về các khoản nợ phải trả (mình nợ ai) và các khoản cho vay (ai nợ mình). Hãy gọi tool này khi người dùng hỏi: 'tôi đang nợ ai?', 'ai đang mượn tiền tôi?', 'tổng nợ hiện tại bao nhiêu?'.",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -165,7 +165,7 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "list_wallets",
-				Description: "Xem danh sách tất cả các ví/tài khoản và số dư chi tiết của từng ví của người dùng.",
+				Description: "Xem danh sách toàn bộ các ví/tài khoản và số dư thực tế của từng ví (Tiền mặt, Ngân hàng, Ví điện tử). Hãy gọi tool này khi người dùng hỏi: 'tôi có những ví nào?', 'số dư tài khoản của tôi?', 'kiểm tra các ví'.",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -176,21 +176,21 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_spending_by_category",
-				Description: "Phân tích cơ cấu chi tiêu theo từng danh mục (Breakdown) trong tháng hoặc khoảng ngày.",
+				Description: "Phân tích cơ cấu và tỷ trọng chi tiêu theo từng danh mục (Breakdown). Hãy gọi tool này khi người dùng hỏi: 'tháng này tiêu vào việc gì nhiều nhất?', 'cơ cấu chi tiêu', 'tôi đã tiêu bao nhiêu cho ăn uống?'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"month": map[string]interface{}{
 							"type":        "string",
-							"description": "Tháng cần phân tích (YYYY-MM)",
+							"description": "Tháng cần phân tích (định dạng YYYY-MM, ví dụ: '2026-08').",
 						},
 						"startDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày bắt đầu (YYYY-MM-DD)",
+							"description": "Ngày bắt đầu (YYYY-MM-DD).",
 						},
 						"endDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày kết thúc (YYYY-MM-DD)",
+							"description": "Ngày kết thúc (YYYY-MM-DD).",
 						},
 					},
 				},
@@ -200,30 +200,30 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "transfer_between_wallets",
-				Description: "Thực hiện chuyển tiền nội bộ giữa 2 ví/tài khoản (ví dụ rút tiền từ ngân hàng về tiền mặt, chuyển từ Techcombank sang MoMo).",
+				Description: "Thực hiện chuyển tiền nội bộ giữa 2 ví/tài khoản cá nhân. Hãy gọi tool này khi người dùng nói: 'chuyển 500k từ Techcombank sang MoMo', 'rút 1 triệu từ tài khoản về tiền mặt'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"amount", "fromWalletName", "toWalletName"},
 					"properties": map[string]interface{}{
 						"amount": map[string]interface{}{
 							"type":        "number",
-							"description": "Số tiền cần chuyển (VND)",
+							"description": "Số tiền cần chuyển (VND). Ví dụ: 500000, 1000000.",
 						},
 						"fromWalletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví nguồn chuyển đi (ví dụ: Techcombank, VPBank, Tiền mặt, v.v.)",
+							"description": "Tên ví nguồn chuyển đi (ví dụ: 'Techcombank', 'VPBank', 'Tiền mặt').",
 						},
 						"toWalletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví đích nhận tiền (ví dụ: MoMo, Tiền mặt, ZaloPay, v.v.)",
+							"description": "Tên ví đích nhận tiền (ví dụ: 'MoMo', 'Tiền mặt', 'ZaloPay').",
 						},
 						"fee": map[string]interface{}{
 							"type":        "number",
-							"description": "Phí chuyển khoản nếu có (VND, mặc định 0)",
+							"description": "Phí chuyển khoản nếu có (VND, mặc định 0).",
 						},
 						"notes": map[string]interface{}{
 							"type":        "string",
-							"description": "Ghi chú chuyển khoản",
+							"description": "Ghi chú cho việc chuyển khoản.",
 						},
 					},
 				},
@@ -233,31 +233,31 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "create_debt",
-				Description: "Ghi nhận một khoản nợ mới (nợ phải trả PAYABLE hoặc cho người khác vay mượn RECEIVABLE).",
+				Description: "Tạo một khoản nợ mới (nợ phải trả PAYABLE hoặc cho vay cần thu hồi RECEIVABLE). Hãy gọi tool này khi người dùng nói: 'cho Nam vay 2 triệu', 'mượn anh Tuấn 5 triệu', 'ghi nợ mua điện thoại 10tr'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"title", "totalAmount", "type"},
 					"properties": map[string]interface{}{
 						"title": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên khoản nợ/người vay (ví dụ: Cho Nam mượn tiền, Vay anh Tuấn, Mua trả góp iPhone)",
+							"description": "Tên khoản nợ hoặc người liên quan (ví dụ: 'Cho Nam mượn tiền', 'Vay anh Tuấn', 'Mua trả góp laptop').",
 						},
 						"totalAmount": map[string]interface{}{
 							"type":        "number",
-							"description": "Tổng số tiền nợ (VND)",
+							"description": "Tổng số tiền nợ/cho vay (VND).",
 						},
 						"type": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"PAYABLE", "RECEIVABLE"},
-							"description": "Loại nợ: PAYABLE (mình nợ người khác / phải trả), RECEIVABLE (người khác nợ mình / cần thu hồi)",
+							"description": "Bắt buộc: 'PAYABLE' (mình nợ người khác / phải trả), 'RECEIVABLE' (người khác nợ mình / mình cho vay).",
 						},
 						"dueDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Hạn trả nợ (YYYY-MM-DD)",
+							"description": "Hạn trả nợ nếu có (định dạng YYYY-MM-DD).",
 						},
 						"notes": map[string]interface{}{
 							"type":        "string",
-							"description": "Ghi chú thêm về khoản nợ",
+							"description": "Ghi chú thêm về khoản nợ.",
 						},
 					},
 				},
@@ -267,26 +267,26 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "record_debt_repayment",
-				Description: "Ghi nhận một lần trả nợ hoặc thu hồi nợ (toàn phần hoặc một phần) cho một khoản nợ hiện có.",
+				Description: "Ghi nhận một lần thanh toán trả nợ hoặc thu hồi nợ (toàn phần hoặc một phần). Hãy gọi tool này khi người dùng nói: 'Nam vừa trả tôi 1 triệu', 'tôi vừa trả nợ anh Tuấn 2tr'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"debtTitle", "amount"},
 					"properties": map[string]interface{}{
 						"debtTitle": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên khoản nợ cần trả hoặc tên người trả nợ (ví dụ: Nam, Anh Tuấn)",
+							"description": "Tên khoản nợ hoặc tên người trả/được trả (ví dụ: 'Nam', 'Anh Tuấn').",
 						},
 						"amount": map[string]interface{}{
 							"type":        "number",
-							"description": "Số tiền trả nợ đợt này (VND)",
+							"description": "Số tiền thanh toán trả nợ đợt này (VND).",
 						},
 						"walletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví nhận tiền thu hồi hoặc ví dùng để trả nợ",
+							"description": "Tên ví nhận tiền thu hồi hoặc ví dùng để trích tiền trả nợ.",
 						},
 						"notes": map[string]interface{}{
 							"type":        "string",
-							"description": "Ghi chú thanh toán",
+							"description": "Ghi chú thanh toán.",
 						},
 					},
 				},
@@ -296,22 +296,22 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "set_budget",
-				Description: "Tạo mới hoặc điều chỉnh hạn mức ngân sách chi tiêu hàng tháng cho một danh mục.",
+				Description: "Thiết lập hoặc cập nhật hạn mức ngân sách chi tiêu hàng tháng cho một danh mục. Hãy gọi tool này khi người dùng nói: 'đặt ngân sách ăn uống 3 triệu/tháng', 'hạn mức mua sắm tháng này là 2tr'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"categoryName", "amount"},
 					"properties": map[string]interface{}{
 						"categoryName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên danh mục cần đặt ngân sách (ví dụ: Ăn uống, Mua sắm, Di chuyển)",
+							"description": "Tên danh mục cần đặt ngân sách (ví dụ: 'Ăn uống', 'Mua sắm', 'Di chuyển').",
 						},
 						"amount": map[string]interface{}{
 							"type":        "number",
-							"description": "Hạn mức ngân sách (VND)",
+							"description": "Hạn mức ngân sách bằng số (VND). Ví dụ: 3000000.",
 						},
 						"periodStart": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày bắt đầu chu kỳ (YYYY-MM-DD), mặc định ngày 1 đầu tháng",
+							"description": "Ngày bắt đầu chu kỳ ngân sách (YYYY-MM-DD), mặc định là ngày đầu tháng.",
 						},
 					},
 				},
@@ -321,18 +321,18 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "compare_financial_periods",
-				Description: "So sánh tình hình thu/chi giữa 2 tháng khác nhau để xem biến động tăng giảm các danh mục.",
+				Description: "So sánh tình hình thu/chi giữa 2 tháng khác nhau để xem biến động tăng giảm các danh mục. Hãy gọi tool này khi người dùng hỏi: 'so sánh chi tiêu tháng 7 và tháng 8', 'tháng này tiêu nhiều hơn tháng trước không?'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"firstMonth", "secondMonth"},
 					"properties": map[string]interface{}{
 						"firstMonth": map[string]interface{}{
 							"type":        "string",
-							"description": "Tháng thứ nhất cần so sánh (YYYY-MM, ví dụ 2026-07)",
+							"description": "Tháng thứ nhất cần so sánh (định dạng YYYY-MM, ví dụ: '2026-07').",
 						},
 						"secondMonth": map[string]interface{}{
 							"type":        "string",
-							"description": "Tháng thứ hai cần so sánh (YYYY-MM, ví dụ 2026-08)",
+							"description": "Tháng thứ hai cần so sánh (định dạng YYYY-MM, ví dụ: '2026-08').",
 						},
 					},
 				},
@@ -342,17 +342,17 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_financial_targets",
-				Description: "Kiểm tra tiến độ thực hiện các mục tiêu tài chính tháng (hạn mức chi tiêu tối đa hoặc mục tiêu tiết kiệm, số tiền đã đạt, tỷ lệ hoàn thành).",
+				Description: "Kiểm tra tiến độ thực hiện mục tiêu tài chính tháng (mục tiêu tiết kiệm tích lũy hoặc hạn mức trần chi tiêu). Hãy gọi tool này khi người dùng hỏi: 'tiến độ mục tiêu tài chính tháng này', 'tôi đã tiết kiệm được bao nhiêu so với mục tiêu?'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"month": map[string]interface{}{
 							"type":        "integer",
-							"description": "Tháng (1-12), mặc định là tháng hiện tại",
+							"description": "Tháng (1-12), mặc định là tháng hiện tại.",
 						},
 						"year": map[string]interface{}{
 							"type":        "integer",
-							"description": "Năm (YYYY), mặc định là năm hiện tại",
+							"description": "Năm (YYYY), mặc định là năm hiện tại.",
 						},
 					},
 				},
@@ -362,7 +362,7 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "set_financial_target",
-				Description: "Thiết lập hoặc cập nhật mục tiêu tài chính cho tháng (Mục tiêu tiết kiệm SAVINGS hoặc Hạn mức chi tiêu SPENDING_LIMIT).",
+				Description: "Thiết lập mục tiêu tài chính tháng (Mục tiêu tiết kiệm SAVINGS hoặc Hạn mức chi tiêu tối đa SPENDING_LIMIT). Hãy gọi tool này khi người dùng nói: 'đặt mục tiêu tiết kiệm tháng này 10 triệu', 'tháng này chỉ được tiêu tối đa 15 triệu'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"targetType", "targetAmount"},
@@ -370,19 +370,19 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 						"targetType": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"SAVINGS", "SPENDING_LIMIT"},
-							"description": "Loại mục tiêu: SAVINGS (tiết kiệm tích lũy) hoặc SPENDING_LIMIT (hạn mức chi tiêu tối đa)",
+							"description": "Loại mục tiêu: 'SAVINGS' (tiết kiệm tích lũy) hoặc 'SPENDING_LIMIT' (hạn mức chi tiêu tối đa).",
 						},
 						"targetAmount": map[string]interface{}{
 							"type":        "number",
-							"description": "Số tiền mục tiêu (VND)",
+							"description": "Số tiền mục tiêu (VND). Ví dụ: 10000000.",
 						},
 						"month": map[string]interface{}{
 							"type":        "integer",
-							"description": "Tháng áp dụng (1-12), mặc định tháng hiện tại",
+							"description": "Tháng áp dụng (1-12), mặc định tháng hiện tại.",
 						},
 						"year": map[string]interface{}{
 							"type":        "integer",
-							"description": "Năm áp dụng (YYYY), mặc định năm hiện tại",
+							"description": "Năm áp dụng (YYYY), mặc định năm hiện tại.",
 						},
 					},
 				},

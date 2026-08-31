@@ -22,55 +22,55 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "search_transactions",
-				Description: "Tìm kiếm nâng cao giao dịch thu/chi/đầu tư với bộ lọc chi tiết: theo danh mục, ví tiền, khoảng thời gian, khoảng số tiền, từ khóa trong ghi chú, kèm sắp xếp kết quả.",
+				Description: "Tìm kiếm và lọc nâng cao các giao dịch thu/chi/đầu tư: theo tên danh mục, tên ví tiền, khoảng thời gian (ngày bắt đầu, ngày kết thúc, tháng), khoảng số tiền (tối thiểu, tối đa), từ khóa mô tả và sắp xếp. Hãy gọi tool này khi người dùng yêu cầu: 'tìm các khoản chi trên 500k', 'tìm giao dịch có chữ Grab', 'lọc chi tiêu ăn uống từ ngày A đến ngày B'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"type": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"INCOME", "EXPENSE", "INVESTMENT", "ALL"},
-							"description": "Loại giao dịch cần lọc, mặc định ALL",
+							"description": "Loại giao dịch cần lọc ('INCOME', 'EXPENSE', 'INVESTMENT', 'ALL'). Mặc định ALL.",
 						},
 						"categoryName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên danh mục cần lọc (ví dụ: Ăn uống, Di chuyển)",
+							"description": "Tên danh mục cần lọc (ví dụ: 'Ăn uống', 'Di chuyển', 'Mua sắm').",
 						},
 						"walletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví/tài khoản cần lọc (ví dụ: Techcombank, Tiền mặt)",
+							"description": "Tên ví/tài khoản cần lọc (ví dụ: 'Techcombank', 'Tiền mặt', 'MoMo').",
 						},
 						"month": map[string]interface{}{
 							"type":        "string",
-							"description": "Tháng cần lọc (YYYY-MM)",
+							"description": "Tháng cần lọc theo định dạng YYYY-MM (ví dụ: '2026-08').",
 						},
 						"startDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày bắt đầu (YYYY-MM-DD)",
+							"description": "Ngày bắt đầu (YYYY-MM-DD).",
 						},
 						"endDate": map[string]interface{}{
 							"type":        "string",
-							"description": "Ngày kết thúc (YYYY-MM-DD)",
+							"description": "Ngày kết thúc (YYYY-MM-DD).",
 						},
 						"minAmount": map[string]interface{}{
 							"type":        "number",
-							"description": "Số tiền tối thiểu (VND)",
+							"description": "Số tiền tối thiểu (VND).",
 						},
 						"maxAmount": map[string]interface{}{
 							"type":        "number",
-							"description": "Số tiền tối đa (VND)",
+							"description": "Số tiền tối đa (VND).",
 						},
 						"keyword": map[string]interface{}{
 							"type":        "string",
-							"description": "Từ khóa tìm trong mô tả giao dịch (ví dụ: phở, grab, điện)",
+							"description": "Từ khóa tìm trong ghi chú/mô tả giao dịch (ví dụ: 'phở', 'grab', 'tiền điện').",
 						},
 						"sortBy": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"date_desc", "date_asc", "amount_desc", "amount_asc"},
-							"description": "Cách sắp xếp kết quả, mặc định date_desc (mới nhất trước)",
+							"description": "Cách sắp xếp: 'date_desc' (mới nhất trước), 'date_asc' (cũ nhất trước), 'amount_desc' (tiền nhiều nhất), 'amount_asc' (tiền ít nhất). Mặc định date_desc.",
 						},
 						"limit": map[string]interface{}{
 							"type":        "integer",
-							"description": "Số kết quả trả về (mặc định 10, tối đa 50)",
+							"description": "Số kết quả trả về (mặc định 10, tối đa 50).",
 						},
 					},
 				},
@@ -80,14 +80,14 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "list_categories",
-				Description: "Liệt kê toàn bộ danh mục thu nhập/chi tiêu của người dùng, kèm tổng tiền đã chi trong tháng hiện tại cho danh mục chi tiêu và hạn mức ngân sách nếu có.",
+				Description: "Liệt kê toàn bộ danh mục thu/chi hiện có của người dùng, kèm số tiền đã chi tiêu trong tháng hiện tại và ngân sách của từng danh mục. Hãy gọi tool này khi người dùng hỏi: 'tôi có những danh mục chi tiêu nào?', 'liệt kê các nhóm danh mục'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"type": map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"INCOME", "EXPENSE", "ALL"},
-							"description": "Lọc theo loại danh mục, mặc định ALL",
+							"description": "Lọc theo loại danh mục: 'INCOME', 'EXPENSE', 'ALL'. Mặc định ALL.",
 						},
 					},
 				},
@@ -97,13 +97,13 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_monthly_trend",
-				Description: "Phân tích xu hướng thu nhập, chi tiêu và tiết kiệm qua N tháng liên tiếp gần đây (bao gồm trung bình mỗi tháng), hữu ích cho các câu hỏi về thói quen chi tiêu dài hạn.",
+				Description: "Phân tích xu hướng tài chính (tổng thu, tổng chi, tiết kiệm và mức chi trung bình mỗi tháng) qua N tháng liên tiếp gần đây. Hãy gọi tool này khi người dùng hỏi: 'xu hướng chi tiêu mấy tháng gần đây thế nào?', 'trung bình mỗi tháng tôi tiêu bao nhiêu?'.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"months": map[string]interface{}{
 							"type":        "integer",
-							"description": "Số tháng cần phân tích lùi lại từ hiện tại (mặc định 6, tối đa 12)",
+							"description": "Số tháng liên tiếp cần phân tích lùi từ tháng hiện tại (mặc định 6, tối đa 12).",
 						},
 					},
 				},
@@ -113,18 +113,18 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_wallet_detail",
-				Description: "Xem thông tin chi tiết một ví/tài khoản cụ thể: số dư hiện tại và các giao dịch phát sinh gần nhất trên chính ví đó.",
+				Description: "Xem chi tiết một ví/tài khoản cụ thể: số dư hiện tại và lịch sử các giao dịch gần nhất trên ví đó. Hãy gọi tool này khi người dùng hỏi: 'ví Techcombank còn bao nhiêu và gần đây có giao dịch gì?', 'chi tiết ví MoMo'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"walletName"},
 					"properties": map[string]interface{}{
 						"walletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví cần xem chi tiết (ví dụ: Techcombank, MoMo, Tiền mặt)",
+							"description": "Tên ví cần tra cứu chi tiết (ví dụ: 'Techcombank', 'MoMo', 'Tiền mặt').",
 						},
 						"limit": map[string]interface{}{
 							"type":        "integer",
-							"description": "Số giao dịch gần nhất cần lấy (mặc định 10, tối đa 20)",
+							"description": "Số giao dịch gần nhất trên ví cần lấy (mặc định 10, tối đa 20).",
 						},
 					},
 				},
@@ -134,14 +134,14 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_debt_detail",
-				Description: "Xem chi tiết một khoản nợ hoặc khoản cho vay cụ thể: tổng tiền, đã trả, còn lại, hạn trả, trạng thái và toàn bộ lịch sử các lần thanh toán.",
+				Description: "Xem chi tiết một khoản nợ hoặc cho vay cụ thể: tổng số tiền, số tiền đã trả, số tiền còn lại, ngày đến hạn và toàn bộ lịch sử thanh toán. Hãy gọi tool này khi người dùng hỏi: 'chi tiết khoản nợ của Nam', 'khoản vay anh Tuấn đã trả được bao nhiêu rồi?'.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"debtTitle"},
 					"properties": map[string]interface{}{
 						"debtTitle": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên khoản nợ hoặc tên người vay/mượn (ví dụ: Cho Nam mượn, Vay anh Tuấn)",
+							"description": "Tên khoản nợ hoặc tên người liên quan (ví dụ: 'Cho Nam mượn tiền', 'Vay anh Tuấn').",
 						},
 					},
 				},
@@ -151,7 +151,7 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_investment_summary",
-				Description: "Tổng hợp danh mục đầu tư của người dùng: tổng số tiền đang nắm giữ, số vị trí đang holding, lãi/lỗ đã chốt (realized PnL) và các giao dịch đầu tư gần nhất.",
+				Description: "Xem tổng quan danh mục đầu tư tài chính của người dùng: tổng giá trị tài sản đang nắm giữ, số vị thế holding, lãi/lỗ đã hiện thực (realized PnL) và các giao dịch đầu tư mới nhất. Hãy gọi tool này khi người dùng hỏi: 'tình hình đầu tư của tôi', 'danh mục đầu tư lãi lỗ ra sao?'.",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -162,14 +162,14 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "search_financial_knowledge",
-				Description: "Tra cứu kiến thức tài chính cá nhân trong cơ sở tri thức nội bộ (nguyên tắc quản lý tiền, chiến lược tiết kiệm, đầu tư an toàn...) để đưa ra lời khuyên có căn cứ.",
+				Description: "Tra cứu kiến thức và nguyên tắc tài chính trong kho tri thức nội bộ (ví dụ: quy tắc 50/30/20, xây dựng quỹ dự phòng khẩn cấp, phương pháp quản lý nợ snowball/avalanche, chiến lược tiết kiệm). Hãy gọi tool này khi người dùng xin lời khuyên tài chính chung.",
 				Parameters: map[string]interface{}{
 					"type":     "object",
 					"required": []string{"query"},
 					"properties": map[string]interface{}{
 						"query": map[string]interface{}{
 							"type":        "string",
-							"description": "Câu hỏi hoặc chủ đề kiến thức cần tra cứu (ví dụ: quy tắc 50/30/20, quỹ dự khẩn)",
+							"description": "Chủ đề hoặc câu hỏi tài chính cần tra cứu (ví dụ: 'quy tắc 50 30 20', 'quỹ khẩn cấp bao nhiêu là đủ', 'cách trả nợ nhanh').",
 						},
 					},
 				},
