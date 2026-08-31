@@ -52,10 +52,12 @@ func NewPostgres(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(10)                 // Maximum number of connections in the idle connection pool
 	sqlDB.SetConnMaxLifetime(10 * time.Minute) // Maximum amount of time a connection may be reused
 
-	// Use migrator instead of direct auto-migration
-	migrator := migration.NewMigrator(db)
-	if err := migrator.AutoMigrate(); err != nil {
-		return nil, fmt.Errorf("migration failed: %w", err)
+	// Use migrator instead of direct auto-migration (only in non-production environments)
+	if cfg.AppEnv != "production" {
+		migrator := migration.NewMigrator(db)
+		if err := migrator.AutoMigrate(); err != nil {
+			return nil, fmt.Errorf("migration failed: %w", err)
+		}
 	}
 
 	return db, nil
