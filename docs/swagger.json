@@ -847,6 +847,352 @@
                 }
             }
         },
+        "/credit-card-statements": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve credit card statements with optional filtering by wallet, year and month",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditCardStatements"
+                ],
+                "summary": "List credit card statements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "walletId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Year",
+                        "name": "year",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Month",
+                        "name": "month",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StatementListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a monthly credit card statement record",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditCardStatements"
+                ],
+                "summary": "Create a credit card statement",
+                "parameters": [
+                    {
+                        "description": "Statement payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateStatementRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StatementResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/credit-card-statements/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve a credit card statement by its ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditCardStatements"
+                ],
+                "summary": "Get statement by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Statement ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StatementResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update fields of a credit card statement",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditCardStatements"
+                ],
+                "summary": "Update credit card statement",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Statement ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateStatementRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StatementResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a credit card statement",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditCardStatements"
+                ],
+                "summary": "Delete statement",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Statement ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/credit-card-statements/{id}/pay": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Record a payment against a monthly credit card statement",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditCardStatements"
+                ],
+                "summary": "Pay a credit card statement",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Statement ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Payment payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PayStatementRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StatementResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/transactions": {
             "get": {
                 "security": [
@@ -1875,6 +2221,65 @@
         "dto.CreateCostRequest": {
             "type": "object"
         },
+        "dto.CreateStatementRequest": {
+            "type": "object",
+            "required": [
+                "dueDate",
+                "statementBalance",
+                "statementDate",
+                "statementMonth",
+                "statementYear",
+                "walletId"
+            ],
+            "properties": {
+                "dueDate": {
+                    "type": "string",
+                    "example": "2026-09-05"
+                },
+                "minimumPayment": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 250000
+                },
+                "note": {
+                    "type": "string",
+                    "example": "Sao kê kỳ tháng 08/2026"
+                },
+                "paidAmount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "previousBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "statementBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 5000000
+                },
+                "statementDate": {
+                    "type": "string",
+                    "example": "2026-08-20"
+                },
+                "statementMonth": {
+                    "type": "integer",
+                    "maximum": 12,
+                    "minimum": 1,
+                    "example": 8
+                },
+                "statementYear": {
+                    "type": "integer",
+                    "minimum": 2000,
+                    "example": 2026
+                },
+                "walletId": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CreateTransactionRequest": {
             "type": "object"
         },
@@ -1895,9 +2300,20 @@
                     "type": "number",
                     "example": 1000000
                 },
+                "creditLimit": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 30000000
+                },
                 "currency": {
                     "type": "string",
                     "example": "VND"
+                },
+                "dueDay": {
+                    "type": "integer",
+                    "maximum": 31,
+                    "minimum": 1,
+                    "example": 5
                 },
                 "icon": {
                     "type": "string",
@@ -1910,11 +2326,32 @@
                     "type": "string",
                     "example": "NEC"
                 },
+                "minimumPayment": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 250000
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 1,
                     "example": "Ví Tiền mặt"
+                },
+                "previousBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "statementBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 5000000
+                },
+                "statementDay": {
+                    "type": "integer",
+                    "maximum": 31,
+                    "minimum": 1,
+                    "example": 20
                 },
                 "type": {
                     "enum": [
@@ -1974,6 +2411,29 @@
                 }
             }
         },
+        "dto.PayStatementRequest": {
+            "type": "object",
+            "required": [
+                "amount"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 5000000
+                },
+                "note": {
+                    "type": "string",
+                    "example": "Thanh toán sao kê tháng 8"
+                },
+                "paymentDate": {
+                    "type": "string",
+                    "example": "2026-09-01"
+                },
+                "sourceWalletId": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.RegisterRequest": {
             "type": "object",
             "required": [
@@ -2011,6 +2471,88 @@
                     "type": "string"
                 },
                 "sessionId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.StatementListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.StatementResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "totalBalance": {
+                    "type": "number"
+                },
+                "totalPaid": {
+                    "type": "number"
+                },
+                "totalRemaining": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.StatementResponse": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dueDate": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "minimumPayment": {
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "paidAmount": {
+                    "type": "number"
+                },
+                "previousBalance": {
+                    "type": "number"
+                },
+                "remainingAmount": {
+                    "type": "number"
+                },
+                "statementBalance": {
+                    "type": "number"
+                },
+                "statementDate": {
+                    "type": "string"
+                },
+                "statementMonth": {
+                    "type": "integer"
+                },
+                "statementYear": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/model.StatementStatus"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                },
+                "walletIcon": {
+                    "type": "string"
+                },
+                "walletId": {
+                    "type": "string"
+                },
+                "walletName": {
                     "type": "string"
                 }
             }
@@ -2105,6 +2647,62 @@
                 }
             }
         },
+        "dto.UpdateStatementRequest": {
+            "type": "object",
+            "properties": {
+                "dueDate": {
+                    "type": "string",
+                    "example": "2026-09-05"
+                },
+                "minimumPayment": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 250000
+                },
+                "note": {
+                    "type": "string",
+                    "example": "Đã thanh toán một phần"
+                },
+                "paidAmount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 1000000
+                },
+                "previousBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "statementBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 5000000
+                },
+                "statementDate": {
+                    "type": "string",
+                    "example": "2026-08-20"
+                },
+                "statementMonth": {
+                    "type": "integer",
+                    "maximum": 12,
+                    "minimum": 1,
+                    "example": 8
+                },
+                "statementYear": {
+                    "type": "integer",
+                    "minimum": 2000,
+                    "example": 2026
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.StatementStatus"
+                        }
+                    ],
+                    "example": "PARTIALLY_PAID"
+                }
+            }
+        },
         "dto.UpdateTransactionRequest": {
             "type": "object"
         },
@@ -2121,9 +2719,20 @@
                     "type": "number",
                     "example": 1000000
                 },
+                "creditLimit": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 30000000
+                },
                 "currency": {
                     "type": "string",
                     "example": "VND"
+                },
+                "dueDay": {
+                    "type": "integer",
+                    "maximum": 31,
+                    "minimum": 1,
+                    "example": 5
                 },
                 "icon": {
                     "type": "string",
@@ -2136,11 +2745,32 @@
                     "type": "string",
                     "example": "NEC"
                 },
+                "minimumPayment": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 250000
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 1,
                     "example": "Ví Tiền mặt"
+                },
+                "previousBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "statementBalance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 5000000
+                },
+                "statementDay": {
+                    "type": "integer",
+                    "maximum": 31,
+                    "minimum": 1,
+                    "example": 20
                 },
                 "type": {
                     "enum": [
@@ -2191,14 +2821,23 @@
                 "allocationPercent": {
                     "type": "number"
                 },
+                "availableCredit": {
+                    "type": "number"
+                },
                 "balance": {
                     "type": "number"
                 },
                 "createdAt": {
                     "type": "string"
                 },
+                "creditLimit": {
+                    "type": "number"
+                },
                 "currency": {
                     "type": "string"
+                },
+                "dueDay": {
+                    "type": "integer"
                 },
                 "icon": {
                     "type": "string"
@@ -2212,8 +2851,23 @@
                 "jarCategory": {
                     "type": "string"
                 },
+                "minimumPayment": {
+                    "type": "number"
+                },
                 "name": {
                     "type": "string"
+                },
+                "outstandingDebt": {
+                    "type": "number"
+                },
+                "previousBalance": {
+                    "type": "number"
+                },
+                "statementBalance": {
+                    "type": "number"
+                },
+                "statementDay": {
+                    "type": "integer"
                 },
                 "type": {
                     "$ref": "#/definitions/model.WalletType"
@@ -2382,6 +3036,21 @@
                     "type": "string"
                 }
             }
+        },
+        "model.StatementStatus": {
+            "type": "string",
+            "enum": [
+                "UNPAID",
+                "PARTIALLY_PAID",
+                "PAID",
+                "OVERDUE"
+            ],
+            "x-enum-varnames": [
+                "StatementStatusUnpaid",
+                "StatementStatusPartiallyPaid",
+                "StatementStatusPaid",
+                "StatementStatusOverdue"
+            ]
         },
         "model.User": {
             "type": "object",

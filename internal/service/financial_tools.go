@@ -165,7 +165,7 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "list_wallets",
-				Description: "Xem danh sách toàn bộ các ví/tài khoản và số dư thực tế của từng ví (Tiền mặt, Ngân hàng, Ví điện tử). Hãy gọi tool này khi người dùng hỏi: 'tôi có những ví nào?', 'số dư tài khoản của tôi?', 'kiểm tra các ví'.",
+				Description: "Xem danh sách toàn bộ các ví/tài khoản và số dư thực tế của từng ví (Tiền mặt, Ngân hàng, Thẻ tín dụng - kèm hạn mức, dư nợ và ngày sao kê/hạn thanh toán, Ví điện tử). Hãy gọi tool này khi người dùng hỏi: 'tôi có những ví nào?', 'số dư tài khoản của tôi?', 'kiểm tra các ví', 'hạn mức thẻ tín dụng còn bao nhiêu?'.",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},

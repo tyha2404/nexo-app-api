@@ -37,6 +37,12 @@ type Wallet struct {
 	JarCategory       *string    `gorm:"type:varchar(50)" json:"jarCategory,omitempty"`
 	AllocationPercent float64    `gorm:"type:numeric(5,2);default:0.00" json:"allocationPercent"`
 	IsIncludedInTotal bool       `gorm:"type:boolean;default:true" json:"isIncludedInTotal"`
+	CreditLimit       *float64   `gorm:"type:numeric(15,2);default:0.00" json:"creditLimit,omitempty"`
+	StatementDay      *int       `gorm:"type:int;default:0" json:"statementDay,omitempty"`
+	DueDay            *int       `gorm:"type:int;default:0" json:"dueDay,omitempty"`
+	StatementBalance  *float64   `gorm:"type:numeric(15,2);default:0.00" json:"statementBalance,omitempty"`
+	MinimumPayment    *float64   `gorm:"type:numeric(15,2);default:0.00" json:"minimumPayment,omitempty"`
+	PreviousBalance   *float64   `gorm:"type:numeric(15,2);default:0.00" json:"previousBalance,omitempty"`
 	CreatedAt         time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt         time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
 	DeletedAt         DeletedAt  `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`

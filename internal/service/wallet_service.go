@@ -55,13 +55,20 @@ func (s *walletService) CreateWallet(ctx context.Context, userID uuid.UUID, req 
 		JarCategory:       req.JarCategory,
 		AllocationPercent: req.AllocationPercent,
 		IsIncludedInTotal: isIncluded,
+		CreditLimit:       req.CreditLimit,
+		StatementDay:      req.StatementDay,
+		DueDay:            req.DueDay,
+		StatementBalance:  req.StatementBalance,
+		MinimumPayment:    req.MinimumPayment,
+		PreviousBalance:   req.PreviousBalance,
 	}
 
 	if err := s.repo.Create(ctx, wallet); err != nil {
 		return nil, err
 	}
 
-	return s.toWalletResponse(wallet), nil
+	res := dto.ToWalletResponse(wallet)
+	return &res, nil
 }
 
 func (s *walletService) GetWallets(ctx context.Context, userID uuid.UUID) (*dto.WalletSummaryResponse, error) {
@@ -76,7 +83,8 @@ func (s *walletService) GetWalletByID(ctx context.Context, userID uuid.UUID, id 
 	if wallet == nil {
 		return nil, ErrWalletNotFound
 	}
-	return s.toWalletResponse(wallet), nil
+	res := dto.ToWalletResponse(wallet)
+	return &res, nil
 }
 
 func (s *walletService) UpdateWallet(ctx context.Context, userID uuid.UUID, id uuid.UUID, req dto.UpdateWalletRequest) (*dto.WalletResponse, error) {
@@ -112,12 +120,31 @@ func (s *walletService) UpdateWallet(ctx context.Context, userID uuid.UUID, id u
 	if req.IsIncludedInTotal != nil {
 		wallet.IsIncludedInTotal = *req.IsIncludedInTotal
 	}
+	if req.CreditLimit != nil {
+		wallet.CreditLimit = req.CreditLimit
+	}
+	if req.StatementDay != nil {
+		wallet.StatementDay = req.StatementDay
+	}
+	if req.DueDay != nil {
+		wallet.DueDay = req.DueDay
+	}
+	if req.StatementBalance != nil {
+		wallet.StatementBalance = req.StatementBalance
+	}
+	if req.MinimumPayment != nil {
+		wallet.MinimumPayment = req.MinimumPayment
+	}
+	if req.PreviousBalance != nil {
+		wallet.PreviousBalance = req.PreviousBalance
+	}
 
 	if err := s.repo.Update(ctx, wallet); err != nil {
 		return nil, err
 	}
 
-	return s.toWalletResponse(wallet), nil
+	res := dto.ToWalletResponse(wallet)
+	return &res, nil
 }
 
 func (s *walletService) DeleteWallet(ctx context.Context, userID uuid.UUID, id uuid.UUID) error {
@@ -170,21 +197,4 @@ func (s *walletService) TransferMoney(ctx context.Context, userID uuid.UUID, req
 
 func (s *walletService) AutoAllocateIncome(ctx context.Context, userID uuid.UUID, req dto.AutoAllocateRequest) (*dto.AutoAllocateResponse, error) {
 	return s.repo.AutoAllocateIncome(ctx, userID, &req)
-}
-
-func (s *walletService) toWalletResponse(w *model.Wallet) *dto.WalletResponse {
-	return &dto.WalletResponse{
-		ID:                w.ID,
-		UserID:            w.UserID,
-		Name:              w.Name,
-		Type:              w.Type,
-		Balance:           w.Balance,
-		Currency:          w.Currency,
-		Icon:              w.Icon,
-		JarCategory:       w.JarCategory,
-		AllocationPercent: w.AllocationPercent,
-		IsIncludedInTotal: w.IsIncludedInTotal,
-		CreatedAt:         w.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:         w.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}
 }

@@ -15,51 +15,54 @@ type Container struct {
 	Logger *zap.Logger
 
 	// Repositories
-	UserRepo        repository.UserRepo
-	CategoryRepo    repository.CategoryRepo
-	CostRepo        repository.CostRepo
-	TransactionRepo repository.TransactionRepository
-	BudgetRepo      repository.BudgetRepository
-	AlertRepo       repository.AlertRepository
-	TargetRepo      repository.TargetRepository
-	DebtRepo        repository.DebtRepository
-	PresetRepo      repository.PresetRepository
-	WalletRepo      repository.WalletRepository
-	ChatRepo        repository.ChatRepository
-	KnowledgeRepo   repository.KnowledgeRepository
+	UserRepo                repository.UserRepo
+	CategoryRepo            repository.CategoryRepo
+	CostRepo                repository.CostRepo
+	TransactionRepo         repository.TransactionRepository
+	BudgetRepo              repository.BudgetRepository
+	AlertRepo               repository.AlertRepository
+	TargetRepo              repository.TargetRepository
+	DebtRepo                repository.DebtRepository
+	PresetRepo              repository.PresetRepository
+	WalletRepo              repository.WalletRepository
+	CreditCardStatementRepo repository.CreditCardStatementRepository
+	ChatRepo                repository.ChatRepository
+	KnowledgeRepo           repository.KnowledgeRepository
 
 	// Services
-	AuthService        service.AuthService
-	UserService        service.UserService
-	CategoryService    service.CategoryService
-	CostService        service.CostService
-	TransactionService service.TransactionService
-	BudgetService      service.BudgetService
-	AlertService       service.AlertService
-	ReportService      service.ReportService
-	TargetService      service.TargetService
-	DebtService        service.DebtService
-	PresetService      service.PresetService
-	WalletService      service.WalletService
-	RequestyService    service.RequestyService
-	RAGService         service.RAGService
-	ChatService        service.ChatService
+	AuthService                service.AuthService
+	UserService                service.UserService
+	CategoryService            service.CategoryService
+	CostService                service.CostService
+	TransactionService         service.TransactionService
+	BudgetService              service.BudgetService
+	AlertService               service.AlertService
+	ReportService              service.ReportService
+	TargetService              service.TargetService
+	DebtService                service.DebtService
+	PresetService              service.PresetService
+	WalletService              service.WalletService
+	CreditCardStatementService service.CreditCardStatementService
+	RequestyService            service.RequestyService
+	RAGService                 service.RAGService
+	ChatService                service.ChatService
 
 	// Handlers
-	HealthHandler      *handler.HealthHandler
-	AuthHandler        *handler.AuthHandler
-	UserHandler        *handler.UserHandler
-	CategoryHandler    *handler.CategoryHandler
-	CostHandler        *handler.CostHandler
-	TransactionHandler *handler.TransactionHandler
-	BudgetHandler      *handler.BudgetHandler
-	AlertHandler       *handler.AlertHandler
-	ReportHandler      *handler.ReportHandler
-	TargetHandler      *handler.TargetHandler
-	DebtHandler        *handler.DebtHandler
-	PresetHandler      *handler.PresetHandler
-	WalletHandler      *handler.WalletHandler
-	ChatHandler        *handler.ChatHandler
+	HealthHandler              *handler.HealthHandler
+	AuthHandler                *handler.AuthHandler
+	UserHandler                *handler.UserHandler
+	CategoryHandler            *handler.CategoryHandler
+	CostHandler                *handler.CostHandler
+	TransactionHandler         *handler.TransactionHandler
+	BudgetHandler              *handler.BudgetHandler
+	AlertHandler               *handler.AlertHandler
+	ReportHandler              *handler.ReportHandler
+	TargetHandler              *handler.TargetHandler
+	DebtHandler                *handler.DebtHandler
+	PresetHandler              *handler.PresetHandler
+	WalletHandler              *handler.WalletHandler
+	CreditCardStatementHandler *handler.CreditCardStatementHandler
+	ChatHandler                *handler.ChatHandler
 }
 
 // NewContainer initializes and wires all dependencies
@@ -75,6 +78,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	debtRepo := repository.NewDebtRepository(db)
 	presetRepo := repository.NewPresetRepository(db)
 	walletRepo := repository.NewWalletRepository(db)
+	ccStatementRepo := repository.NewCreditCardStatementRepository(db)
 	chatRepo := repository.NewChatRepository(db)
 	knowledgeRepo := repository.NewKnowledgeRepository(db)
 
@@ -96,6 +100,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	debtService := service.NewDebtService(debtRepo)
 	presetService := service.NewPresetService(presetRepo, categoryRepo)
 	walletService := service.NewWalletService(walletRepo)
+	ccStatementService := service.NewCreditCardStatementService(ccStatementRepo, walletRepo)
 	requestyService := service.NewRequestyService(cfg, logger)
 	ragService := service.NewRAGService(knowledgeRepo, requestyService, logger)
 	chatService := service.NewChatService(
@@ -128,51 +133,55 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	debtHandler := handler.NewDebtHandler(debtService, logger)
 	presetHandler := handler.NewPresetHandler(presetService, logger)
 	walletHandler := handler.NewWalletHandler(walletService, logger)
+	ccStatementHandler := handler.NewCreditCardStatementHandler(ccStatementService, logger)
 	chatHandler := handler.NewChatHandler(chatService, logger)
 
 	return &Container{
-		DB:                 db,
-		Logger:             logger,
-		UserRepo:           userRepo,
-		CategoryRepo:       categoryRepo,
-		CostRepo:           costRepo,
-		TransactionRepo:    transactionRepo,
-		BudgetRepo:         budgetRepo,
-		AlertRepo:          alertRepo,
-		TargetRepo:         targetRepo,
-		DebtRepo:           debtRepo,
-		PresetRepo:         presetRepo,
-		WalletRepo:         walletRepo,
-		ChatRepo:           chatRepo,
-		KnowledgeRepo:      knowledgeRepo,
-		AuthService:        authService,
-		UserService:        userService,
-		CategoryService:    categoryService,
-		CostService:        costService,
-		TransactionService: transactionService,
-		BudgetService:      budgetService,
-		AlertService:       alertService,
-		ReportService:      reportService,
-		TargetService:      targetService,
-		DebtService:        debtService,
-		PresetService:      presetService,
-		WalletService:      walletService,
-		RequestyService:    requestyService,
-		RAGService:         ragService,
-		ChatService:        chatService,
-		HealthHandler:      healthHandler,
-		AuthHandler:        authHandler,
-		UserHandler:        userHandler,
-		CategoryHandler:    categoryHandler,
-		CostHandler:        costHandler,
-		TransactionHandler: transactionHandler,
-		BudgetHandler:      budgetHandler,
-		AlertHandler:       alertHandler,
-		ReportHandler:      reportHandler,
-		TargetHandler:      targetHandler,
-		DebtHandler:        debtHandler,
-		PresetHandler:      presetHandler,
-		WalletHandler:      walletHandler,
-		ChatHandler:        chatHandler,
+		DB:                         db,
+		Logger:                     logger,
+		UserRepo:                   userRepo,
+		CategoryRepo:               categoryRepo,
+		CostRepo:                   costRepo,
+		TransactionRepo:            transactionRepo,
+		BudgetRepo:                 budgetRepo,
+		AlertRepo:                  alertRepo,
+		TargetRepo:                 targetRepo,
+		DebtRepo:                   debtRepo,
+		PresetRepo:                 presetRepo,
+		WalletRepo:                 walletRepo,
+		CreditCardStatementRepo:    ccStatementRepo,
+		ChatRepo:                   chatRepo,
+		KnowledgeRepo:              knowledgeRepo,
+		AuthService:                authService,
+		UserService:                userService,
+		CategoryService:            categoryService,
+		CostService:                costService,
+		TransactionService:         transactionService,
+		BudgetService:              budgetService,
+		AlertService:               alertService,
+		ReportService:              reportService,
+		TargetService:              targetService,
+		DebtService:                debtService,
+		PresetService:              presetService,
+		WalletService:              walletService,
+		CreditCardStatementService: ccStatementService,
+		RequestyService:            requestyService,
+		RAGService:                 ragService,
+		ChatService:                chatService,
+		HealthHandler:              healthHandler,
+		AuthHandler:                authHandler,
+		UserHandler:                userHandler,
+		CategoryHandler:            categoryHandler,
+		CostHandler:                costHandler,
+		TransactionHandler:         transactionHandler,
+		BudgetHandler:              budgetHandler,
+		AlertHandler:               alertHandler,
+		ReportHandler:              reportHandler,
+		TargetHandler:              targetHandler,
+		DebtHandler:                debtHandler,
+		PresetHandler:              presetHandler,
+		WalletHandler:              walletHandler,
+		CreditCardStatementHandler: ccStatementHandler,
+		ChatHandler:                chatHandler,
 	}
 }

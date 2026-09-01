@@ -32,6 +32,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 	debtRouter := NewDebtRouter(container.DebtHandler)
 	presetRouter := NewPresetRouter(container.PresetHandler)
 	walletRouter := NewWalletRouter(container.WalletHandler)
+	ccStatementRouter := NewCreditCardStatementRouter(container.CreditCardStatementHandler)
 	chatRouter := NewChatRouter(container.ChatHandler)
 
 	// Register all routes
@@ -49,6 +50,7 @@ func New(db *gorm.DB, logger *zap.Logger) *chi.Mux {
 		debtRouter.RegisterRoutes(apiRouter)
 		presetRouter.RegisterRoutes(apiRouter)
 		walletRouter.RegisterRoutes(apiRouter)
+		ccStatementRouter.RegisterRoutes(apiRouter)
 		chatRouter.RegisterRoutes(apiRouter)
 	})
 

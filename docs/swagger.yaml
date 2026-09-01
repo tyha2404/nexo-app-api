@@ -100,6 +100,52 @@ definitions:
     type: object
   dto.CreateCostRequest:
     type: object
+  dto.CreateStatementRequest:
+    properties:
+      dueDate:
+        example: "2026-09-05"
+        type: string
+      minimumPayment:
+        example: 250000
+        minimum: 0
+        type: number
+      note:
+        example: Sao kê kỳ tháng 08/2026
+        type: string
+      paidAmount:
+        example: 0
+        minimum: 0
+        type: number
+      previousBalance:
+        example: 0
+        minimum: 0
+        type: number
+      statementBalance:
+        example: 5000000
+        minimum: 0
+        type: number
+      statementDate:
+        example: "2026-08-20"
+        type: string
+      statementMonth:
+        example: 8
+        maximum: 12
+        minimum: 1
+        type: integer
+      statementYear:
+        example: 2026
+        minimum: 2000
+        type: integer
+      walletId:
+        type: string
+    required:
+    - dueDate
+    - statementBalance
+    - statementDate
+    - statementMonth
+    - statementYear
+    - walletId
+    type: object
   dto.CreateTransactionRequest:
     type: object
   dto.CreateWalletRequest:
@@ -112,9 +158,18 @@ definitions:
       balance:
         example: 1000000
         type: number
+      creditLimit:
+        example: 30000000
+        minimum: 0
+        type: number
       currency:
         example: VND
         type: string
+      dueDay:
+        example: 5
+        maximum: 31
+        minimum: 1
+        type: integer
       icon:
         example: "\U0001F4B5"
         type: string
@@ -123,11 +178,28 @@ definitions:
       jarCategory:
         example: NEC
         type: string
+      minimumPayment:
+        example: 250000
+        minimum: 0
+        type: number
       name:
         example: Ví Tiền mặt
         maxLength: 100
         minLength: 1
         type: string
+      previousBalance:
+        example: 0
+        minimum: 0
+        type: number
+      statementBalance:
+        example: 5000000
+        minimum: 0
+        type: number
+      statementDay:
+        example: 20
+        maximum: 31
+        minimum: 1
+        type: integer
       type:
         allOf:
         - $ref: '#/definitions/model.WalletType'
@@ -171,6 +243,22 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResponse'
     type: object
+  dto.PayStatementRequest:
+    properties:
+      amount:
+        example: 5000000
+        type: number
+      note:
+        example: Thanh toán sao kê tháng 8
+        type: string
+      paymentDate:
+        example: "2026-09-01"
+        type: string
+      sourceWalletId:
+        type: string
+    required:
+    - amount
+    type: object
   dto.RegisterRequest:
     properties:
       email:
@@ -200,6 +288,60 @@ definitions:
         type: string
     required:
     - message
+    type: object
+  dto.StatementListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.StatementResponse'
+        type: array
+      total:
+        type: integer
+      totalBalance:
+        type: number
+      totalPaid:
+        type: number
+      totalRemaining:
+        type: number
+    type: object
+  dto.StatementResponse:
+    properties:
+      createdAt:
+        type: string
+      dueDate:
+        type: string
+      id:
+        type: string
+      minimumPayment:
+        type: number
+      note:
+        type: string
+      paidAmount:
+        type: number
+      previousBalance:
+        type: number
+      remainingAmount:
+        type: number
+      statementBalance:
+        type: number
+      statementDate:
+        type: string
+      statementMonth:
+        type: integer
+      statementYear:
+        type: integer
+      status:
+        $ref: '#/definitions/model.StatementStatus'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+      walletIcon:
+        type: string
+      walletId:
+        type: string
+      walletName:
+        type: string
     type: object
   dto.TransactionResponse:
     properties:
@@ -266,6 +408,47 @@ definitions:
     - fromWalletId
     - toWalletId
     type: object
+  dto.UpdateStatementRequest:
+    properties:
+      dueDate:
+        example: "2026-09-05"
+        type: string
+      minimumPayment:
+        example: 250000
+        minimum: 0
+        type: number
+      note:
+        example: Đã thanh toán một phần
+        type: string
+      paidAmount:
+        example: 1000000
+        minimum: 0
+        type: number
+      previousBalance:
+        example: 0
+        minimum: 0
+        type: number
+      statementBalance:
+        example: 5000000
+        minimum: 0
+        type: number
+      statementDate:
+        example: "2026-08-20"
+        type: string
+      statementMonth:
+        example: 8
+        maximum: 12
+        minimum: 1
+        type: integer
+      statementYear:
+        example: 2026
+        minimum: 2000
+        type: integer
+      status:
+        allOf:
+        - $ref: '#/definitions/model.StatementStatus'
+        example: PARTIALLY_PAID
+    type: object
   dto.UpdateTransactionRequest:
     type: object
   dto.UpdateWalletRequest:
@@ -278,9 +461,18 @@ definitions:
       balance:
         example: 1000000
         type: number
+      creditLimit:
+        example: 30000000
+        minimum: 0
+        type: number
       currency:
         example: VND
         type: string
+      dueDay:
+        example: 5
+        maximum: 31
+        minimum: 1
+        type: integer
       icon:
         example: "\U0001F4B5"
         type: string
@@ -289,11 +481,28 @@ definitions:
       jarCategory:
         example: NEC
         type: string
+      minimumPayment:
+        example: 250000
+        minimum: 0
+        type: number
       name:
         example: Ví Tiền mặt
         maxLength: 100
         minLength: 1
         type: string
+      previousBalance:
+        example: 0
+        minimum: 0
+        type: number
+      statementBalance:
+        example: 5000000
+        minimum: 0
+        type: number
+      statementDay:
+        example: 20
+        maximum: 31
+        minimum: 1
+        type: integer
       type:
         allOf:
         - $ref: '#/definitions/model.WalletType'
@@ -328,12 +537,18 @@ definitions:
     properties:
       allocationPercent:
         type: number
+      availableCredit:
+        type: number
       balance:
         type: number
       createdAt:
         type: string
+      creditLimit:
+        type: number
       currency:
         type: string
+      dueDay:
+        type: integer
       icon:
         type: string
       id:
@@ -342,8 +557,18 @@ definitions:
         type: boolean
       jarCategory:
         type: string
+      minimumPayment:
+        type: number
       name:
         type: string
+      outstandingDebt:
+        type: number
+      previousBalance:
+        type: number
+      statementBalance:
+        type: number
+      statementDay:
+        type: integer
       type:
         $ref: '#/definitions/model.WalletType'
       updatedAt:
@@ -458,6 +683,18 @@ definitions:
     - incurredAt
     - title
     type: object
+  model.StatementStatus:
+    enum:
+    - UNPAID
+    - PARTIALLY_PAID
+    - PAID
+    - OVERDUE
+    type: string
+    x-enum-varnames:
+    - StatementStatusUnpaid
+    - StatementStatusPartiallyPaid
+    - StatementStatusPaid
+    - StatementStatusOverdue
   model.User:
     properties:
       createdAt:
@@ -1046,6 +1283,228 @@ paths:
       summary: Update a cost
       tags:
       - costs
+  /credit-card-statements:
+    get:
+      description: Retrieve credit card statements with optional filtering by wallet,
+        year and month
+      parameters:
+      - description: Wallet ID
+        in: query
+        name: walletId
+        type: string
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      - description: Month
+        in: query
+        name: month
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StatementListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List credit card statements
+      tags:
+      - CreditCardStatements
+    post:
+      consumes:
+      - application/json
+      description: Create a monthly credit card statement record
+      parameters:
+      - description: Statement payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateStatementRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.StatementResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a credit card statement
+      tags:
+      - CreditCardStatements
+  /credit-card-statements/{id}:
+    delete:
+      description: Delete a credit card statement
+      parameters:
+      - description: Statement ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete statement
+      tags:
+      - CreditCardStatements
+    get:
+      description: Retrieve a credit card statement by its ID
+      parameters:
+      - description: Statement ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StatementResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get statement by ID
+      tags:
+      - CreditCardStatements
+    put:
+      consumes:
+      - application/json
+      description: Update fields of a credit card statement
+      parameters:
+      - description: Statement ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateStatementRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StatementResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update credit card statement
+      tags:
+      - CreditCardStatements
+  /credit-card-statements/{id}/pay:
+    post:
+      consumes:
+      - application/json
+      description: Record a payment against a monthly credit card statement
+      parameters:
+      - description: Statement ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PayStatementRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StatementResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pay a credit card statement
+      tags:
+      - CreditCardStatements
   /transactions:
     get:
       description: List transactions

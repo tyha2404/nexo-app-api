@@ -1,0 +1,9 @@
+-- +goose Up
+ALTER TABLE wallets ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(15,2) DEFAULT 0.00;
+ALTER TABLE wallets ADD COLUMN IF NOT EXISTS statement_day INT DEFAULT 0;
+ALTER TABLE wallets ADD COLUMN IF NOT EXISTS due_day INT DEFAULT 0;
+
+-- +goose Down
+ALTER TABLE wallets DROP COLUMN IF EXISTS due_day;
+ALTER TABLE wallets DROP COLUMN IF EXISTS statement_day;
+ALTER TABLE wallets DROP COLUMN IF EXISTS credit_limit;

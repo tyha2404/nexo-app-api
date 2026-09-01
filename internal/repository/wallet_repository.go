@@ -172,20 +172,7 @@ func (r *walletRepository) GetSummaryByUserID(ctx context.Context, userID uuid.U
 		if w.IsIncludedInTotal {
 			totalBalance += w.Balance
 		}
-		walletDTOs = append(walletDTOs, dto.WalletResponse{
-			ID:                w.ID,
-			UserID:            w.UserID,
-			Name:              w.Name,
-			Type:              w.Type,
-			Balance:           w.Balance,
-			Currency:          w.Currency,
-			Icon:              w.Icon,
-			JarCategory:       w.JarCategory,
-			AllocationPercent: w.AllocationPercent,
-			IsIncludedInTotal: w.IsIncludedInTotal,
-			CreatedAt:         w.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:         w.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		})
+		walletDTOs = append(walletDTOs, dto.ToWalletResponse(&w))
 	}
 
 	return &dto.WalletSummaryResponse{
