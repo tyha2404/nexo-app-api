@@ -20,8 +20,11 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/config"
 	"github.com/tyha2404/nexo-app-api/internal/db"
 	"github.com/tyha2404/nexo-app-api/internal/logger"
+	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"github.com/tyha2404/nexo-app-api/internal/router"
+	"github.com/tyha2404/nexo-app-api/internal/service"
 	"github.com/tyha2404/nexo-app-api/internal/util"
+	"github.com/tyha2404/nexo-app-api/internal/worker"
 )
 
 func main() {
@@ -44,6 +47,12 @@ func main() {
 		logg.Sugar().Fatalf("failed to connect db: %v", err)
 	}
 
+	// Initialize and start background workers
+	rolloverRepo := repository.NewRolloverRepository(gormDB)
+	rolloverService := service.NewRolloverService(rolloverRepo, logg)
+	rolloverWorker := worker.NewMonthlyRolloverWorker(rolloverService, logg)
+	rolloverWorker.Start(context.Background())
+
 	r := router.New(gormDB, logg)
 
 	srv := &http.Server{
@@ -63,6 +72,9 @@ func main() {
 	signal.Notify(quit, os.Interrupt)
 	<-quit
 	logg.Sugar().Info("shutting down server...")
+
+	// Stop background workers
+	rolloverWorker.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
