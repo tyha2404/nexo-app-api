@@ -1,0 +1,5 @@
+{
+  "topic": "rule_of_72_compound_interest",
+  "title": "Quy tắc 72 và Sức Mạnh Lãi Suất Kép",
+  "content": "Quy tắc 72 là công thức toán học tài chính kinh điển giúp ước tính nhanh số năm cần thiết để nhân đôi số tiền đầu tư ban đầu dựa trên lãi suất hàng năm:\n1. Công thức tính: Số năm nhân đôi tài sản = 72 / Tỷ suất lợi nhuận bình quân hàng năm (%).\nVí dụ áp dụng thực tế:\n- Gửi tiết kiệm lãi suất 6%/năm: Cần 72 / 6 = 12 năm để nhân đôi tài sản.\n- Đầu tư chứng chỉ quỹ/cổ phiếu với tỷ suất 10%/năm: Cần 72 / 10 = 7.2 năm để nhân đôi tài sản.\n- Đầu tư tăng trưởng 12%/năm: Cần 72 / 12 = 6 năm để nhân đôi tài sản.\n2. Ý nghĩa trong lập kế hoạch tài chính cá nhân:\n- Cho thấy tầm quan trọng của thời gian: Bắt đầu đầu tư càng sớm, chu kỳ nhân đôi càng nhiều lần (ví dụ sau 24 năm: lãi 6% nhân 4 lần, lãi 12% nhân 16 lần).\n- Ứng dụng để tính tốc độ bào mòn tài sản do lạm phát: Nếu lạm phát 4%/năm, giá trị sức mua của tiền sẽ giảm một nửa sau 72 / 4 = 18 năm nếu để tiền mặt không sinh lời."
+}

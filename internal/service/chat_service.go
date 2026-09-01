@@ -10,6 +10,7 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -445,12 +446,14 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 			}
 
 			// Stream final answer from model after tool outputs
+			streamFilter := util.NewThinkingStreamFilter()
 			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
-				if delta != "" {
-					fullAIResponse.WriteString(delta)
+				cleanDelta := streamFilter.Process(delta)
+				if cleanDelta != "" {
+					fullAIResponse.WriteString(cleanDelta)
 					eventChan <- dto.ChatStreamEvent{
 						Type:      "text_delta",
-						Delta:     delta,
+						Delta:     cleanDelta,
 						SessionID: &session.ID,
 						MessageID: &aiMsg.ID,
 						Status:    "STREAMING",
@@ -458,10 +461,21 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 				}
 				return nil
 			})
+			if flushed := streamFilter.Flush(); flushed != "" {
+				fullAIResponse.WriteString(flushed)
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "text_delta",
+					Delta:     flushed,
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+			}
 
 			// If AI model stream returned empty content after running tools, synthesize a fallback response from tool results
-			if fullAIResponse.Len() == 0 && len(fallbackSummaries) > 0 {
+			if strings.TrimSpace(fullAIResponse.String()) == "" && len(fallbackSummaries) > 0 {
 				fallbackText := "Đã hoàn thành yêu cầu của bạn:\n\n" + strings.Join(fallbackSummaries, "\n")
+				fullAIResponse.Reset()
 				fullAIResponse.WriteString(fallbackText)
 				eventChan <- dto.ChatStreamEvent{
 					Type:      "text_delta",
@@ -472,30 +486,18 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 				}
 			}
 		} else if choice.Message.Content != "" {
-			// Model responded directly with text - stream it token-by-token for silky smooth UX
-			fullAIResponse.WriteString(choice.Message.Content)
-			runes := []rune(choice.Message.Content)
-			chunkSize := 4
-			for i := 0; i < len(runes); i += chunkSize {
-				end := i + chunkSize
-				if end > len(runes) {
-					end = len(runes)
-				}
-				delta := string(runes[i:end])
-				eventChan <- dto.ChatStreamEvent{
-					Type:      "text_delta",
-					Delta:     delta,
-					SessionID: &session.ID,
-					MessageID: &aiMsg.ID,
-					Status:    "STREAMING",
-				}
-				time.Sleep(15 * time.Millisecond)
-			}
-		} else {
-			// Fallback to stream completions
-			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
-				if delta != "" {
-					fullAIResponse.WriteString(delta)
+			// Model responded directly with text - strip thinking tags and stream token-by-token for silky smooth UX
+			cleanContent := util.StripThinkingTags(choice.Message.Content)
+			if cleanContent != "" {
+				fullAIResponse.WriteString(cleanContent)
+				runes := []rune(cleanContent)
+				chunkSize := 4
+				for i := 0; i < len(runes); i += chunkSize {
+					end := i + chunkSize
+					if end > len(runes) {
+						end = len(runes)
+					}
+					delta := string(runes[i:end])
 					eventChan <- dto.ChatStreamEvent{
 						Type:      "text_delta",
 						Delta:     delta,
@@ -503,18 +505,47 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 						MessageID: &aiMsg.ID,
 						Status:    "STREAMING",
 					}
+					time.Sleep(15 * time.Millisecond)
+				}
+			}
+		} else {
+			// Fallback to stream completions
+			streamFilter := util.NewThinkingStreamFilter()
+			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+				cleanDelta := streamFilter.Process(delta)
+				if cleanDelta != "" {
+					fullAIResponse.WriteString(cleanDelta)
+					eventChan <- dto.ChatStreamEvent{
+						Type:      "text_delta",
+						Delta:     cleanDelta,
+						SessionID: &session.ID,
+						MessageID: &aiMsg.ID,
+						Status:    "STREAMING",
+					}
 				}
 				return nil
 			})
+			if flushed := streamFilter.Flush(); flushed != "" {
+				fullAIResponse.WriteString(flushed)
+				eventChan <- dto.ChatStreamEvent{
+					Type:      "text_delta",
+					Delta:     flushed,
+					SessionID: &session.ID,
+					MessageID: &aiMsg.ID,
+					Status:    "STREAMING",
+				}
+			}
 		}
 	} else {
 		// Fallback to direct stream completions
+		streamFilter := util.NewThinkingStreamFilter()
 		err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
-			if delta != "" {
-				fullAIResponse.WriteString(delta)
+			cleanDelta := streamFilter.Process(delta)
+			if cleanDelta != "" {
+				fullAIResponse.WriteString(cleanDelta)
 				eventChan <- dto.ChatStreamEvent{
 					Type:      "text_delta",
-					Delta:     delta,
+					Delta:     cleanDelta,
 					SessionID: &session.ID,
 					MessageID: &aiMsg.ID,
 					Status:    "STREAMING",
@@ -522,6 +553,16 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 			}
 			return nil
 		})
+		if flushed := streamFilter.Flush(); flushed != "" {
+			fullAIResponse.WriteString(flushed)
+			eventChan <- dto.ChatStreamEvent{
+				Type:      "text_delta",
+				Delta:     flushed,
+				SessionID: &session.ID,
+				MessageID: &aiMsg.ID,
+				Status:    "STREAMING",
+			}
+		}
 	}
 
 	if err != nil {
