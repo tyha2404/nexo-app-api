@@ -16,6 +16,7 @@ type PushSubscriptionRepository interface {
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 	ListByUserID(ctx context.Context, userID uuid.UUID) ([]model.PushSubscription, error)
 	ListAll(ctx context.Context) ([]model.PushSubscription, error)
+	GetSubscribedUserIDs(ctx context.Context) ([]uuid.UUID, error)
 }
 
 type pushSubscriptionRepository struct {
@@ -59,4 +60,13 @@ func (r *pushSubscriptionRepository) ListAll(ctx context.Context) ([]model.PushS
 	var subs []model.PushSubscription
 	err := r.db.WithContext(ctx).Find(&subs).Error
 	return subs, err
+}
+
+func (r *pushSubscriptionRepository) GetSubscribedUserIDs(ctx context.Context) ([]uuid.UUID, error) {
+	var userIDs []uuid.UUID
+	err := r.db.WithContext(ctx).
+		Model(&model.PushSubscription{}).
+		Distinct("user_id").
+		Pluck("user_id", &userIDs).Error
+	return userIDs, err
 }

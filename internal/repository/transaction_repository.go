@@ -18,6 +18,7 @@ type TransactionRepository interface {
 	SearchByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
 	Update(ctx context.Context, transaction *model.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	CountTransactionsInRange(ctx context.Context, userID uuid.UUID, start, end time.Time) (int64, error)
 }
 
 type transactionRepository struct {
@@ -255,4 +256,13 @@ func (r *transactionRepository) SearchByUserID(ctx context.Context, userID uuid.
 
 func (r *transactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&model.Transaction{}, id).Error
+}
+
+func (r *transactionRepository) CountTransactionsInRange(ctx context.Context, userID uuid.UUID, start, end time.Time) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&model.Transaction{}).
+		Where("user_id = ? AND transaction_date >= ? AND transaction_date <= ?", userID, start, end).
+		Count(&count).Error
+	return count, err
 }

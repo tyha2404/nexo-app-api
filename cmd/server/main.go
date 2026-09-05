@@ -53,6 +53,15 @@ func main() {
 	rolloverWorker := worker.NewMonthlyRolloverWorker(rolloverService, logg)
 	rolloverWorker.Start(context.Background())
 
+	pushSubRepo := repository.NewPushSubscriptionRepository(gormDB)
+	notifService := service.NewNotificationService(pushSubRepo, cfg, logg)
+	stmtRepo := repository.NewCreditCardStatementRepository(gormDB)
+	debtRepo := repository.NewDebtRepository(gormDB)
+	targetRepo := repository.NewTargetRepository(gormDB)
+	txRepo := repository.NewTransactionRepository(gormDB)
+	notifWorker := worker.NewNotificationWorker(notifService, stmtRepo, debtRepo, targetRepo, txRepo, pushSubRepo, logg)
+	notifWorker.Start(context.Background())
+
 	r := router.New(gormDB, logg)
 
 	srv := &http.Server{
@@ -75,6 +84,7 @@ func main() {
 
 	// Stop background workers
 	rolloverWorker.Stop()
+	notifWorker.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

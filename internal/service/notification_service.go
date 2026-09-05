@@ -35,15 +35,14 @@ type notificationService struct {
 
 func cleanVapidSubject(sub string) string {
 	sub = strings.TrimSpace(sub)
-	for strings.HasPrefix(sub, "mailto:") {
-		sub = strings.TrimPrefix(sub, "mailto:")
-		sub = strings.TrimSpace(sub)
-	}
 	sub = strings.TrimPrefix(sub, "<")
 	sub = strings.TrimSuffix(sub, ">")
 	sub = strings.TrimSpace(sub)
 	if sub == "" {
-		return "admin@nexo.local"
+		return "mailto:admin@nexo.app"
+	}
+	if !strings.HasPrefix(sub, "mailto:") && !strings.HasPrefix(sub, "https://") && !strings.HasPrefix(sub, "http://") {
+		return "mailto:" + sub
 	}
 	return sub
 }
