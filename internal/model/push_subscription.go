@@ -11,7 +11,7 @@ import (
 type PushSubscription struct {
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID     uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
-	Endpoint   string    `gorm:"type:text;not null;uniqueIndex" json:"endpoint"`
+	Endpoint   string    `gorm:"type:text;not null;unique" json:"endpoint"`
 	P256dh     string    `gorm:"type:text;not null" json:"p256dh"`
 	Auth       string    `gorm:"type:text;not null" json:"auth"`
 	UserAgent  string    `gorm:"type:text" json:"userAgent,omitempty"`

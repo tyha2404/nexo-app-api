@@ -76,7 +76,7 @@ func TestCreditCardStatementService_CreateAndPayStatement(t *testing.T) {
 		StatementMonth:   8,
 		StatementYear:    2026,
 		StatementDate:    "2026-08-20",
-		DueDate:          "2026-09-05",
+		DueDate:          "2026-12-05",
 		StatementBalance: 5000000.0,
 		MinimumPayment:   250000.0,
 		PreviousBalance:  0.0,
