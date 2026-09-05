@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/SherClockHolmes/webpush-go"
@@ -124,6 +125,9 @@ func (s *notificationService) SendPushToUser(ctx context.Context, userID uuid.UU
 			continue
 		}
 
+		respBody, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
 		// Handle expired or stale subscription (404 Not Found or 410 Gone)
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 			s.logger.Info("deleting stale subscription", zap.String("endpoint", subRecord.Endpoint))
@@ -131,14 +135,19 @@ func (s *notificationService) SendPushToUser(ctx context.Context, userID uuid.UU
 		} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			successCount++
 		} else {
+			respBodyStr := string(respBody)
 			s.logger.Warn("web push gateway responded with error status",
 				zap.Int("statusCode", resp.StatusCode),
+				zap.String("responseBody", respBodyStr),
 				zap.String("endpoint", subRecord.Endpoint),
 				zap.String("userID", userID.String()),
 			)
-			lastErr = fmt.Errorf("push gateway trả về mã lỗi HTTP %d", resp.StatusCode)
+			if respBodyStr != "" {
+				lastErr = fmt.Errorf("cổng push trả về lỗi HTTP %d: %s", resp.StatusCode, respBodyStr)
+			} else {
+				lastErr = fmt.Errorf("cổng push trả về mã lỗi HTTP %d", resp.StatusCode)
+			}
 		}
-		_ = resp.Body.Close()
 	}
 
 	if successCount == 0 && len(subs) > 0 && lastErr != nil {
