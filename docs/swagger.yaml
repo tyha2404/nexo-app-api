@@ -259,6 +259,16 @@ definitions:
     required:
     - amount
     type: object
+  dto.PushKeys:
+    properties:
+      auth:
+        type: string
+      p256dh:
+        type: string
+    required:
+    - auth
+    - p256dh
+    type: object
   dto.RegisterRequest:
     properties:
       email:
@@ -343,6 +353,29 @@ definitions:
       walletName:
         type: string
     type: object
+  dto.SubscribePushRequest:
+    properties:
+      deviceType:
+        type: string
+      endpoint:
+        type: string
+      keys:
+        $ref: '#/definitions/dto.PushKeys'
+      userAgent:
+        type: string
+    required:
+    - endpoint
+    - keys
+    type: object
+  dto.TestPushRequest:
+    properties:
+      body:
+        type: string
+      title:
+        type: string
+      url:
+        type: string
+    type: object
   dto.TransactionResponse:
     properties:
       amount:
@@ -407,6 +440,13 @@ definitions:
     - amount
     - fromWalletId
     - toWalletId
+    type: object
+  dto.UnsubscribePushRequest:
+    properties:
+      endpoint:
+        type: string
+    required:
+    - endpoint
     type: object
   dto.UpdateStatementRequest:
     properties:
@@ -531,6 +571,11 @@ definitions:
         type: string
       username:
         example: johndoe
+        type: string
+    type: object
+  dto.VapidPublicKeyResponse:
+    properties:
+      publicKey:
         type: string
     type: object
   dto.WalletResponse:
@@ -1505,6 +1550,122 @@ paths:
       summary: Pay a credit card statement
       tags:
       - CreditCardStatements
+  /notifications/subscribe:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Subscription payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SubscribePushRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Subscribe a device to Web Push
+      tags:
+      - Notifications
+  /notifications/test:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Custom test payload
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.TestPushRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send a test push notification to the current user's devices
+      tags:
+      - Notifications
+  /notifications/unsubscribe:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Unsubscribe payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UnsubscribePushRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unsubscribe a device from Web Push
+      tags:
+      - Notifications
+  /notifications/vapid-public-key:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.VapidPublicKeyResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get VAPID Public Key for Web Push
+      tags:
+      - Notifications
   /transactions:
     get:
       description: List transactions
