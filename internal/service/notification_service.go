@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/google/uuid"
@@ -32,16 +33,35 @@ type notificationService struct {
 	logger          *zap.Logger
 }
 
+func cleanVapidSubject(sub string) string {
+	sub = strings.TrimSpace(sub)
+	for strings.HasPrefix(sub, "mailto:") {
+		sub = strings.TrimPrefix(sub, "mailto:")
+		sub = strings.TrimSpace(sub)
+	}
+	sub = strings.TrimPrefix(sub, "<")
+	sub = strings.TrimSuffix(sub, ">")
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		return "admin@nexo.local"
+	}
+	return sub
+}
+
 func NewNotificationService(
 	repo repository.PushSubscriptionRepository,
 	cfg *config.Config,
 	logger *zap.Logger,
 ) NotificationService {
+	cleanSubject := cleanVapidSubject(cfg.VapidSubject)
+	cleanPub := strings.TrimSpace(cfg.VapidPublicKey)
+	cleanPriv := strings.TrimSpace(cfg.VapidPrivateKey)
+
 	return &notificationService{
 		repo:            repo,
-		vapidPublicKey:  cfg.VapidPublicKey,
-		vapidPrivateKey: cfg.VapidPrivateKey,
-		vapidSubject:    cfg.VapidSubject,
+		vapidPublicKey:  cleanPub,
+		vapidPrivateKey: cleanPriv,
+		vapidSubject:    cleanSubject,
 		logger:          logger,
 	}
 }
