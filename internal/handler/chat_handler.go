@@ -222,3 +222,27 @@ func (h *ChatHandler) ClearSessions(w http.ResponseWriter, r *http.Request) {
 		Data:    "Đã xóa toàn bộ lịch sử trò chuyện",
 	})
 }
+
+// ListModels returns available AI models dynamically from 9Router providers
+// @Summary List available models from 9Router
+// @Description Fetch available models and combos from 9Router Gateway
+// @Tags chat
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.ChatModelsResponse
+// @Router /chat/models [get]
+func (h *ChatHandler) ListModels(w http.ResponseWriter, r *http.Request) {
+	models, err := h.chatService.ListAvailableModels(r.Context())
+	if err != nil {
+		h.log.Warn("failed to fetch models from 9Router, returning default", zap.Error(err))
+		models = []string{"auto"}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response.BaseResponse[dto.ChatModelsResponse]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    dto.ChatModelsResponse{Models: models},
+	})
+}

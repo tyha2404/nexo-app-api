@@ -18,6 +18,7 @@ func (r *ChatRouter) RegisterRoutes(router chi.Router) {
 	router.Route("/chat", func(router chi.Router) {
 		router.Use(middleware.AuthMiddleware)
 		router.Post("/stream", r.handler.StreamMessage)
+		router.Get("/models", r.handler.ListModels)
 		router.Get("/sessions", r.handler.ListSessions)
 		router.Get("/sessions/{id}", r.handler.GetSessionMessages)
 		router.Delete("/sessions/{id}", r.handler.DeleteSession)

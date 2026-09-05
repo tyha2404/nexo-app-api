@@ -68,6 +68,14 @@ func (m *MockRequestyService) IsConfigured() bool {
 	return args.Bool(0)
 }
 
+func (m *MockRequestyService) ListModels(ctx context.Context) ([]string, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *MockRequestyService) ChatCompletion(ctx context.Context, messages []service.RequestyMessage, tools []service.ToolDefinition) (*service.RequestyChatResponse, error) {
 	args := m.Called(ctx, messages, tools)
 	if args.Get(0) == nil {
@@ -76,8 +84,21 @@ func (m *MockRequestyService) ChatCompletion(ctx context.Context, messages []ser
 	return args.Get(0).(*service.RequestyChatResponse), args.Error(1)
 }
 
+func (m *MockRequestyService) ChatCompletionWithModel(ctx context.Context, model string, messages []service.RequestyMessage, tools []service.ToolDefinition) (*service.RequestyChatResponse, error) {
+	args := m.Called(ctx, model, messages, tools)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.RequestyChatResponse), args.Error(1)
+}
+
 func (m *MockRequestyService) StreamChatCompletions(ctx context.Context, messages []service.RequestyMessage, onChunk func(delta string) error) error {
 	args := m.Called(ctx, messages, onChunk)
+	return args.Error(0)
+}
+
+func (m *MockRequestyService) StreamChatCompletionsWithModel(ctx context.Context, model string, messages []service.RequestyMessage, onChunk func(delta string) error) error {
+	args := m.Called(ctx, model, messages, onChunk)
 	return args.Error(0)
 }
 

@@ -58,6 +58,13 @@ definitions:
       toolResults:
         type: string
     type: object
+  dto.ChatModelsResponse:
+    properties:
+      models:
+        items:
+          type: string
+        type: array
+    type: object
   dto.ChatSessionResponse:
     properties:
       createdAt:
@@ -293,6 +300,8 @@ definitions:
   dto.SendMessageRequest:
     properties:
       message:
+        type: string
+      model:
         type: string
       sessionId:
         type: string
@@ -1061,6 +1070,21 @@ paths:
       security:
       - BearerAuth: []
       summary: Clear all chat history
+      tags:
+      - chat
+  /chat/models:
+    get:
+      description: Fetch available models and combos from 9Router Gateway
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ChatModelsResponse'
+      security:
+      - BearerAuth: []
+      summary: List available models from 9Router
       tags:
       - chat
   /chat/sessions:

@@ -20,6 +20,7 @@ type ChatService interface {
 	GetSessionMessages(ctx context.Context, userID, sessionID uuid.UUID, limit int) (*dto.ChatSessionResponse, error)
 	DeleteSession(ctx context.Context, userID, sessionID uuid.UUID) error
 	ClearSessions(ctx context.Context, userID uuid.UUID) error
+	ListAvailableModels(ctx context.Context) ([]string, error)
 	ProcessMessageStream(ctx context.Context, userID uuid.UUID, req dto.SendMessageRequest, eventChan chan<- dto.ChatStreamEvent) error
 }
 
@@ -375,6 +376,11 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 		})
 	}
 
+	requestedModel := ""
+	if req.Model != nil {
+		requestedModel = *req.Model
+	}
+
 	// 6. Check for Tool Calling
 	// If knowledge was already auto-injected, hide the retrieval tool for this
 	// turn so the model cannot duplicate the lookup (next turn re-injects).
@@ -382,7 +388,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 	if len(injectedDocs) > 0 {
 		tools = withoutKnowledgeSearchTool(tools)
 	}
-	toolChatResp, err := s.requestyService.ChatCompletion(ctx, requestyMessages, tools)
+	toolChatResp, err := s.requestyService.ChatCompletionWithModel(ctx, requestedModel, requestyMessages, tools)
 
 	var fullAIResponse strings.Builder
 	if err == nil && toolChatResp != nil && len(toolChatResp.Choices) > 0 {
@@ -447,7 +453,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 
 			// Stream final answer from model after tool outputs
 			streamFilter := util.NewThinkingStreamFilter()
-			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+			err = s.requestyService.StreamChatCompletionsWithModel(ctx, requestedModel, requestyMessages, func(delta string) error {
 				cleanDelta := streamFilter.Process(delta)
 				if cleanDelta != "" {
 					fullAIResponse.WriteString(cleanDelta)
@@ -511,7 +517,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 		} else {
 			// Fallback to stream completions
 			streamFilter := util.NewThinkingStreamFilter()
-			err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+			err = s.requestyService.StreamChatCompletionsWithModel(ctx, requestedModel, requestyMessages, func(delta string) error {
 				cleanDelta := streamFilter.Process(delta)
 				if cleanDelta != "" {
 					fullAIResponse.WriteString(cleanDelta)
@@ -539,7 +545,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 	} else {
 		// Fallback to direct stream completions
 		streamFilter := util.NewThinkingStreamFilter()
-		err = s.requestyService.StreamChatCompletions(ctx, requestyMessages, func(delta string) error {
+		err = s.requestyService.StreamChatCompletionsWithModel(ctx, requestedModel, requestyMessages, func(delta string) error {
 			cleanDelta := streamFilter.Process(delta)
 			if cleanDelta != "" {
 				fullAIResponse.WriteString(cleanDelta)
@@ -593,4 +599,8 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 	}
 
 	return nil
+}
+
+func (s *chatService) ListAvailableModels(ctx context.Context) ([]string, error) {
+	return s.requestyService.ListModels(ctx)
 }

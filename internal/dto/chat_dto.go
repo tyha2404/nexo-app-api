@@ -9,6 +9,11 @@ import (
 type SendMessageRequest struct {
 	SessionID *uuid.UUID `json:"sessionId,omitempty"`
 	Message   string     `json:"message" validate:"required"`
+	Model     *string    `json:"model,omitempty"`
+}
+
+type ChatModelsResponse struct {
+	Models []string `json:"models"`
 }
 
 type ChatSessionResponse struct {

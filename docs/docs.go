@@ -436,6 +436,31 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/models": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Fetch available models and combos from 9Router Gateway",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "List available models from 9Router",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatModelsResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/sessions": {
             "get": {
                 "security": [
@@ -2357,6 +2382,17 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ChatModelsResponse": {
+            "type": "object",
+            "properties": {
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "dto.ChatSessionResponse": {
             "type": "object",
             "properties": {
@@ -2678,6 +2714,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "message": {
+                    "type": "string"
+                },
+                "model": {
                     "type": "string"
                 },
                 "sessionId": {

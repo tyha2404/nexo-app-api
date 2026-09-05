@@ -44,7 +44,7 @@ type Container struct {
 	PresetService              service.PresetService
 	WalletService              service.WalletService
 	CreditCardStatementService service.CreditCardStatementService
-	RequestyService            service.RequestyService
+	NineRouterService          service.NineRouterService
 	RAGService                 service.RAGService
 	ChatService                service.ChatService
 	NotificationService        service.NotificationService
@@ -105,11 +105,11 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	presetService := service.NewPresetService(presetRepo, categoryRepo)
 	walletService := service.NewWalletService(walletRepo)
 	ccStatementService := service.NewCreditCardStatementService(ccStatementRepo, walletRepo)
-	requestyService := service.NewRequestyService(cfg, logger)
-	ragService := service.NewRAGService(knowledgeRepo, requestyService, logger)
+	nineRouterService := service.NewNineRouterService(cfg, logger)
+	ragService := service.NewRAGService(knowledgeRepo, nineRouterService, logger)
 	chatService := service.NewChatService(
 		chatRepo,
-		requestyService,
+		nineRouterService,
 		ragService,
 		transactionService,
 		reportService,
@@ -172,7 +172,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		PresetService:              presetService,
 		WalletService:              walletService,
 		CreditCardStatementService: ccStatementService,
-		RequestyService:            requestyService,
+		NineRouterService:          nineRouterService,
 		RAGService:                 ragService,
 		ChatService:                chatService,
 		NotificationService:        notificationService,

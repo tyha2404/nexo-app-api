@@ -18,10 +18,10 @@ type Config struct {
 	LogLevel               string
 	JwtSecret              string
 	AppEnv                 string
-	RequestyApiKey         string
-	RequestyBaseURL        string
-	RequestyModel          string
-	RequestyEmbeddingModel string
+	NineRouterURL          string
+	NineRouterAPIKey       string
+	NineRouterModel        string
+	NineRouterEmbeddingModel string
 	VapidPublicKey         string
 	VapidPrivateKey        string
 	VapidSubject           string
@@ -30,14 +30,25 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	_ = godotenv.Load()
 
-	apiKey := getEnv("REQUESTY_API_KEY", "")
-	if apiKey == "" {
-		apiKey = getEnv("AI_API_KEY", "")
+	nineRouterURL := getEnv("NINE_ROUTER_URL", "")
+	if nineRouterURL == "" {
+		nineRouterURL = getEnv("AI_BASE_URL", "http://localhost:20128/v1/")
 	}
 
-	baseURL := getEnv("REQUESTY_BASE_URL", "https://api.groq.com/openai/v1/")
-	model := getEnv("REQUESTY_MODEL", "google/gemma-4-31b-it")
-	embeddingModel := getEnv("REQUESTY_EMBEDDING_MODEL", "embedding-3")
+	nineRouterAPIKey := getEnv("NINE_ROUTER_API_KEY", "")
+	if nineRouterAPIKey == "" {
+		nineRouterAPIKey = getEnv("AI_API_KEY", "9router-local")
+	}
+
+	nineRouterModel := getEnv("NINE_ROUTER_MODEL", "")
+	if nineRouterModel == "" {
+		nineRouterModel = getEnv("AI_MODEL", "gemini-2.5-flash")
+	}
+
+	nineRouterEmbeddingModel := getEnv("NINE_ROUTER_EMBEDDING_MODEL", "")
+	if nineRouterEmbeddingModel == "" {
+		nineRouterEmbeddingModel = getEnv("AI_EMBEDDING_MODEL", "embedding-3")
+	}
 
 	c := &Config{
 		DBHost:                 getEnv("DB_HOST", "localhost"),
@@ -50,10 +61,10 @@ func LoadConfig() (*Config, error) {
 		LogLevel:               getEnv("LOG_LEVEL", "info"),
 		JwtSecret:              getEnv("JWT_SECRET", "secret"),
 		AppEnv:                 getEnv("APP_ENV", "dev"),
-		RequestyApiKey:         apiKey,
-		RequestyBaseURL:        baseURL,
-		RequestyModel:          model,
-		RequestyEmbeddingModel: embeddingModel,
+		NineRouterURL:          nineRouterURL,
+		NineRouterAPIKey:       nineRouterAPIKey,
+		NineRouterModel:        nineRouterModel,
+		NineRouterEmbeddingModel: nineRouterEmbeddingModel,
 		VapidPublicKey:         getEnv("VAPID_PUBLIC_KEY", "BAyz5fFinQHdqEWjHznwDfqpRMIrJshJd31quXzgE-aRMBUd9F_a2iIhnxOocrbDe_mt_zFXOI_3BJVykFDMPBU"),
 		VapidPrivateKey:        getEnv("VAPID_PRIVATE_KEY", "sfbZBDeRsCQYRhU56XEBl-8KL6LuNNbFGuGD0JSzXPg"),
 		VapidSubject:           getEnv("VAPID_SUBJECT", "mailto:support@nexo.local"),
