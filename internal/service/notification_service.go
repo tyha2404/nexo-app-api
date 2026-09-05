@@ -97,6 +97,7 @@ func (s *notificationService) SendPushToUser(ctx context.Context, userID uuid.UU
 	}
 
 	successCount := 0
+	var lastErr error
 	for _, subRecord := range subs {
 		sub := &webpush.Subscription{
 			Endpoint: subRecord.Endpoint,
@@ -119,6 +120,7 @@ func (s *notificationService) SendPushToUser(ctx context.Context, userID uuid.UU
 				zap.String("endpoint", subRecord.Endpoint),
 				zap.String("userID", userID.String()),
 			)
+			lastErr = err
 			continue
 		}
 
@@ -128,8 +130,19 @@ func (s *notificationService) SendPushToUser(ctx context.Context, userID uuid.UU
 			_ = s.repo.DeleteByEndpoint(ctx, subRecord.Endpoint)
 		} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			successCount++
+		} else {
+			s.logger.Warn("web push gateway responded with error status",
+				zap.Int("statusCode", resp.StatusCode),
+				zap.String("endpoint", subRecord.Endpoint),
+				zap.String("userID", userID.String()),
+			)
+			lastErr = fmt.Errorf("push gateway trả về mã lỗi HTTP %d", resp.StatusCode)
 		}
 		_ = resp.Body.Close()
+	}
+
+	if successCount == 0 && len(subs) > 0 && lastErr != nil {
+		return 0, fmt.Errorf("không thể gửi thông báo tới thiết bị (%w). Vui lòng thử tắt và bật lại thông báo để làm mới đăng ký", lastErr)
 	}
 
 	return successCount, nil
@@ -162,7 +175,7 @@ func (s *notificationService) SendTestPush(ctx context.Context, userID uuid.UUID
 	}
 
 	if count == 0 {
-		return fmt.Errorf("chưa tìm thấy thiết bị nào đã đăng ký nhận thông báo của bạn. Vui lòng bật thông báo trước")
+		return fmt.Errorf("chưa tìm thấy thiết bị nào đã đăng ký nhận thông báo của bạn. Vui lòng tắt và bật lại nút thông báo")
 	}
 
 	return nil
