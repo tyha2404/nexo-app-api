@@ -40,7 +40,6 @@ func (m *Migrator) AutoMigrate() error {
 		&model.Wallet{},
 		&model.WalletTransfer{},
 		&model.CreditCardStatement{},
-		&model.PushSubscription{},
 		&model.Preset{},
 		&model.ChatSession{},
 		&model.ChatMessage{},

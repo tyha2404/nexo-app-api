@@ -1225,194 +1225,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/notifications/subscribe": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Notifications"
-                ],
-                "summary": "Subscribe a device to Web Push",
-                "parameters": [
-                    {
-                        "description": "Subscription payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.SubscribePushRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/notifications/test": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Notifications"
-                ],
-                "summary": "Send a test push notification to the current user's devices",
-                "parameters": [
-                    {
-                        "description": "Custom test payload",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/dto.TestPushRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/notifications/unsubscribe": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Notifications"
-                ],
-                "summary": "Unsubscribe a device from Web Push",
-                "parameters": [
-                    {
-                        "description": "Unsubscribe payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UnsubscribePushRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/notifications/vapid-public-key": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Notifications"
-                ],
-                "summary": "Get VAPID Public Key for Web Push",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.VapidPublicKeyResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/transactions": {
             "get": {
                 "security": [
@@ -2665,21 +2477,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.PushKeys": {
-            "type": "object",
-            "required": [
-                "auth",
-                "p256dh"
-            ],
-            "properties": {
-                "auth": {
-                    "type": "string"
-                },
-                "p256dh": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.RegisterRequest": {
             "type": "object",
             "required": [
@@ -2806,41 +2603,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.SubscribePushRequest": {
-            "type": "object",
-            "required": [
-                "endpoint",
-                "keys"
-            ],
-            "properties": {
-                "deviceType": {
-                    "type": "string"
-                },
-                "endpoint": {
-                    "type": "string"
-                },
-                "keys": {
-                    "$ref": "#/definitions/dto.PushKeys"
-                },
-                "userAgent": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.TestPushRequest": {
-            "type": "object",
-            "properties": {
-                "body": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.TransactionResponse": {
             "type": "object",
             "properties": {
@@ -2928,17 +2690,6 @@ const docTemplate = `{
                 },
                 "transferDate": {
                     "$ref": "#/definitions/dto.CustomTime"
-                }
-            }
-        },
-        "dto.UnsubscribePushRequest": {
-            "type": "object",
-            "required": [
-                "endpoint"
-            ],
-            "properties": {
-                "endpoint": {
-                    "type": "string"
                 }
             }
         },
@@ -3107,14 +2858,6 @@ const docTemplate = `{
                 "username": {
                     "type": "string",
                     "example": "johndoe"
-                }
-            }
-        },
-        "dto.VapidPublicKeyResponse": {
-            "type": "object",
-            "properties": {
-                "publicKey": {
-                    "type": "string"
                 }
             }
         },

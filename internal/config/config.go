@@ -22,9 +22,6 @@ type Config struct {
 	NineRouterAPIKey       string
 	NineRouterModel        string
 	NineRouterEmbeddingModel string
-	VapidPublicKey         string
-	VapidPrivateKey        string
-	VapidSubject           string
 }
 
 func LoadConfig() (*Config, error) {
@@ -65,9 +62,6 @@ func LoadConfig() (*Config, error) {
 		NineRouterAPIKey:       nineRouterAPIKey,
 		NineRouterModel:        nineRouterModel,
 		NineRouterEmbeddingModel: nineRouterEmbeddingModel,
-		VapidPublicKey:         getEnv("VAPID_PUBLIC_KEY", "BAyz5fFinQHdqEWjHznwDfqpRMIrJshJd31quXzgE-aRMBUd9F_a2iIhnxOocrbDe_mt_zFXOI_3BJVykFDMPBU"),
-		VapidPrivateKey:        getEnv("VAPID_PRIVATE_KEY", "sfbZBDeRsCQYRhU56XEBl-8KL6LuNNbFGuGD0JSzXPg"),
-		VapidSubject:           getEnv("VAPID_SUBJECT", "mailto:support@nexo.local"),
 	}
 
 	// Security validations

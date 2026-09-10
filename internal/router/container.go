@@ -28,7 +28,6 @@ type Container struct {
 	CreditCardStatementRepo repository.CreditCardStatementRepository
 	ChatRepo                repository.ChatRepository
 	KnowledgeRepo           repository.KnowledgeRepository
-	PushSubscriptionRepo    repository.PushSubscriptionRepository
 
 	// Services
 	AuthService                service.AuthService
@@ -47,7 +46,6 @@ type Container struct {
 	NineRouterService          service.NineRouterService
 	RAGService                 service.RAGService
 	ChatService                service.ChatService
-	NotificationService        service.NotificationService
 
 	// Handlers
 	HealthHandler              *handler.HealthHandler
@@ -65,7 +63,6 @@ type Container struct {
 	WalletHandler              *handler.WalletHandler
 	CreditCardStatementHandler *handler.CreditCardStatementHandler
 	ChatHandler                *handler.ChatHandler
-	NotificationHandler        *handler.NotificationHandler
 }
 
 // NewContainer initializes and wires all dependencies
@@ -84,7 +81,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	ccStatementRepo := repository.NewCreditCardStatementRepository(db)
 	chatRepo := repository.NewChatRepository(db)
 	knowledgeRepo := repository.NewKnowledgeRepository(db)
-	pushSubscriptionRepo := repository.NewPushSubscriptionRepository(db)
 
 	cfg, _ := config.LoadConfig()
 	if cfg == nil {
@@ -122,8 +118,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		walletRepo,
 		logger,
 	)
-	notificationService := service.NewNotificationService(pushSubscriptionRepo, cfg, logger)
-
 	// 3. Initialize Handlers
 	healthHandler := handler.NewHealthHandler(db, logger)
 	authHandler := handler.NewAuthHandler(authService, logger)
@@ -140,7 +134,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	walletHandler := handler.NewWalletHandler(walletService, logger)
 	ccStatementHandler := handler.NewCreditCardStatementHandler(ccStatementService, logger)
 	chatHandler := handler.NewChatHandler(chatService, logger)
-	notificationHandler := handler.NewNotificationHandler(notificationService, logger)
 
 	return &Container{
 		DB:                         db,
@@ -158,7 +151,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		CreditCardStatementRepo:    ccStatementRepo,
 		ChatRepo:                   chatRepo,
 		KnowledgeRepo:              knowledgeRepo,
-		PushSubscriptionRepo:       pushSubscriptionRepo,
 		AuthService:                authService,
 		UserService:                userService,
 		CategoryService:            categoryService,
@@ -175,7 +167,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		NineRouterService:          nineRouterService,
 		RAGService:                 ragService,
 		ChatService:                chatService,
-		NotificationService:        notificationService,
 		HealthHandler:              healthHandler,
 		AuthHandler:                authHandler,
 		UserHandler:                userHandler,
@@ -191,6 +182,5 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		WalletHandler:              walletHandler,
 		CreditCardStatementHandler: ccStatementHandler,
 		ChatHandler:                chatHandler,
-		NotificationHandler:        notificationHandler,
 	}
 }
