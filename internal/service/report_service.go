@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
@@ -12,15 +14,18 @@ import (
 type ReportService interface {
 	GetSummary(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.SummaryReport, error)
 	GetCategoryBreakdown(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.CategoryBreakdownReport, error)
+	GetMonthlyTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error)
 }
 
 type reportService struct {
 	transactionRepo repository.TransactionRepository
+	targetRepo      repository.TargetRepository
 }
 
-func NewReportService(transactionRepo repository.TransactionRepository) ReportService {
+func NewReportService(transactionRepo repository.TransactionRepository, targetRepo repository.TargetRepository) ReportService {
 	return &reportService{
 		transactionRepo: transactionRepo,
+		targetRepo:      targetRepo,
 	}
 }
 
@@ -125,3 +130,95 @@ func (s *reportService) GetCategoryBreakdown(ctx context.Context, userID uuid.UU
 		TotalExpense: totalExpense,
 	}, nil
 }
+
+func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error) {
+	if months <= 0 || months > 36 {
+		months = 12
+	}
+
+	now := time.Now()
+	// Calculate range: from the 1st of (now - months + 1) to end of current month
+	startMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -(months - 1), 0)
+	endMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+	startDateStr := startMonth.Format("2006-01-02")
+	endDateStr := endMonth.Format("2006-01-02")
+
+	// 1. Fetch expenses in range
+	expenseFilters := map[string]interface{}{
+		"type":      string(model.TransactionTypeExpense),
+		"startDate": startDateStr,
+		"endDate":   endDateStr,
+	}
+	expenses, _, err := s.transactionRepo.ListByUserID(ctx, userID, 100000, 0, expenseFilters)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Fetch incomes in range
+	incomeFilters := map[string]interface{}{
+		"type":      string(model.TransactionTypeIncome),
+		"startDate": startDateStr,
+		"endDate":   endDateStr,
+	}
+	incomes, _, err := s.transactionRepo.ListByUserID(ctx, userID, 100000, 0, incomeFilters)
+	if err != nil {
+		return nil, err
+	}
+
+	// Aggregate by month ("YYYY-MM")
+	monthlyExpense := make(map[string]float64)
+	monthlyIncome := make(map[string]float64)
+
+	for _, exp := range expenses {
+		mKey := exp.TransactionDate.Format("2006-01")
+		monthlyExpense[mKey] += exp.Amount
+	}
+
+	for _, inc := range incomes {
+		mKey := inc.TransactionDate.Format("2006-01")
+		monthlyIncome[mKey] += inc.Amount
+	}
+
+	// Build monthly items chronologically
+	var items []dto.MonthlyTrendItem
+	var totalExpenseSum float64
+
+	for i := 0; i < months; i++ {
+		cur := startMonth.AddDate(0, i, 0)
+		mKey := cur.Format("2006-01")
+		label := fmt.Sprintf("T%02d/%s", int(cur.Month()), cur.Format("06"))
+
+		exp := monthlyExpense[mKey]
+		inc := monthlyIncome[mKey]
+
+		var targetAmount float64
+		if s.targetRepo != nil {
+			target, err := s.targetRepo.GetTarget(ctx, userID, model.TargetTypeExpense, int(cur.Month()), cur.Year())
+			if err == nil && target != nil {
+				targetAmount = target.TargetAmount
+			}
+		}
+
+		totalExpenseSum += exp
+
+		items = append(items, dto.MonthlyTrendItem{
+			Month:   mKey,
+			Label:   label,
+			Expense: exp,
+			Income:  inc,
+			Target:  targetAmount,
+		})
+	}
+
+	avgExpense := 0.0
+	if months > 0 {
+		avgExpense = totalExpenseSum / float64(months)
+	}
+
+	return &dto.MonthlyTrendReport{
+		AverageExpense: avgExpense,
+		Items:          items,
+	}, nil
+}
+

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -65,6 +66,42 @@ func (h *ReportHandler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response.BaseResponse[dto.CategoryBreakdownReport]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *res,
+	})
+}
+
+// GetMonthlyTrend handles GET /reports/monthly-trend
+// @Summary Get monthly financial trend
+// @Description Get 12-month expense, income, target and average trend
+// @Tags Reports
+// @Accept json
+// @Produce json
+// @Param months query int false "Number of months (default: 12)"
+// @Security BearerAuth
+// @Success 200 {object} response.BaseResponse[dto.MonthlyTrendReport]
+// @Failure 500 {string} string
+// @Router /reports/monthly-trend [get]
+func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
+
+	monthsStr := r.URL.Query().Get("months")
+	months := 12
+	if monthsStr != "" {
+		if parsed, err := strconv.Atoi(monthsStr); err == nil && parsed > 0 {
+			months = parsed
+		}
+	}
+
+	res, err := h.svc.GetMonthlyTrend(r.Context(), userID, months)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response.BaseResponse[dto.MonthlyTrendReport]{
 		Status:  http.StatusOK,
 		Success: true,
 		Data:    *res,

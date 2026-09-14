@@ -22,6 +22,8 @@ type Config struct {
 	NineRouterAPIKey       string
 	NineRouterModel        string
 	NineRouterEmbeddingModel string
+	SupabaseURL            string
+	SupabaseJWKSURL        string
 }
 
 func LoadConfig() (*Config, error) {
@@ -62,6 +64,12 @@ func LoadConfig() (*Config, error) {
 		NineRouterAPIKey:       nineRouterAPIKey,
 		NineRouterModel:        nineRouterModel,
 		NineRouterEmbeddingModel: nineRouterEmbeddingModel,
+		SupabaseURL:            getEnv("SUPABASE_URL", ""),
+		SupabaseJWKSURL:        getEnv("SUPABASE_JWKS_URL", ""),
+	}
+
+	if c.SupabaseURL != "" && c.SupabaseJWKSURL == "" {
+		c.SupabaseJWKSURL = fmt.Sprintf("%s/auth/v1/.well-known/jwks.json", c.SupabaseURL)
 	}
 
 	// Security validations

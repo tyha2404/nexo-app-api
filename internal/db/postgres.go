@@ -37,7 +37,10 @@ func NewPostgres(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 		Logger: NewGormLogger(logger, logLevel),
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true, // Required for connection poolers like Supavisor / PgBouncer
+	}), gormConfig)
 	if err != nil {
 		return nil, err
 	}

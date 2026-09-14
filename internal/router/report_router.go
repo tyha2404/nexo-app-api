@@ -19,5 +19,6 @@ func (r *ReportRouter) RegisterRoutes(router chi.Router) {
 		router.Use(middleware.AuthMiddleware)
 		router.Get("/summary", r.handler.GetSummary)
 		router.Get("/category-breakdown", r.handler.GetCategoryBreakdown)
+		router.Get("/monthly-trend", r.handler.GetMonthlyTrend)
 	})
 }

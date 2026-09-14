@@ -49,8 +49,7 @@ func (r *targetRepository) GetMonthlyTotalByCategoryType(ctx context.Context, us
 	var total float64
 	query := r.db.WithContext(ctx).
 		Model(&model.Transaction{}).
-		Joins("JOIN categories ON categories.id = transactions.category_id").
-		Where("transactions.user_id = ? AND categories.type = ? AND transactions.transaction_date >= ? AND transactions.transaction_date <= ?", userID, catType, startDate, endDate)
+		Where("transactions.user_id = ? AND transactions.type = ? AND transactions.transaction_date >= ? AND transactions.transaction_date <= ?", userID, string(catType), startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 
 	if catType == model.CategoryTypeInvestment {
 		query = query.Where("transactions.status IS NULL OR transactions.status = ?", model.InvestmentStatusHolding)

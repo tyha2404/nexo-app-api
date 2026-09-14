@@ -95,7 +95,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	transactionService := service.NewTransactionService(transactionRepo, categoryRepo, budgetRepo, alertRepo)
 	budgetService := service.NewBudgetService(budgetRepo, categoryRepo)
 	alertService := service.NewAlertService(alertRepo)
-	reportService := service.NewReportService(transactionRepo)
+	reportService := service.NewReportService(transactionRepo, targetRepo)
 	targetService := service.NewTargetService(targetRepo)
 	debtService := service.NewDebtService(debtRepo)
 	presetService := service.NewPresetService(presetRepo, categoryRepo)
