@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	thinkTagRegex   = regexp.MustCompile(`(?is)<think>.*?</think>|<thought>.*?</thought>|<thinking>.*?</thinking>`)
+	thinkTagRegex    = regexp.MustCompile(`(?is)<think>.*?</think>|<thought>.*?</thought>|<thinking>.*?</thinking>`)
 	unclosedTagRegex = regexp.MustCompile(`(?is)<think>.*$|<thought>.*$|<thinking>.*$`)
 )
 

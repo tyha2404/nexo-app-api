@@ -14,12 +14,14 @@ type CreateDebtRequest struct {
 	StartDate   *time.Time     `json:"startDate"`
 	DueDate     *time.Time     `json:"dueDate"`
 	Notes       string         `json:"notes"`
+	WalletID    *uuid.UUID     `json:"walletId,omitempty"`
 }
 
 type AddRepaymentRequest struct {
-	Amount float64    `json:"amount" validate:"required,gt=0"`
-	PaidAt *time.Time `json:"paidAt"`
-	Notes  string     `json:"notes"`
+	Amount   float64    `json:"amount" validate:"required,gt=0"`
+	PaidAt   *time.Time `json:"paidAt"`
+	Notes    string     `json:"notes"`
+	WalletID *uuid.UUID `json:"walletId,omitempty"`
 }
 
 type DebtSummaryResponse struct {
@@ -41,6 +43,7 @@ type DebtResponse struct {
 	DueDate     *time.Time        `json:"dueDate"`
 	Status      model.DebtStatus  `json:"status"`
 	Notes       string            `json:"notes"`
+	WalletID    *uuid.UUID        `json:"walletId,omitempty"`
 	Repayments  []model.Repayment `json:"repayments,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt"`

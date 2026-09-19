@@ -10,10 +10,10 @@ import (
 
 func TestCustomTime_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		jsonInput string
-		expected time.Time
-		wantErr  bool
+		expected  time.Time
+		wantErr   bool
 	}{
 		{
 			name:      "RFC3339 format",

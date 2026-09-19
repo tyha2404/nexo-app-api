@@ -74,10 +74,14 @@ func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startD
 	}
 
 	var totalInvestment float64
+	var totalRealizedPnL float64
 	for _, inv := range investments {
 		// Only count HOLDING (or empty/legacy) as currently active invested money
 		if inv.Status == nil || *inv.Status == model.InvestmentStatusHolding {
 			totalInvestment += inv.Amount
+		}
+		if inv.RealizedPnL != nil {
+			totalRealizedPnL += *inv.RealizedPnL
 		}
 	}
 
@@ -85,6 +89,7 @@ func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startD
 		TotalIncome:     totalIncome,
 		TotalExpense:    totalExpense,
 		TotalInvestment: totalInvestment,
+		RealizedPnL:     totalRealizedPnL,
 	}, nil
 }
 
@@ -221,4 +226,3 @@ func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, m
 		Items:          items,
 	}, nil
 }
-

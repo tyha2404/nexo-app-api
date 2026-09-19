@@ -33,6 +33,7 @@ type Debt struct {
 	DueDate     *time.Time  `gorm:"type:timestamp" json:"dueDate"`
 	Status      DebtStatus  `gorm:"type:varchar(20);default:'PENDING'" json:"status"`
 	Notes       string      `gorm:"type:text" json:"notes"`
+	WalletID    *uuid.UUID  `gorm:"type:uuid;index" json:"walletId,omitempty"`
 	Repayments  []Repayment `gorm:"foreignKey:DebtID;constraint:OnDelete:CASCADE" json:"repayments,omitempty"`
 	CreatedAt   time.Time   `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt   time.Time   `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
@@ -47,14 +48,15 @@ func (d *Debt) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type Repayment struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	DebtID    uuid.UUID `gorm:"type:uuid;not null;index" json:"debtId"`
-	Amount    float64   `gorm:"type:numeric(14,2);not null" json:"amount"`
-	PaidAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"paidAt"`
-	Notes     string    `gorm:"type:text" json:"notes"`
-	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
-	DeletedAt DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
+	ID        uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
+	DebtID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"debtId"`
+	Amount    float64    `gorm:"type:numeric(14,2);not null" json:"amount"`
+	PaidAt    time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"paidAt"`
+	Notes     string     `gorm:"type:text" json:"notes"`
+	WalletID  *uuid.UUID `gorm:"type:uuid;index" json:"walletId,omitempty"`
+	CreatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	DeletedAt DeletedAt  `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 }
 
 func (r *Repayment) BeforeCreate(tx *gorm.DB) (err error) {

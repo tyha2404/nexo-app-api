@@ -17,4 +17,3 @@ type PaginationResponse[T any] struct {
 	Limit   int         `json:"limit"`
 	Summary interface{} `json:"summary,omitempty"`
 }
-

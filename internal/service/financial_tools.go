@@ -851,12 +851,12 @@ func (s *chatService) toolGetBudgetStatus(ctx context.Context, userID uuid.UUID,
 	}
 
 	type BudgetStatusItem struct {
-		Category   string  `json:"category"`
-		Limit      float64 `json:"limit"`
-		Spent      float64 `json:"spent"`
-		Remaining  float64 `json:"remaining"`
-		Percent    float64 `json:"percentage"`
-		Status     string  `json:"status"` // "OK", "WARNING", "EXCEEDED"
+		Category  string  `json:"category"`
+		Limit     float64 `json:"limit"`
+		Spent     float64 `json:"spent"`
+		Remaining float64 `json:"remaining"`
+		Percent   float64 `json:"percentage"`
+		Status    string  `json:"status"` // "OK", "WARNING", "EXCEEDED"
 	}
 
 	var items []BudgetStatusItem

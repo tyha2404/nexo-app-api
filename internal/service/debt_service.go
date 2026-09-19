@@ -54,11 +54,21 @@ func (s *debtService) CreateDebt(ctx context.Context, userID uuid.UUID, req dto.
 		DueDate:     req.DueDate,
 		Status:      status,
 		Notes:       req.Notes,
+		WalletID:    req.WalletID,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
 
-	if err := s.debtRepo.Create(ctx, debt); err != nil {
+	var balanceDelta float64
+	if req.WalletID != nil {
+		if req.Type == model.DebtTypeReceivable {
+			balanceDelta = -req.TotalAmount
+		} else if req.Type == model.DebtTypePayable {
+			balanceDelta = req.TotalAmount
+		}
+	}
+
+	if err := s.debtRepo.CreateWithWallet(ctx, debt, req.WalletID, balanceDelta); err != nil {
 		return nil, err
 	}
 
@@ -108,6 +118,7 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 		Amount:    req.Amount,
 		PaidAt:    paidAt,
 		Notes:     req.Notes,
+		WalletID:  req.WalletID,
 		CreatedAt: time.Now(),
 	}
 
@@ -122,7 +133,16 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 		debt.Status = model.DebtStatusPending
 	}
 
-	if err := s.debtRepo.AddRepayment(ctx, debt, repayment); err != nil {
+	var balanceDelta float64
+	if req.WalletID != nil {
+		if debt.Type == model.DebtTypeReceivable {
+			balanceDelta = req.Amount
+		} else if debt.Type == model.DebtTypePayable {
+			balanceDelta = -req.Amount
+		}
+	}
+
+	if err := s.debtRepo.AddRepaymentWithWallet(ctx, debt, repayment, req.WalletID, balanceDelta); err != nil {
 		return nil, err
 	}
 
@@ -152,6 +172,7 @@ func (s *debtService) toResponse(debt *model.Debt) *dto.DebtResponse {
 		DueDate:     debt.DueDate,
 		Status:      debt.Status,
 		Notes:       debt.Notes,
+		WalletID:    debt.WalletID,
 		Repayments:  debt.Repayments,
 		CreatedAt:   debt.CreatedAt,
 		UpdatedAt:   debt.UpdatedAt,

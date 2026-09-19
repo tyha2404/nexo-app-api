@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tyha2404/nexo-app-api/internal/config"
 	"github.com/tyha2404/nexo-app-api/internal/db"
 	"github.com/tyha2404/nexo-app-api/internal/logger"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const (

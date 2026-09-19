@@ -8,22 +8,22 @@ import (
 )
 
 type Config struct {
-	DBHost                 string
-	DBPort                 string
-	DBUser                 string
-	DBPass                 string
-	DBName                 string
-	DBSSL                  string
-	Port                   string
-	LogLevel               string
-	JwtSecret              string
-	AppEnv                 string
-	NineRouterURL          string
-	NineRouterAPIKey       string
-	NineRouterModel        string
+	DBHost                   string
+	DBPort                   string
+	DBUser                   string
+	DBPass                   string
+	DBName                   string
+	DBSSL                    string
+	Port                     string
+	LogLevel                 string
+	JwtSecret                string
+	AppEnv                   string
+	NineRouterURL            string
+	NineRouterAPIKey         string
+	NineRouterModel          string
 	NineRouterEmbeddingModel string
-	SupabaseURL            string
-	SupabaseJWKSURL        string
+	SupabaseURL              string
+	SupabaseJWKSURL          string
 }
 
 func LoadConfig() (*Config, error) {
@@ -50,22 +50,22 @@ func LoadConfig() (*Config, error) {
 	}
 
 	c := &Config{
-		DBHost:                 getEnv("DB_HOST", "localhost"),
-		DBPort:                 getEnv("DB_PORT", "5432"),
-		DBUser:                 getEnv("DB_USER", "postgres"),
-		DBPass:                 getEnv("DB_PASS", "postgres"),
-		DBName:                 getEnv("DB_NAME", "costdb"),
-		DBSSL:                  getEnv("DB_SSLMODE", "disable"),
-		Port:                   getEnv("APP_PORT", "3001"),
-		LogLevel:               getEnv("LOG_LEVEL", "info"),
-		JwtSecret:              getEnv("JWT_SECRET", "secret"),
-		AppEnv:                 getEnv("APP_ENV", "dev"),
-		NineRouterURL:          nineRouterURL,
-		NineRouterAPIKey:       nineRouterAPIKey,
-		NineRouterModel:        nineRouterModel,
+		DBHost:                   getEnv("DB_HOST", "localhost"),
+		DBPort:                   getEnv("DB_PORT", "5432"),
+		DBUser:                   getEnv("DB_USER", "postgres"),
+		DBPass:                   getEnv("DB_PASS", "postgres"),
+		DBName:                   getEnv("DB_NAME", "costdb"),
+		DBSSL:                    getEnv("DB_SSLMODE", "disable"),
+		Port:                     getEnv("APP_PORT", "3001"),
+		LogLevel:                 getEnv("LOG_LEVEL", "info"),
+		JwtSecret:                getEnv("JWT_SECRET", "secret"),
+		AppEnv:                   getEnv("APP_ENV", "dev"),
+		NineRouterURL:            nineRouterURL,
+		NineRouterAPIKey:         nineRouterAPIKey,
+		NineRouterModel:          nineRouterModel,
 		NineRouterEmbeddingModel: nineRouterEmbeddingModel,
-		SupabaseURL:            getEnv("SUPABASE_URL", ""),
-		SupabaseJWKSURL:        getEnv("SUPABASE_JWKS_URL", ""),
+		SupabaseURL:              getEnv("SUPABASE_URL", ""),
+		SupabaseJWKSURL:          getEnv("SUPABASE_JWKS_URL", ""),
 	}
 
 	if c.SupabaseURL != "" && c.SupabaseJWKSURL == "" {

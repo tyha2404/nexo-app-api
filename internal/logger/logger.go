@@ -28,14 +28,14 @@ func New(level string, env ...string) (*zap.Logger, error) {
 
 	// Dev / Console configuration with ANSI colors and human-readable time format
 	encoderConfig := zapcore.EncoderConfig{
-		TimeKey:        "time",
-		LevelKey:       "level",
-		NameKey:        "logger",
-		CallerKey:      "caller",
-		MessageKey:     "msg",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+		TimeKey:       "time",
+		LevelKey:      "level",
+		NameKey:       "logger",
+		CallerKey:     "caller",
+		MessageKey:    "msg",
+		StacktraceKey: "stacktrace",
+		LineEnding:    zapcore.DefaultLineEnding,
+		EncodeLevel:   zapcore.CapitalColorLevelEncoder,
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.Format("15:04:05.000"))
 		},

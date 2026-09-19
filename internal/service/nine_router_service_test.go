@@ -33,16 +33,16 @@ func TestNineRouterService_ChatCompletion_Success(t *testing.T) {
 		resp := service.NineRouterChatResponse{}
 		resp.Choices = append(resp.Choices, struct {
 			Message struct {
-				Role      string                 `json:"role"`
-				Content   string                 `json:"content"`
-				ToolCalls []service.ToolCall     `json:"tool_calls"`
+				Role      string             `json:"role"`
+				Content   string             `json:"content"`
+				ToolCalls []service.ToolCall `json:"tool_calls"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		}{
 			Message: struct {
-				Role      string                 `json:"role"`
-				Content   string                 `json:"content"`
-				ToolCalls []service.ToolCall     `json:"tool_calls"`
+				Role      string             `json:"role"`
+				Content   string             `json:"content"`
+				ToolCalls []service.ToolCall `json:"tool_calls"`
 			}{
 				Role:    "assistant",
 				Content: "Phản hồi từ 9Router AI Gateway!",

@@ -6,6 +6,7 @@ type SummaryReport struct {
 	TotalIncome     float64 `json:"totalIncome"`
 	TotalExpense    float64 `json:"totalExpense"`
 	TotalInvestment float64 `json:"totalInvestment"`
+	RealizedPnL     float64 `json:"realizedPnL"`
 }
 
 type CategoryBreakdownItem struct {

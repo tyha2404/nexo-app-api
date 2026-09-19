@@ -51,8 +51,8 @@ func NewPostgres(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
 
-	sqlDB.SetMaxOpenConns(25)                 // Maximum number of open connections to the database
-	sqlDB.SetMaxIdleConns(10)                 // Maximum number of connections in the idle connection pool
+	sqlDB.SetMaxOpenConns(25)                  // Maximum number of open connections to the database
+	sqlDB.SetMaxIdleConns(10)                  // Maximum number of connections in the idle connection pool
 	sqlDB.SetConnMaxLifetime(10 * time.Minute) // Maximum amount of time a connection may be reused
 
 	// Use migrator instead of direct auto-migration (only in non-production environments)

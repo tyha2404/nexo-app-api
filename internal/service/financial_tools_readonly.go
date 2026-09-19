@@ -392,10 +392,10 @@ func (s *chatService) toolListCategories(ctx context.Context, userID uuid.UUID, 
 	}
 
 	type CategoryItem struct {
-		Name            string   `json:"name"`
-		Type            string   `json:"type"`
-		SpentThisMonth  float64  `json:"spentThisMonth,omitempty"`
-		BudgetLimit     float64  `json:"budgetLimit,omitempty"`
+		Name           string  `json:"name"`
+		Type           string  `json:"type"`
+		SpentThisMonth float64 `json:"spentThisMonth,omitempty"`
+		BudgetLimit    float64 `json:"budgetLimit,omitempty"`
 	}
 
 	items := make([]CategoryItem, 0, len(categories))
@@ -473,11 +473,11 @@ func (s *chatService) toolGetMonthlyTrend(ctx context.Context, userID uuid.UUID,
 	}
 
 	resultMap := map[string]interface{}{
-		"months_count":           monthsBack,
-		"monthly_points":         points,
-		"avg_income_per_month":   math.Round(totalIncome/float64(monthsBack)*100) / 100,
-		"avg_expense_per_month":  math.Round(totalExpense/float64(monthsBack)*100) / 100,
-		"avg_savings_per_month":  math.Round((totalIncome-totalExpense)/float64(monthsBack)*100) / 100,
+		"months_count":          monthsBack,
+		"monthly_points":        points,
+		"avg_income_per_month":  math.Round(totalIncome/float64(monthsBack)*100) / 100,
+		"avg_expense_per_month": math.Round(totalExpense/float64(monthsBack)*100) / 100,
+		"avg_savings_per_month": math.Round((totalIncome-totalExpense)/float64(monthsBack)*100) / 100,
 	}
 	resultBytes, _ := json.Marshal(resultMap)
 

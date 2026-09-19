@@ -30,7 +30,7 @@ const (
 	HiCyan      = "\033[96m"
 	HiWhite     = "\033[97m"
 	BgRed       = "\033[41m"
-	BgGreen   = "\033[42m"
+	BgGreen     = "\033[42m"
 	BgYellow    = "\033[43m"
 	BgBlue      = "\033[44m"
 	BgMagenta   = "\033[45m"
