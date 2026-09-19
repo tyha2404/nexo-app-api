@@ -125,13 +125,30 @@ func TestAuthService_Login(t *testing.T) {
 	// Restore is not needed because GORM hashes it in model helper but in mock we need correct hash stored.
 	// Hash is correct in database, so now we try login:
 
-	// 1. Success login
+	// 1. Success login with email
 	logged, err := svc.Login(context.Background(), "login@example.com", "correctpassword")
 	if err != nil {
 		t.Fatalf("failed to login: %v", err)
 	}
 	if logged.Email != user.Email {
 		t.Errorf("expected email %s, got %s", user.Email, logged.Email)
+	}
+
+	// 1.1 Success login with username
+	user2 := &model.User{
+		Username: "loginuser2",
+		Email:    "login2@example.com",
+		Password: "correctpassword",
+	}
+	_ = user2.HashPassword()
+	_ = repo.Create(context.Background(), user2)
+
+	loggedUser, err := svc.Login(context.Background(), "loginuser2", "correctpassword")
+	if err != nil {
+		t.Fatalf("failed to login by username: %v", err)
+	}
+	if loggedUser.Username != user2.Username {
+		t.Errorf("expected username %s, got %s", user2.Username, loggedUser.Username)
 	}
 
 	// 2. Failure login - incorrect password

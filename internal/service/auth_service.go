@@ -9,7 +9,7 @@ import (
 )
 
 type AuthService interface {
-	Login(ctx context.Context, email string, password string) (*model.User, error)
+	Login(ctx context.Context, identifier string, password string) (*model.User, error)
 	Register(ctx context.Context, user *model.User) (*model.User, error)
 }
 
@@ -23,14 +23,24 @@ func NewAuthService(repo repository.UserRepo) AuthService {
 	}
 }
 
-func (s *authService) Login(ctx context.Context, email string, password string) (*model.User, error) {
-	// 1. Find user by email
-	user, err := s.repo.FindByEmail(ctx, email)
-	if err != nil {
-		if err == constant.ErrNotFound {
-			return nil, constant.ErrInvalidCredentials
-		}
+func (s *authService) Login(ctx context.Context, identifier string, password string) (*model.User, error) {
+	// 1. Find user by email or username
+	var user *model.User
+	var err error
+
+	user, err = s.repo.FindByEmail(ctx, identifier)
+	if err != nil && err != constant.ErrNotFound {
 		return nil, err
+	}
+
+	if user == nil {
+		user, err = s.repo.FindByUsername(ctx, identifier)
+		if err != nil {
+			if err == constant.ErrNotFound {
+				return nil, constant.ErrInvalidCredentials
+			}
+			return nil, err
+		}
 	}
 
 	// 2. Verify password hash

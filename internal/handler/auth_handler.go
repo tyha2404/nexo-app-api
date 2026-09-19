@@ -47,10 +47,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	identifier := req.Username
+	if identifier == "" {
+		identifier = req.Email
+	}
+	if identifier == "" {
+		h.errorHandler.HandleError(w, errors.New("username or email is required"), http.StatusBadRequest, "Username or email is required", "login")
+		return
+	}
+
 	// Authenticate user
-	user, err := h.svc.Login(r.Context(), req.Email, req.Password)
+	user, err := h.svc.Login(r.Context(), identifier, req.Password)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Invalid email or password", "login")
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Invalid username/email or password", "login")
 		return
 	}
 
