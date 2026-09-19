@@ -12,6 +12,7 @@ type CreateTransactionRequest struct {
 	Status          *string    `json:"status,omitempty" example:"HOLDING" validate:"omitempty,oneof=HOLDING SOLD MATURED CANCELLED"`
 	RealizedPnL     *float64   `json:"realizedPnl,omitempty" example:"50.00"`
 	Description     *string    `json:"description" example:"Grocery shopping" validate:"omitempty,max=500"`
+	ReceiptURL      *string    `json:"receiptUrl,omitempty" example:"https://supabase.co/storage/v1/object/public/receipts/user/img.jpg"`
 	TransactionDate CustomTime `json:"transactionDate" example:"2024-01-15T00:00:00Z" validate:"required"`
 }
 
@@ -23,6 +24,7 @@ type UpdateTransactionRequest struct {
 	Status          *string     `json:"status,omitempty" example:"HOLDING" validate:"omitempty,oneof=HOLDING SOLD MATURED CANCELLED"`
 	RealizedPnL     *float64    `json:"realizedPnl,omitempty" example:"50.00"`
 	Description     *string     `json:"description,omitempty" example:"Updated description" validate:"omitempty,max=500"`
+	ReceiptURL      *string     `json:"receiptUrl,omitempty" example:"https://supabase.co/storage/v1/object/public/receipts/user/img.jpg"`
 	TransactionDate *CustomTime `json:"transactionDate,omitempty" example:"2024-01-20T00:00:00Z"`
 }
 
@@ -37,6 +39,7 @@ type TransactionResponse struct {
 	Status          *string    `json:"status,omitempty" example:"HOLDING"`
 	RealizedPnL     *float64   `json:"realizedPnl,omitempty" example:"50.00"`
 	Description     *string    `json:"description,omitempty" example:"Grocery shopping"`
+	ReceiptURL      *string    `json:"receiptUrl,omitempty" example:"https://supabase.co/storage/v1/object/public/receipts/user/img.jpg"`
 	TransactionDate string     `json:"transactionDate" example:"2024-01-15T00:00:00Z"`
 	CreatedAt       string     `json:"createdAt" example:"2024-01-15T00:00:00Z"`
 	UpdatedAt       string     `json:"updatedAt" example:"2024-01-15T00:00:00Z"`

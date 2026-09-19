@@ -61,6 +61,7 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		Amount:          req.Amount,
 		Type:            model.TransactionType(req.Type),
 		Description:     req.Description,
+		ReceiptURL:      req.ReceiptURL,
 		TransactionDate: req.TransactionDate.Time,
 	}
 
@@ -177,6 +178,9 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 	if req.Description != nil {
 		transaction.Description = req.Description
 	}
+	if req.ReceiptURL != nil {
+		transaction.ReceiptURL = req.ReceiptURL
+	}
 	if req.TransactionDate != nil {
 		transaction.TransactionDate = req.TransactionDate.Time
 	}
@@ -235,6 +239,7 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		Status:          statusStr,
 		RealizedPnL:     t.RealizedPnL,
 		Description:     t.Description,
+		ReceiptURL:      t.ReceiptURL,
 		TransactionDate: t.TransactionDate.Format("2006-01-02"),
 		CreatedAt:       t.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       t.UpdatedAt.Format(time.RFC3339),

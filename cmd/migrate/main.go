@@ -6,10 +6,10 @@ import (
 	"log"
 	"os"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tyha2404/nexo-app-api/internal/config"
-	"github.com/tyha2404/nexo-app-api/internal/db"
 	"github.com/tyha2404/nexo-app-api/internal/logger"
 )
 
@@ -72,17 +72,22 @@ func main() {
 	}
 	defer logg.Sync()
 
-	// Connect to GORM and get sql.DB
-	gormDB, err := db.NewPostgres(cfg, logg)
-	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
-	}
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s default_query_exec_mode=simple_protocol",
+		cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, cfg.DBSSL,
+	)
 
-	sqlDB, err := gormDB.DB()
+	connConfig, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		log.Fatalf("failed to get sql.DB: %v", err)
+		log.Fatalf("failed to parse DB config: %v", err)
 	}
+	connConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+
+	sqlDB := stdlib.OpenDB(*connConfig)
 	defer sqlDB.Close()
+
+	if err := sqlDB.Ping(); err != nil {
+		log.Fatalf("failed to ping database: %v", err)
+	}
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatalf("failed to set goose dialect: %v", err)
@@ -92,6 +97,9 @@ func main() {
 	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
 		log.Fatalf("failed to create migrations directory: %v", err)
 	}
+
+	// Resync goose_db_version sequence if needed
+	_, _ = sqlDB.Exec(`SELECT setval(pg_get_serial_sequence('goose_db_version', 'id'), COALESCE((SELECT MAX(id) FROM goose_db_version), 1));`)
 
 	log.Printf("Executing goose command: %s", command)
 	var gooseArgs []string
