@@ -33,20 +33,7 @@ type Config struct {
 	CORSAllowedOrigins []string
 	// AppTimezone is the IANA zone used for "today"/"this month" (APP_TIMEZONE).
 	AppTimezone string
-	// Web Push (VAPID). Push is disabled when either key is empty.
-	VAPIDPublicKey  string
-	VAPIDPrivateKey string
-	VAPIDSubject    string
 }
-
-// PushEnabled reports whether both VAPID keys are configured.
-func (c *Config) PushEnabled() bool {
-	return c != nil && c.VAPIDPublicKey != "" && c.VAPIDPrivateKey != ""
-}
-
-// DefaultVAPIDSubject is used when VAPID_SUBJECT is unset. Apple rejects
-// localhost subjects, so production should set a real mailto: or https URL.
-const DefaultVAPIDSubject = "mailto:admin@example.com"
 
 // DefaultCORSAllowedOrigins are used when CORS_ALLOWED_ORIGINS is unset: the
 // Vite dev server. In production nexo-web's server.cjs serves the app and
@@ -111,9 +98,6 @@ func LoadConfig() (*Config, error) {
 		SupabaseJWKSURL:          getEnv("SUPABASE_JWKS_URL", ""),
 		CORSAllowedOrigins:       ParseOrigins(getEnv("CORS_ALLOWED_ORIGINS", DefaultCORSAllowedOrigins)),
 		AppTimezone:              getEnv("APP_TIMEZONE", DefaultAppTimezone),
-		VAPIDPublicKey:           strings.TrimSpace(getEnv("VAPID_PUBLIC_KEY", "")),
-		VAPIDPrivateKey:          strings.TrimSpace(getEnv("VAPID_PRIVATE_KEY", "")),
-		VAPIDSubject:             strings.TrimSpace(getEnv("VAPID_SUBJECT", DefaultVAPIDSubject)),
 	}
 
 	if _, err := time.LoadLocation(c.AppTimezone); err != nil {

@@ -401,23 +401,6 @@ definitions:
     required:
     - amount
     type: object
-  dto.PushSubscriptionKeys:
-    properties:
-      auth:
-        type: string
-      p256dh:
-        type: string
-    required:
-    - auth
-    - p256dh
-    type: object
-  dto.PushSubscriptionResponse:
-    properties:
-      enabled:
-        type: boolean
-      endpoint:
-        type: string
-    type: object
   dto.RegisterRequest:
     properties:
       email:
@@ -508,16 +491,6 @@ definitions:
       walletName:
         type: string
     type: object
-  dto.SubscribePushRequest:
-    properties:
-      endpoint:
-        type: string
-      keys:
-        $ref: '#/definitions/dto.PushSubscriptionKeys'
-    required:
-    - endpoint
-    - keys
-    type: object
   dto.TransactionResponse:
     properties:
       amount:
@@ -585,13 +558,6 @@ definitions:
     - amount
     - fromWalletId
     - toWalletId
-    type: object
-  dto.UnsubscribePushRequest:
-    properties:
-      endpoint:
-        type: string
-    required:
-    - endpoint
     type: object
   dto.UpdateCategoryRequest:
     properties:
@@ -752,11 +718,6 @@ definitions:
         type: string
       username:
         example: johndoe
-        type: string
-    type: object
-  dto.VAPIDPublicKeyResponse:
-    properties:
-      publicKey:
         type: string
     type: object
   dto.WalletResponse:
@@ -2112,101 +2073,6 @@ paths:
       summary: Record a debt repayment
       tags:
       - Debts
-  /push/subscriptions:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes the current user's subscription with that endpoint. Succeeds
-        even if it does not exist.
-      parameters:
-      - description: Endpoint to remove
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UnsubscribePushRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.PushSubscriptionResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Unsubscribe from push notifications
-      tags:
-      - push
-    post:
-      consumes:
-      - application/json
-      description: Upserts the browser PushSubscription by endpoint for the current
-        user.
-      parameters:
-      - description: PushSubscription.toJSON()
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.SubscribePushRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.PushSubscriptionResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "503":
-          description: Push notifications disabled
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Subscribe to push notifications
-      tags:
-      - push
-  /push/vapid-public-key:
-    get:
-      description: Public endpoint. Returns 503 when Web Push is not configured on
-        the server (VAPID keys missing).
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.VAPIDPublicKeyResponse'
-        "503":
-          description: Push notifications disabled
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Get VAPID public key
-      tags:
-      - push
   /reports/monthly-trend:
     get:
       consumes:

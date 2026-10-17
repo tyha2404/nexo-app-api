@@ -1651,150 +1651,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/push/subscriptions": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Upserts the browser PushSubscription by endpoint for the current user.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "push"
-                ],
-                "summary": "Subscribe to push notifications",
-                "parameters": [
-                    {
-                        "description": "PushSubscription.toJSON()",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.SubscribePushRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/dto.PushSubscriptionResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "503": {
-                        "description": "Push notifications disabled",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Deletes the current user's subscription with that endpoint. Succeeds even if it does not exist.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "push"
-                ],
-                "summary": "Unsubscribe from push notifications",
-                "parameters": [
-                    {
-                        "description": "Endpoint to remove",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UnsubscribePushRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.PushSubscriptionResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/push/vapid-public-key": {
-            "get": {
-                "description": "Public endpoint. Returns 503 when Web Push is not configured on the server (VAPID keys missing).",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "push"
-                ],
-                "summary": "Get VAPID public key",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.VAPIDPublicKeyResponse"
-                        }
-                    },
-                    "503": {
-                        "description": "Push notifications disabled",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/reports/monthly-trend": {
             "get": {
                 "security": [
@@ -3450,32 +3306,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.PushSubscriptionKeys": {
-            "type": "object",
-            "required": [
-                "auth",
-                "p256dh"
-            ],
-            "properties": {
-                "auth": {
-                    "type": "string"
-                },
-                "p256dh": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.PushSubscriptionResponse": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "endpoint": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.RegisterRequest": {
             "type": "object",
             "required": [
@@ -3604,21 +3434,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.SubscribePushRequest": {
-            "type": "object",
-            "required": [
-                "endpoint",
-                "keys"
-            ],
-            "properties": {
-                "endpoint": {
-                    "type": "string"
-                },
-                "keys": {
-                    "$ref": "#/definitions/dto.PushSubscriptionKeys"
-                }
-            }
-        },
         "dto.TransactionResponse": {
             "type": "object",
             "properties": {
@@ -3710,17 +3525,6 @@ const docTemplate = `{
                 },
                 "transferDate": {
                     "$ref": "#/definitions/dto.CustomTime"
-                }
-            }
-        },
-        "dto.UnsubscribePushRequest": {
-            "type": "object",
-            "required": [
-                "endpoint"
-            ],
-            "properties": {
-                "endpoint": {
-                    "type": "string"
                 }
             }
         },
@@ -3937,14 +3741,6 @@ const docTemplate = `{
                 "username": {
                     "type": "string",
                     "example": "johndoe"
-                }
-            }
-        },
-        "dto.VAPIDPublicKeyResponse": {
-            "type": "object",
-            "properties": {
-                "publicKey": {
-                    "type": "string"
                 }
             }
         },

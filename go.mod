@@ -20,7 +20,6 @@ require (
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
-	github.com/SherClockHolmes/webpush-go v1.4.0 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
@@ -76,6 +75,6 @@ require (
 	github.com/swaggo/http-swagger v1.3.4
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.38.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

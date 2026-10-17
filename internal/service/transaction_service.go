@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,16 +28,6 @@ type transactionService struct {
 	budgetRepo      repository.BudgetRepository
 	alertRepo       repository.AlertRepository
 	walletRepo      repository.WalletRepository
-	pushService     PushService
-}
-
-// TransactionServiceOption configures optional collaborators.
-type TransactionServiceOption func(*transactionService)
-
-// WithBudgetAlertPush sends a Web Push notification whenever a new budget
-// alert is inserted (deduplicated alerts are not re-notified).
-func WithBudgetAlertPush(push PushService) TransactionServiceOption {
-	return func(s *transactionService) { s.pushService = push }
 }
 
 func NewTransactionService(
@@ -47,7 +36,6 @@ func NewTransactionService(
 	budgetRepo repository.BudgetRepository,
 	alertRepo repository.AlertRepository,
 	walletRepo repository.WalletRepository,
-	opts ...TransactionServiceOption,
 ) TransactionService {
 	s := &transactionService{
 		transactionRepo: transactionRepo,
@@ -55,9 +43,6 @@ func NewTransactionService(
 		budgetRepo:      budgetRepo,
 		alertRepo:       alertRepo,
 		walletRepo:      walletRepo,
-	}
-	for _, opt := range opts {
-		opt(s)
 	}
 	return s
 }
@@ -343,41 +328,10 @@ func (s *transactionService) checkBudgetLimit(ctx context.Context, userID, categ
 			AlertType: alertType,
 			Message:   message,
 		}
-		created, err := s.alertRepo.Create(ctx, alert)
-		if err == nil && created {
-			s.notifyBudgetAlert(ctx, userID, budget, ratio)
+		if _, err := s.alertRepo.Create(ctx, alert); err != nil {
+			return
 		}
 	}
-}
-
-// BudgetAlertPayload builds the push notification for a new budget alert.
-func BudgetAlertPayload(categoryName string, ratio float64) dto.PushPayload {
-	if categoryName == "" {
-		categoryName = "Danh mục"
-	}
-	percent := int(math.Floor(ratio * 100))
-	body := fmt.Sprintf("%s đã dùng %d%% ngân sách.", categoryName, percent)
-	if ratio >= 1.0 {
-		body = fmt.Sprintf("%s đã dùng %d%% ngân sách — vượt hạn mức!", categoryName, percent)
-	}
-	return dto.PushPayload{Title: "Cảnh báo ngân sách", Body: body, URL: "/#/planning/categories", Tag: "budget-alert"}
-}
-
-// notifyBudgetAlert pushes in the background; it never blocks or fails the
-// transaction request.
-func (s *transactionService) notifyBudgetAlert(ctx context.Context, userID uuid.UUID, budget *model.Budget, ratio float64) {
-	if s.pushService == nil || !s.pushService.Enabled() {
-		return
-	}
-	categoryName := ""
-	if budget.Category.Name != "" {
-		categoryName = budget.Category.Name
-	} else if s.categoryRepo != nil {
-		if cat, err := s.categoryRepo.GetByIDForUser(ctx, userID, budget.CategoryID); err == nil && cat != nil {
-			categoryName = cat.Name
-		}
-	}
-	s.pushService.NotifyUser(userID, BudgetAlertPayload(categoryName, ratio))
 }
 
 // categoryLookupError maps a failed user-scoped category lookup: a category that

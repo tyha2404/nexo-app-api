@@ -59,23 +59,8 @@ func main() {
 	rolloverWorker := worker.NewMonthlyRolloverWorker(rolloverService, logg)
 	rolloverWorker.Start(context.Background())
 
-	// Web Push: disabled (endpoints answer 503) when VAPID keys are missing.
-	pushService := router.NewPushServiceFromConfig(gormDB, cfg, logg)
-	var reminderWorker *worker.DailyReminderWorker
-	if pushService.Enabled() {
-		if os.Getenv("VAPID_SUBJECT") == "" {
-			logg.Warn("VAPID_SUBJECT is not set; using a placeholder subject (Apple may reject it)")
-		}
-		reminderService := service.NewPushReminderService(repository.NewReminderRepository(gormDB), pushService, logg)
-		reminderWorker = worker.NewDailyReminderWorker(reminderService, logg)
-		reminderWorker.Start()
-	} else {
-		logg.Info("web push disabled: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY not set")
-	}
-
 	r := router.New(gormDB, logg,
 		router.WithCORSAllowedOrigins(cfg.CORSAllowedOrigins),
-		router.WithPushService(pushService),
 	)
 
 	srv := &http.Server{
@@ -107,17 +92,12 @@ func main() {
 
 	// Stop background workers
 	rolloverWorker.Stop()
-	if reminderWorker != nil {
-		reminderWorker.Stop()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logg.Sugar().Fatalf("server forced to shutdown: %v", err)
 	}
-	// Let in-flight background pushes finish (each is time-bounded).
-	pushService.Wait()
 
 	// Close Database connection pool
 	sqlDB, err := gormDB.DB()
