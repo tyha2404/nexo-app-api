@@ -50,7 +50,18 @@ func NewUserResponse(user *model.User) UserResponse {
 	return ur
 }
 
+// UpdateUserRequest is the only payload accepted by PUT /users/{id}.
+// Role and password are deliberately absent: they can never be changed
+// through this endpoint (unknown JSON fields such as "role" are ignored).
 type UpdateUserRequest struct {
-	Username *string `json:"username,omitempty" example:"newusername" validate:"omitempty,min=3,max=50,alphanum"`
+	Username *string `json:"username,omitempty" example:"newusername" validate:"omitempty,min=3,max=50,username"`
 	Email    *string `json:"email,omitempty" example:"newemail@example.com" validate:"omitempty,email,max=255"`
+}
+
+// CreateUserRequest is the payload for the admin-only POST /users endpoint.
+// New users always get the default "user" role.
+type CreateUserRequest struct {
+	Username string `json:"username" example:"johndoe" validate:"required,min=3,max=50,username"`
+	Email    string `json:"email" example:"john@example.com" validate:"required,email,max=255"`
+	Password string `json:"password" example:"password123" validate:"required,min=8,max=128"`
 }

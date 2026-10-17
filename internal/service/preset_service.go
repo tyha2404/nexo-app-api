@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -31,12 +32,9 @@ func NewPresetService(presetRepo repository.PresetRepository, categoryRepo repos
 }
 
 func (s *presetService) CreatePreset(ctx context.Context, userID uuid.UUID, req dto.CreatePresetRequest) (*dto.PresetResponse, error) {
-	category, err := s.categoryRepo.GetByID(ctx, req.CategoryID)
+	category, err := s.categoryRepo.GetByIDForUser(ctx, userID, req.CategoryID)
 	if err != nil {
-		return nil, errors.New("category not found")
-	}
-	if category.UserID != userID {
-		return nil, errors.New("unauthorized category access")
+		return nil, categoryLookupError(err)
 	}
 
 	preset := &model.Preset{
@@ -64,7 +62,7 @@ func (s *presetService) GetPreset(ctx context.Context, userID, id uuid.UUID) (*d
 		return nil, err
 	}
 	if preset.UserID != userID {
-		return nil, errors.New("preset not found")
+		return nil, fmt.Errorf("preset %w", constant.ErrNotFound)
 	}
 	return dto.ToPresetResponse(preset), nil
 }
@@ -88,16 +86,13 @@ func (s *presetService) UpdatePreset(ctx context.Context, userID, id uuid.UUID, 
 		return nil, err
 	}
 	if preset.UserID != userID {
-		return nil, errors.New("preset not found")
+		return nil, fmt.Errorf("preset %w", constant.ErrNotFound)
 	}
 
 	if req.CategoryID != nil {
-		category, err := s.categoryRepo.GetByID(ctx, *req.CategoryID)
+		category, err := s.categoryRepo.GetByIDForUser(ctx, userID, *req.CategoryID)
 		if err != nil {
-			return nil, errors.New("category not found")
-		}
-		if category.UserID != userID {
-			return nil, errors.New("unauthorized category access")
+			return nil, categoryLookupError(err)
 		}
 		preset.CategoryID = *req.CategoryID
 		preset.Category = *category
@@ -135,7 +130,7 @@ func (s *presetService) DeletePreset(ctx context.Context, userID, id uuid.UUID) 
 		return err
 	}
 	if preset.UserID != userID {
-		return errors.New("preset not found")
+		return fmt.Errorf("preset %w", constant.ErrNotFound)
 	}
 	return s.presetRepo.Delete(ctx, id)
 }

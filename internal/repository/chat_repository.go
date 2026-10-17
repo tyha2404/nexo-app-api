@@ -18,7 +18,13 @@ type ChatRepository interface {
 
 	CreateMessage(ctx context.Context, message *model.ChatMessage) error
 	UpdateMessage(ctx context.Context, id uuid.UUID, content string, status model.ChatMessageStatus) error
+	// UpdateMessageToolResults stores the message's action cards (JSON array).
+	UpdateMessageToolResults(ctx context.Context, id uuid.UUID, toolResults *string) error
+	GetMessageByID(ctx context.Context, id uuid.UUID) (*model.ChatMessage, error)
 	ListMessagesBySessionID(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.ChatMessage, error)
+	// ListRecentMessagesBySessionID returns the newest `limit` messages of a
+	// session in chronological (oldest → newest) order.
+	ListRecentMessagesBySessionID(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.ChatMessage, error)
 }
 
 type chatRepository struct {
@@ -88,14 +94,44 @@ func (r *chatRepository) UpdateMessage(ctx context.Context, id uuid.UUID, conten
 		}).Error
 }
 
+func (r *chatRepository) UpdateMessageToolResults(ctx context.Context, id uuid.UUID, toolResults *string) error {
+	return r.db.WithContext(ctx).Model(&model.ChatMessage{}).
+		Where("id = ?", id).
+		Update("tool_results", toolResults).Error
+}
+
+func (r *chatRepository) GetMessageByID(ctx context.Context, id uuid.UUID) (*model.ChatMessage, error) {
+	var msg model.ChatMessage
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&msg).Error; err != nil {
+		return nil, err
+	}
+	return &msg, nil
+}
+
 func (r *chatRepository) ListMessagesBySessionID(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.ChatMessage, error) {
 	var messages []model.ChatMessage
 	query := r.db.WithContext(ctx).
 		Where("session_id = ?", sessionID).
-		Order("created_at ASC")
+		Order("created_at ASC, id ASC")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 	err := query.Find(&messages).Error
 	return messages, err
+}
+
+func (r *chatRepository) ListRecentMessagesBySessionID(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.ChatMessage, error) {
+	var messages []model.ChatMessage
+	err := r.db.WithContext(ctx).
+		Where("session_id = ?", sessionID).
+		Order("created_at DESC, id DESC").
+		Limit(limit).
+		Find(&messages).Error
+	if err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	return messages, nil
 }

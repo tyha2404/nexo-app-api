@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	ErrStatementNotFound = errors.New("không tìm thấy kỳ sao kê")
-	ErrInvalidDate       = errors.New("định dạng ngày không hợp lệ (cần YYYY-MM-DD)")
+	ErrStatementNotFound       = errors.New("không tìm thấy kỳ sao kê")
+	ErrInvalidDate             = errors.New("định dạng ngày không hợp lệ (cần YYYY-MM-DD)")
+	ErrStatementAlreadyPaid    = repository.ErrStatementAlreadyPaid
+	ErrStatementInvalidPayment = repository.ErrStatementInvalidPayment
 )
 
 type CreditCardStatementService interface {
@@ -111,11 +113,14 @@ func (s *creditCardStatementService) CreateStatement(ctx context.Context, userID
 		return nil, err
 	}
 
-	// Also sync latest active statement to wallet
+	// Also sync latest active statement to wallet (snapshot columns only; never
+	// a full-row Save, which could overwrite a concurrent balance change).
+	if err := s.walletRepo.UpdateStatementSnapshot(ctx, wallet.ID, userID, req.StatementBalance, minPay, req.PreviousBalance); err != nil {
+		return nil, err
+	}
 	wallet.StatementBalance = &req.StatementBalance
 	wallet.MinimumPayment = &minPay
 	wallet.PreviousBalance = &req.PreviousBalance
-	_ = s.walletRepo.Update(ctx, wallet)
 
 	stmt.Wallet = wallet
 	res := dto.ToStatementResponse(stmt)
@@ -223,48 +228,17 @@ func (s *creditCardStatementService) UpdateStatement(ctx context.Context, userID
 	return &res, nil
 }
 
+// PayStatement records a payment. All checks (statement lock, not already PAID,
+// no overpayment, source-wallet ownership) and all balance changes happen in a
+// single DB transaction in the repository; any failure rolls everything back.
 func (s *creditCardStatementService) PayStatement(ctx context.Context, userID uuid.UUID, id uuid.UUID, req dto.PayStatementRequest) (*dto.StatementResponse, error) {
-	stmt, err := s.repo.GetByID(ctx, id, userID)
+	stmt, err := s.repo.PayStatement(ctx, userID, id, req.Amount, req.SourceWalletID)
 	if err != nil {
 		return nil, err
 	}
 	if stmt == nil {
 		return nil, ErrStatementNotFound
 	}
-
-	// Update paid amount
-	stmt.PaidAmount += req.Amount
-	if stmt.PaidAmount >= stmt.StatementBalance && stmt.StatementBalance > 0 {
-		stmt.Status = model.StatementStatusPaid
-	} else {
-		stmt.Status = model.StatementStatusPartiallyPaid
-	}
-
-	if err := s.repo.Update(ctx, stmt); err != nil {
-		return nil, err
-	}
-
-	// If source wallet is provided, execute balance deduction
-	if req.SourceWalletID != nil {
-		sourceWallet, err := s.walletRepo.GetByID(ctx, *req.SourceWalletID, userID)
-		if err == nil && sourceWallet != nil {
-			sourceWallet.Balance -= req.Amount
-			_ = s.walletRepo.Update(ctx, sourceWallet)
-		}
-	}
-
-	// Also reduce credit card debt
-	cardWallet, err := s.walletRepo.GetByID(ctx, stmt.WalletID, userID)
-	if err == nil && cardWallet != nil {
-		cardWallet.Balance += req.Amount // Adding to negative balance reduces debt
-		rem := stmt.StatementBalance - stmt.PaidAmount
-		if rem < 0 {
-			rem = 0
-		}
-		cardWallet.StatementBalance = &rem
-		_ = s.walletRepo.Update(ctx, cardWallet)
-	}
-
 	res := dto.ToStatementResponse(stmt)
 	return &res, nil
 }

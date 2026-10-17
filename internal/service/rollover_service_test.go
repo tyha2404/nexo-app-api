@@ -200,3 +200,27 @@ func TestRolloverService_ProcessRolloverForMonth_ProcessesAllUsers(t *testing.T)
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
 }
+
+func TestRolloverService_ProcessRolloverForUser_DedupesHistoricalBudgetsPerCategory(t *testing.T) {
+	mockRepo := new(MockRolloverRepo)
+	svc := service.NewRolloverService(mockRepo, zap.NewNop())
+
+	userID := uuid.New()
+	targetPeriodStart := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	catID := uuid.New()
+
+	mockRepo.On("GetTargetForMonth", mock.Anything, userID, mock.Anything, 9, 2026).Return(&model.MonthlyTarget{}, nil)
+	mockRepo.On("GetMonthlyBudgetsForPeriod", mock.Anything, userID, targetPeriodStart).Return([]model.Budget{}, nil)
+	// Several historical rows for the same category (latest first).
+	mockRepo.On("GetLatestMonthlyBudgetsBefore", mock.Anything, userID, targetPeriodStart).Return([]model.Budget{
+		{CategoryID: catID, Amount: 3000000},
+		{CategoryID: catID, Amount: 1000000},
+		{CategoryID: catID, Amount: 500000},
+	}, nil)
+	mockRepo.On("CreateBudgets", mock.Anything, mock.MatchedBy(func(budgets []model.Budget) bool {
+		return len(budgets) == 1 && budgets[0].Amount == 3000000
+	})).Return(nil)
+
+	assert.NoError(t, svc.ProcessRolloverForUser(context.Background(), userID, 9, 2026))
+	mockRepo.AssertExpectations(t)
+}

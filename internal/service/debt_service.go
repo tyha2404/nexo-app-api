@@ -3,16 +3,21 @@ package service
 import (
 	"context"
 	"errors"
-	"time"
+	"fmt"
+	"math"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 var (
-	ErrDebtNotFound = errors.New("debt not found")
+	ErrDebtNotFound     = errors.New("debt not found")
+	ErrInvalidRepayment = repository.ErrInvalidRepayment
+	// ErrDebtAlreadyCompleted wraps ErrInvalidRepayment so callers treat it as a 400.
+	ErrDebtAlreadyCompleted = fmt.Errorf("khoản nợ đã hoàn tất, không thể trả thêm: %w", repository.ErrInvalidRepayment)
 )
 
 type DebtService interface {
@@ -33,8 +38,8 @@ func NewDebtService(debtRepo repository.DebtRepository) DebtService {
 
 func (s *debtService) CreateDebt(ctx context.Context, userID uuid.UUID, req dto.CreateDebtRequest) (*dto.DebtResponse, error) {
 	status := model.DebtStatusPending
-	now := time.Now()
-	if req.DueDate != nil && req.DueDate.Before(now) {
+	now := util.Now()
+	if req.DueDate != nil && util.IsPastDate(*req.DueDate) {
 		status = model.DebtStatusOverdue
 	}
 
@@ -61,11 +66,7 @@ func (s *debtService) CreateDebt(ctx context.Context, userID uuid.UUID, req dto.
 
 	var balanceDelta float64
 	if req.WalletID != nil {
-		if req.Type == model.DebtTypeReceivable {
-			balanceDelta = -req.TotalAmount
-		} else if req.Type == model.DebtTypePayable {
-			balanceDelta = req.TotalAmount
-		}
+		balanceDelta = model.DebtCreationWalletDelta(req.Type, req.TotalAmount)
 	}
 
 	if err := s.debtRepo.CreateWithWallet(ctx, debt, req.WalletID, balanceDelta); err != nil {
@@ -81,11 +82,10 @@ func (s *debtService) GetDebts(ctx context.Context, userID uuid.UUID, debtType m
 		return nil, err
 	}
 
-	now := time.Now()
 	res := make([]dto.DebtResponse, len(debts))
 	for i, debt := range debts {
 		// Auto update status to overdue if applicable
-		if debt.Status == model.DebtStatusPending && debt.DueDate != nil && debt.DueDate.Before(now) {
+		if debt.Status == model.DebtStatusPending && debt.DueDate != nil && util.IsPastDate(*debt.DueDate) {
 			debt.Status = model.DebtStatusOverdue
 		}
 		res[i] = *s.toResponse(&debt)
@@ -106,8 +106,18 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 	if debt == nil {
 		return nil, ErrDebtNotFound
 	}
+	if debt.Status == model.DebtStatusCompleted {
+		return nil, ErrDebtAlreadyCompleted
+	}
 
-	paidAt := time.Now()
+	if req.Amount <= 0 || math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount > math.Round((debt.TotalAmount-debt.PaidAmount)*100)/100 {
+		return nil, ErrInvalidRepayment
+	}
+	// Do not mutate the repository snapshot before persistence succeeds.
+	copy := *debt
+	debt = &copy
+
+	paidAt := util.Now()
 	if req.PaidAt != nil {
 		paidAt = *req.PaidAt
 	}
@@ -119,15 +129,15 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 		PaidAt:    paidAt,
 		Notes:     req.Notes,
 		WalletID:  req.WalletID,
-		CreatedAt: time.Now(),
+		CreatedAt: util.Now(),
 	}
 
 	debt.PaidAmount += req.Amount
-	debt.UpdatedAt = time.Now()
+	debt.UpdatedAt = util.Now()
 
 	if debt.PaidAmount >= debt.TotalAmount {
 		debt.Status = model.DebtStatusCompleted
-	} else if debt.DueDate != nil && debt.DueDate.Before(time.Now()) {
+	} else if debt.DueDate != nil && util.IsPastDate(*debt.DueDate) {
 		debt.Status = model.DebtStatusOverdue
 	} else {
 		debt.Status = model.DebtStatusPending
@@ -135,11 +145,7 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 
 	var balanceDelta float64
 	if req.WalletID != nil {
-		if debt.Type == model.DebtTypeReceivable {
-			balanceDelta = req.Amount
-		} else if debt.Type == model.DebtTypePayable {
-			balanceDelta = -req.Amount
-		}
+		balanceDelta = model.DebtRepaymentWalletDelta(debt.Type, req.Amount)
 	}
 
 	if err := s.debtRepo.AddRepaymentWithWallet(ctx, debt, repayment, req.WalletID, balanceDelta); err != nil {
@@ -150,8 +156,14 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 	return s.toResponse(debt), nil
 }
 
+// DeleteDebt soft-deletes the debt and its repayments and reverses their wallet
+// effects in one DB transaction (see model.DebtCreationWalletDelta).
 func (s *debtService) DeleteDebt(ctx context.Context, userID uuid.UUID, debtID uuid.UUID) error {
-	return s.debtRepo.Delete(ctx, debtID, userID)
+	err := s.debtRepo.Delete(ctx, debtID, userID)
+	if errors.Is(err, repository.ErrDebtNotFound) {
+		return ErrDebtNotFound
+	}
+	return err
 }
 
 func (s *debtService) toResponse(debt *model.Debt) *dto.DebtResponse {

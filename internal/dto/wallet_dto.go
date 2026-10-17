@@ -163,7 +163,12 @@ type WalletTransferResponse struct {
 }
 
 type WalletSummaryResponse struct {
-	TotalBalance float64          `json:"totalBalance"`
-	Wallets      []WalletResponse `json:"wallets"`
-	TotalWallets int              `json:"totalWallets"`
+	// TotalBalance sums only wallets in BaseCurrency (VND) that are included in total.
+	TotalBalance float64 `json:"totalBalance"`
+	// BaseCurrency is the currency of TotalBalance.
+	BaseCurrency string `json:"baseCurrency" example:"VND"`
+	// TotalsByCurrency sums included wallets per currency (no FX conversion).
+	TotalsByCurrency map[string]float64 `json:"totalsByCurrency"`
+	Wallets          []WalletResponse   `json:"wallets"`
+	TotalWallets     int                `json:"totalWallets"`
 }

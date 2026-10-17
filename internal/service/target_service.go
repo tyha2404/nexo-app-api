@@ -9,6 +9,7 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 type TargetService interface {
@@ -36,21 +37,22 @@ func (s *targetService) UpsertTarget(ctx context.Context, userID uuid.UUID, req 
 }
 
 func (s *targetService) GetSummary(ctx context.Context, userID uuid.UUID, month, year int) (*dto.TargetSummaryResponse, error) {
-	now := time.Now()
-	if month <= 0 || year <= 0 {
+	// "Today" is evaluated in the app timezone (Vietnam), not the host's.
+	now := util.Now()
+	if month <= 0 || year <= 0 || month > 12 {
 		month = int(now.Month())
 		year = now.Year()
 	}
 
 	// Dynamic Days calculation
-	firstDay := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
-	lastDay := firstDay.AddDate(0, 1, -1)
+	firstDay, nextMonth := util.MonthRangeOf(year, time.Month(month))
+	lastDay := nextMonth.AddDate(0, 0, -1)
 	daysInMonth := lastDay.Day()
 
 	currentDay := 1
 	if now.Year() == year && int(now.Month()) == month {
 		currentDay = now.Day()
-	} else if now.After(lastDay) {
+	} else if !now.Before(nextMonth) {
 		currentDay = daysInMonth
 	}
 
@@ -59,8 +61,8 @@ func (s *targetService) GetSummary(ctx context.Context, userID uuid.UUID, month,
 		daysRemaining = 1
 	}
 
-	startOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
-	endOfMonth := time.Date(year, time.Month(month), daysInMonth, 23, 59, 59, 999999999, time.Local)
+	startOfMonth := firstDay
+	endOfMonth := lastDay
 
 	// Fetch targets
 	expenseTargetModel, err := s.repo.GetTarget(ctx, userID, model.TargetTypeExpense, month, year)

@@ -1,19 +1,57 @@
 package middleware
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
-// CorsMiddleware handles CORS preflight and headers
-func CorsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*") // Adjust origin as needed
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+const (
+	corsAllowMethods = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+	corsAllowHeaders = "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization"
+)
 
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
+// NewCORSMiddleware returns a CORS middleware that only reflects origins in
+// allowedOrigins (exact match, scheme + host + port, no trailing slash). A
+// literal "*" entry allows any origin; use it only for local experiments.
+//
+// Requests without an Origin header (same-origin calls through the nexo-web
+// proxy, curl, server-to-server) are passed through untouched.
+func NewCORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	allowAll := false
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o == "*" {
+			allowAll = true
+			continue
 		}
+		if o != "" {
+			allowed[o] = struct{}{}
+		}
+	}
 
-		next.ServeHTTP(w, r)
-	})
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin != "" {
+				w.Header().Add("Vary", "Origin")
+				_, ok := allowed[origin]
+				if ok || allowAll {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Methods", corsAllowMethods)
+					w.Header().Set("Access-Control-Allow-Headers", corsAllowHeaders)
+					w.Header().Set("Access-Control-Max-Age", "600")
+				}
+			}
+
+			// Answer preflights here. Without the allow headers above the
+			// browser rejects a disallowed origin's actual request.
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }

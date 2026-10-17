@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tyha2404/nexo-app-api/internal/service"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 type MonthlyRolloverWorker struct {
@@ -18,21 +19,24 @@ type MonthlyRolloverWorker struct {
 
 func NewMonthlyRolloverWorker(service service.RolloverService, logger *zap.Logger) *MonthlyRolloverWorker {
 	return &MonthlyRolloverWorker{
-		cron:    cron.New(),
+		// Run the schedule in the business timezone, not the server's (often UTC).
+		cron:    cron.New(cron.WithLocation(util.AppLocation())),
 		service: service,
 		logger:  logger,
 	}
 }
 
-// IsEndOfMonthTransition checks if the given timestamp is at 23:50 on the last day of the month.
+// IsEndOfMonthTransition checks if the given timestamp is at 23:50 on the last
+// day of the month in the app timezone.
 func IsEndOfMonthTransition(t time.Time) (bool, int, int) {
+	t = t.In(util.AppLocation())
 	if t.Hour() != 23 || t.Minute() != 50 {
 		return false, 0, 0
 	}
 
-	nextMonthTime := t.Add(15 * time.Minute)
-	if nextMonthTime.Month() != t.Month() {
-		return true, int(nextMonthTime.Month()), nextMonthTime.Year()
+	_, nextMonthStart := util.MonthRange(t)
+	if !t.Add(15 * time.Minute).Before(nextMonthStart) {
+		return true, int(nextMonthStart.Month()), nextMonthStart.Year()
 	}
 
 	return false, 0, 0
@@ -43,7 +47,7 @@ func (w *MonthlyRolloverWorker) Start(ctx context.Context) {
 	// 1. Startup Backfill for current month
 	go func() {
 		w.logger.Info("running startup sync for monthly targets and budgets...")
-		now := time.Now()
+		now := util.Now()
 		if err := w.service.ProcessRolloverForMonth(ctx, int(now.Month()), now.Year()); err != nil {
 			w.logger.Error("startup rollover sync encountered error", zap.Error(err))
 		} else {
@@ -53,7 +57,7 @@ func (w *MonthlyRolloverWorker) Start(ctx context.Context) {
 
 	// 2. Schedule daily check at 23:50
 	_, err := w.cron.AddFunc("50 23 * * *", func() {
-		now := time.Now()
+		now := util.Now()
 		isTransition, targetMonth, targetYear := IsEndOfMonthTransition(now)
 		if isTransition {
 			w.logger.Info("end-of-month detected (23:50), triggering next month rollover",

@@ -16,18 +16,25 @@ type TargetRepository interface {
 	GetMonthlyTotalByCategoryType(ctx context.Context, userID uuid.UUID, catType model.CategoryType, startDate, endDate time.Time) (float64, error)
 }
 
+// targetRepository also implements ReportRepository (via the embedded
+// reportRepository on the same DB), so services that only receive a
+// TargetRepository can still aggregate in SQL; see AsReportRepository.
 type targetRepository struct {
 	db *gorm.DB
+	*reportRepository
 }
 
 func NewTargetRepository(db *gorm.DB) TargetRepository {
-	return &targetRepository{db: db}
+	return &targetRepository{db: db, reportRepository: &reportRepository{db: db}}
 }
 
 func (r *targetRepository) UpsertTarget(ctx context.Context, target *model.MonthlyTarget) error {
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "user_id"}, {Name: "target_type"}, {Name: "month"}, {Name: "year"}},
-		DoUpdates: clause.AssignmentColumns([]string{"target_amount", "updated_at"}),
+		Columns: []clause.Column{{Name: "user_id"}, {Name: "target_type"}, {Name: "month"}, {Name: "year"}},
+		// The unique index is partial (WHERE deleted_at IS NULL) so a soft-deleted
+		// target never blocks a new one; the predicate is needed for index inference.
+		TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "deleted_at IS NULL"}}},
+		DoUpdates:   clause.AssignmentColumns([]string{"target_amount", "updated_at"}),
 	}).Create(target).Error
 }
 
@@ -45,16 +52,22 @@ func (r *targetRepository) GetTarget(ctx context.Context, userID uuid.UUID, targ
 	return &target, nil
 }
 
+// GetMonthlyTotalByCategoryType sums transactions of one type in
+// [startDate, endDate] (calendar dates) using the shared report definitions
+// (investment = still HOLDING).
 func (r *targetRepository) GetMonthlyTotalByCategoryType(ctx context.Context, userID uuid.UUID, catType model.CategoryType, startDate, endDate time.Time) (float64, error) {
-	var total float64
-	query := r.db.WithContext(ctx).
-		Model(&model.Transaction{}).
-		Where("transactions.user_id = ? AND transactions.type = ? AND transactions.transaction_date >= ? AND transactions.transaction_date <= ?", userID, string(catType), startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
-
-	if catType == model.CategoryTypeInvestment {
-		query = query.Where("transactions.status IS NULL OR transactions.status = ?", model.InvestmentStatusHolding)
+	totals, err := sumTransactionTotals(ctx, r.db, userID, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	if err != nil {
+		return 0, err
 	}
-
-	err := query.Select("COALESCE(SUM(transactions.amount), 0)").Scan(&total).Error
-	return total, err
+	switch catType {
+	case model.CategoryTypeIncome:
+		return totals.Income, nil
+	case model.CategoryTypeExpense:
+		return totals.Expense, nil
+	case model.CategoryTypeInvestment:
+		return totals.ActiveInvestment, nil
+	default:
+		return 0, nil
+	}
 }

@@ -13,7 +13,6 @@ type UserRepo interface {
 	Create(ctx context.Context, user *model.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	List(ctx context.Context, limit, offset int) ([]model.User, error)
-	Update(ctx context.Context, user *model.User) error
 	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByEmail(ctx context.Context, email string) (*model.User, error)
@@ -46,20 +45,33 @@ func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, erro
 
 func (r *userRepo) List(ctx context.Context, limit, offset int) ([]model.User, error) {
 	var users []model.User
-	err := r.db.WithContext(ctx).Limit(limit).Offset(offset).Find(&users).Error
+	err := r.db.WithContext(ctx).Order("created_at DESC").Limit(limit).Offset(offset).Find(&users).Error
 	return users, err
 }
 
-func (r *userRepo) Update(ctx context.Context, user *model.User) error {
-	return r.db.WithContext(ctx).Save(user).Error
-}
-
+// UpdateFields updates only the given columns. Callers are responsible for
+// whitelisting the keys (never pass password/role from client input).
+// Returns constant.ErrNotFound when no row matched.
 func (r *userRepo) UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
-	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
+	result := r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constant.ErrNotFound
+	}
+	return nil
 }
 
 func (r *userRepo) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&model.User{}, "id = ?", id).Error
+	result := r.db.WithContext(ctx).Delete(&model.User{}, "id = ?", id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constant.ErrNotFound
+	}
+	return nil
 }
 
 func (r *userRepo) FindByEmail(ctx context.Context, email string) (*model.User, error) {

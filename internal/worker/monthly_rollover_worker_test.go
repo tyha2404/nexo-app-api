@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"github.com/tyha2404/nexo-app-api/internal/worker"
 )
 
 func TestIsEndOfMonthTransition(t *testing.T) {
-	loc := time.UTC
+	loc := util.AppLocation()
 
 	testCases := []struct {
 		name               string
@@ -70,4 +71,16 @@ func TestIsEndOfMonthTransition(t *testing.T) {
 			assert.Equal(t, tc.expectedYear, year)
 		})
 	}
+}
+
+// The server may run in UTC: the transition is 23:50 in the app timezone
+// (Asia/Ho_Chi_Minh, UTC+7), not 23:50 UTC.
+func TestIsEndOfMonthTransition_UsesAppTimezone(t *testing.T) {
+	ok, month, year := worker.IsEndOfMonthTransition(time.Date(2026, time.August, 31, 16, 50, 0, 0, time.UTC))
+	assert.True(t, ok)
+	assert.Equal(t, 9, month)
+	assert.Equal(t, 2026, year)
+
+	ok, _, _ = worker.IsEndOfMonthTransition(time.Date(2026, time.August, 31, 23, 50, 0, 0, time.UTC))
+	assert.False(t, ok, "23:50 UTC is already 06:50 on Sept 1 in Vietnam")
 }

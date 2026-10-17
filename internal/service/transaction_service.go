@@ -3,12 +3,16 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 type TransactionService interface {
@@ -24,6 +28,17 @@ type transactionService struct {
 	categoryRepo    repository.CategoryRepo
 	budgetRepo      repository.BudgetRepository
 	alertRepo       repository.AlertRepository
+	walletRepo      repository.WalletRepository
+	pushService     PushService
+}
+
+// TransactionServiceOption configures optional collaborators.
+type TransactionServiceOption func(*transactionService)
+
+// WithBudgetAlertPush sends a Web Push notification whenever a new budget
+// alert is inserted (deduplicated alerts are not re-notified).
+func WithBudgetAlertPush(push PushService) TransactionServiceOption {
+	return func(s *transactionService) { s.pushService = push }
 }
 
 func NewTransactionService(
@@ -31,27 +46,51 @@ func NewTransactionService(
 	categoryRepo repository.CategoryRepo,
 	budgetRepo repository.BudgetRepository,
 	alertRepo repository.AlertRepository,
+	walletRepo repository.WalletRepository,
+	opts ...TransactionServiceOption,
 ) TransactionService {
-	return &transactionService{
+	s := &transactionService{
 		transactionRepo: transactionRepo,
 		categoryRepo:    categoryRepo,
 		budgetRepo:      budgetRepo,
 		alertRepo:       alertRepo,
+		walletRepo:      walletRepo,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// ensureWalletOwned verifies the wallet exists and belongs to the user. The
+// repository re-checks ownership inside the DB transaction that moves the balance.
+func (s *transactionService) ensureWalletOwned(ctx context.Context, userID uuid.UUID, walletID *uuid.UUID) error {
+	if walletID == nil || *walletID == uuid.Nil {
+		return nil
+	}
+	wallet, err := s.walletRepo.GetByID(ctx, *walletID, userID)
+	if err != nil {
+		return err
+	}
+	if wallet == nil {
+		return fmt.Errorf("wallet %w", constant.ErrNotFound)
+	}
+	return nil
 }
 
 func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.UUID, req dto.CreateTransactionRequest) (*dto.TransactionResponse, error) {
 	// Verify category exists and belongs to user
-	category, err := s.categoryRepo.GetByID(ctx, req.CategoryID)
+	category, err := s.categoryRepo.GetByIDForUser(ctx, userID, req.CategoryID)
 	if err != nil {
-		return nil, errors.New("category not found")
-	}
-	if category.UserID != userID {
-		return nil, errors.New("unauthorized access to category")
+		return nil, categoryLookupError(err)
 	}
 
 	if string(category.Type) != string(req.Type) {
-		return nil, errors.New("transaction type does not match category type")
+		return nil, fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
+	}
+
+	if err := s.ensureWalletOwned(ctx, userID, req.WalletID); err != nil {
+		return nil, err
 	}
 
 	transaction := &model.Transaction{
@@ -63,6 +102,19 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		Description:     req.Description,
 		ReceiptURL:      req.ReceiptURL,
 		TransactionDate: req.TransactionDate.Time,
+	}
+
+	if transaction.Type == model.TransactionTypeInvestment {
+		status := model.InvestmentStatusHolding
+		if req.Status != nil {
+			status = model.InvestmentStatus(*req.Status)
+		}
+		transaction.Status = &status
+		transaction.RealizedPnL = req.RealizedPnL
+		if status == model.InvestmentStatusHolding {
+			zero := 0.0
+			transaction.RealizedPnL = &zero
+		}
 	}
 
 	if err := s.transactionRepo.Create(ctx, transaction); err != nil {
@@ -86,7 +138,7 @@ func (s *transactionService) GetTransaction(ctx context.Context, userID, id uuid
 	}
 
 	if transaction.UserID != userID {
-		return nil, errors.New("transaction not found")
+		return nil, fmt.Errorf("transaction %w", constant.ErrNotFound)
 	}
 
 	return s.toResponse(transaction), nil
@@ -128,16 +180,13 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 	}
 
 	if transaction.UserID != userID {
-		return nil, errors.New("transaction not found")
+		return nil, fmt.Errorf("transaction %w", constant.ErrNotFound)
 	}
 
 	if req.CategoryID != nil {
-		category, err := s.categoryRepo.GetByID(ctx, *req.CategoryID)
+		category, err := s.categoryRepo.GetByIDForUser(ctx, userID, *req.CategoryID)
 		if err != nil {
-			return nil, errors.New("category not found")
-		}
-		if category.UserID != userID {
-			return nil, errors.New("unauthorized access to category")
+			return nil, categoryLookupError(err)
 		}
 
 		expectedType := transaction.Type
@@ -145,21 +194,26 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 			expectedType = model.TransactionType(*req.Type)
 		}
 		if string(category.Type) != string(expectedType) {
-			return nil, errors.New("transaction type does not match category type")
+			return nil, fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
 		}
 
 		transaction.CategoryID = *req.CategoryID
 		transaction.Category = category
 	} else if req.Type != nil {
-		category, err := s.categoryRepo.GetByID(ctx, transaction.CategoryID)
+		category, err := s.categoryRepo.GetByIDForUser(ctx, userID, transaction.CategoryID)
 		if err == nil {
 			if string(category.Type) != *req.Type {
-				return nil, errors.New("transaction type does not match category type")
+				return nil, fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
 			}
 		}
 	}
 
 	if req.WalletID != nil {
+		if transaction.WalletID == nil || *transaction.WalletID != *req.WalletID {
+			if err := s.ensureWalletOwned(ctx, userID, req.WalletID); err != nil {
+				return nil, err
+			}
+		}
 		transaction.WalletID = req.WalletID
 	}
 	if req.Amount != nil {
@@ -204,7 +258,7 @@ func (s *transactionService) DeleteTransaction(ctx context.Context, userID, id u
 	}
 
 	if transaction.UserID != userID {
-		return errors.New("transaction not found")
+		return fmt.Errorf("transaction %w", constant.ErrNotFound)
 	}
 
 	return s.transactionRepo.Delete(ctx, id)
@@ -217,8 +271,8 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 	}
 
 	var deletedAt *string
-	if t.DeletedAt != nil {
-		formatted := (*t.DeletedAt).Format(time.RFC3339)
+	if t.DeletedAt.Valid {
+		formatted := t.DeletedAt.Time.Format(time.RFC3339)
 		deletedAt = &formatted
 	}
 
@@ -254,16 +308,10 @@ func (s *transactionService) checkBudgetLimit(ctx context.Context, userID, categ
 	}
 
 	var start, end time.Time
-	if budget.PeriodType == "monthly" {
-		start = time.Date(transactionDate.Year(), transactionDate.Month(), 1, 0, 0, 0, 0, transactionDate.Location())
-		end = start.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	} else if budget.PeriodType == "yearly" {
-		start = time.Date(transactionDate.Year(), 1, 1, 0, 0, 0, 0, transactionDate.Location())
-		end = start.AddDate(1, 0, 0).Add(-time.Nanosecond)
-	} else {
-		start = budget.PeriodStart
-		end = start.AddDate(0, 1, 0)
+	if budget.Amount <= 0 {
+		return
 	}
+	start, end = budgetSpendWindow(budget, transactionDate)
 
 	filters := map[string]interface{}{
 		"type":       string(model.TransactionTypeExpense),
@@ -272,14 +320,9 @@ func (s *transactionService) checkBudgetLimit(ctx context.Context, userID, categ
 		"endDate":    end.Format("2006-01-02"),
 	}
 
-	expenses, _, err := s.transactionRepo.ListByUserID(ctx, userID, 1000, 0, filters)
+	totalExpense, _, _, _, _, _, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
 	if err != nil {
 		return
-	}
-
-	var totalExpense float64
-	for _, e := range expenses {
-		totalExpense += e.Amount
 	}
 
 	var alertType string
@@ -300,6 +343,67 @@ func (s *transactionService) checkBudgetLimit(ctx context.Context, userID, categ
 			AlertType: alertType,
 			Message:   message,
 		}
-		_ = s.alertRepo.Create(ctx, alert)
+		created, err := s.alertRepo.Create(ctx, alert)
+		if err == nil && created {
+			s.notifyBudgetAlert(ctx, userID, budget, ratio)
+		}
+	}
+}
+
+// BudgetAlertPayload builds the push notification for a new budget alert.
+func BudgetAlertPayload(categoryName string, ratio float64) dto.PushPayload {
+	if categoryName == "" {
+		categoryName = "Danh mục"
+	}
+	percent := int(math.Floor(ratio * 100))
+	body := fmt.Sprintf("%s đã dùng %d%% ngân sách.", categoryName, percent)
+	if ratio >= 1.0 {
+		body = fmt.Sprintf("%s đã dùng %d%% ngân sách — vượt hạn mức!", categoryName, percent)
+	}
+	return dto.PushPayload{Title: "Cảnh báo ngân sách", Body: body, URL: "/#/planning/categories", Tag: "budget-alert"}
+}
+
+// notifyBudgetAlert pushes in the background; it never blocks or fails the
+// transaction request.
+func (s *transactionService) notifyBudgetAlert(ctx context.Context, userID uuid.UUID, budget *model.Budget, ratio float64) {
+	if s.pushService == nil || !s.pushService.Enabled() {
+		return
+	}
+	categoryName := ""
+	if budget.Category.Name != "" {
+		categoryName = budget.Category.Name
+	} else if s.categoryRepo != nil {
+		if cat, err := s.categoryRepo.GetByIDForUser(ctx, userID, budget.CategoryID); err == nil && cat != nil {
+			categoryName = cat.Name
+		}
+	}
+	s.pushService.NotifyUser(userID, BudgetAlertPayload(categoryName, ratio))
+}
+
+// categoryLookupError maps a failed user-scoped category lookup: a category that
+// does not exist or belongs to another user is a 404 ("category not found"),
+// anything else (DB failure) is returned as is.
+func categoryLookupError(err error) error {
+	if errors.Is(err, constant.ErrNotFound) {
+		return fmt.Errorf("category %w", constant.ErrNotFound)
+	}
+	return err
+}
+
+// budgetSpendWindow returns the inclusive [start, end] dates of the budget period
+// containing transactionDate. Month/year boundaries use the app timezone
+// (util.AppLocation), never the server's or the parsed value's location.
+func budgetSpendWindow(budget *model.Budget, transactionDate time.Time) (time.Time, time.Time) {
+	switch budget.PeriodType {
+	case "monthly":
+		start, next := util.MonthRange(transactionDate)
+		return start, next.Add(-time.Nanosecond)
+	case "yearly":
+		y := transactionDate.In(util.AppLocation()).Year()
+		start := time.Date(y, 1, 1, 0, 0, 0, 0, util.AppLocation())
+		return start, start.AddDate(1, 0, 0).Add(-time.Nanosecond)
+	default:
+		start := budget.PeriodStart
+		return start, start.AddDate(0, 1, 0)
 	}
 }

@@ -30,7 +30,7 @@ func (r *presetRepository) Create(ctx context.Context, preset *model.Preset) err
 
 func (r *presetRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Preset, error) {
 	var preset model.Preset
-	err := r.db.WithContext(ctx).Preload("Category").First(&preset, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Category", withDeleted).First(&preset, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (r *presetRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Pr
 func (r *presetRepository) ListByUserID(ctx context.Context, userID uuid.UUID) ([]model.Preset, error) {
 	var presets []model.Preset
 	err := r.db.WithContext(ctx).
-		Preload("Category").
+		Preload("Category", withDeleted).
 		Where("user_id = ?", userID).
 		Order("sort_order ASC, created_at DESC").
 		Find(&presets).Error

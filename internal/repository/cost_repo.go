@@ -2,20 +2,23 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"gorm.io/gorm"
 )
 
 type CostRepo interface {
 	Create(ctx context.Context, cost *model.Cost) error
-	GetByID(ctx context.Context, id uuid.UUID) (*model.Cost, error)
-	List(ctx context.Context, limit, offset int) ([]model.Cost, error)
-	Update(ctx context.Context, cost *model.Cost) error
-	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	// GetByIDForUser, UpdateFieldsForUser and DeleteForUser are scoped to the
+	// owner and return constant.ErrNotFound when the cost is missing or
+	// belongs to someone else.
+	GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Cost, error)
+	UpdateFieldsForUser(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error
+	DeleteForUser(ctx context.Context, userID, id uuid.UUID) error
 	ListWithCategory(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Cost, error)
 }
 
@@ -31,31 +34,40 @@ func (r *costRepo) Create(ctx context.Context, cost *model.Cost) error {
 	return r.db.WithContext(ctx).Create(cost).Error
 }
 
-func (r *costRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Cost, error) {
+func (r *costRepo) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Cost, error) {
 	var cost model.Cost
-	err := r.db.WithContext(ctx).First(&cost, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&cost).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constant.ErrNotFound
+		}
 		return nil, err
 	}
 	return &cost, nil
 }
 
-func (r *costRepo) List(ctx context.Context, limit, offset int) ([]model.Cost, error) {
-	var costs []model.Cost
-	err := r.db.WithContext(ctx).Limit(limit).Offset(offset).Find(&costs).Error
-	return costs, err
+func (r *costRepo) UpdateFieldsForUser(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error {
+	result := r.db.WithContext(ctx).Model(&model.Cost{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constant.ErrNotFound
+	}
+	return nil
 }
 
-func (r *costRepo) Update(ctx context.Context, cost *model.Cost) error {
-	return r.db.WithContext(ctx).Save(cost).Error
-}
-
-func (r *costRepo) UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
-	return r.db.WithContext(ctx).Model(&model.Cost{}).Where("id = ?", id).Updates(updates).Error
-}
-
-func (r *costRepo) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&model.Cost{}, "id = ?", id).Error
+func (r *costRepo) DeleteForUser(ctx context.Context, userID, id uuid.UUID) error {
+	result := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&model.Cost{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constant.ErrNotFound
+	}
+	return nil
 }
 
 func (r *costRepo) ListWithCategory(

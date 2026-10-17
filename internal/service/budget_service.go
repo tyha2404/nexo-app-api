@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -31,12 +32,9 @@ func NewBudgetService(budgetRepo repository.BudgetRepository, categoryRepo repos
 }
 
 func (s *budgetService) CreateBudget(ctx context.Context, userID uuid.UUID, req dto.CreateBudgetRequest) (*dto.BudgetResponse, error) {
-	category, err := s.categoryRepo.GetByID(ctx, req.CategoryID)
+	category, err := s.categoryRepo.GetByIDForUser(ctx, userID, req.CategoryID)
 	if err != nil {
-		return nil, errors.New("category not found")
-	}
-	if category.UserID != userID {
-		return nil, errors.New("unauthorized category access")
+		return nil, categoryLookupError(err)
 	}
 
 	budget := &model.Budget{
@@ -62,7 +60,7 @@ func (s *budgetService) GetBudget(ctx context.Context, userID, id uuid.UUID) (*d
 		return nil, err
 	}
 	if budget.UserID != userID {
-		return nil, errors.New("budget not found")
+		return nil, fmt.Errorf("budget %w", constant.ErrNotFound)
 	}
 	return dto.ToBudgetResponse(budget), nil
 }
@@ -87,7 +85,7 @@ func (s *budgetService) UpdateBudget(ctx context.Context, userID, id uuid.UUID, 
 		return nil, err
 	}
 	if budget.UserID != userID {
-		return nil, errors.New("budget not found")
+		return nil, fmt.Errorf("budget %w", constant.ErrNotFound)
 	}
 
 	if req.Amount != nil {
@@ -109,7 +107,7 @@ func (s *budgetService) DeleteBudget(ctx context.Context, userID, id uuid.UUID) 
 		return err
 	}
 	if budget.UserID != userID {
-		return errors.New("budget not found")
+		return fmt.Errorf("budget %w", constant.ErrNotFound)
 	}
 	return s.budgetRepo.Delete(ctx, id)
 }

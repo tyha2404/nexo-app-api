@@ -1,19 +1,12 @@
 package model
 
 import (
-	"time"
-
 	"gorm.io/gorm"
 )
 
-// DeletedAt is a pointer to time.Time to handle soft deletes in GORM
+// DeletedAt enables GORM soft deletes: Delete sets deleted_at instead of removing
+// the row, and normal queries automatically add `deleted_at IS NULL`.
+// It is an alias (not a new type) so GORM recognises the soft-delete hooks.
+// Raw SQL, Joins strings and Unscoped queries are NOT filtered automatically.
 // swagger:model DeletedAt
-type DeletedAt *time.Time
-
-// GormDeletedAt is a helper function to convert DeletedAt to gorm.DeletedAt
-func GormDeletedAt(d DeletedAt) gorm.DeletedAt {
-	if d == nil {
-		return gorm.DeletedAt{}
-	}
-	return gorm.DeletedAt{Time: *d, Valid: true}
-}
+type DeletedAt = gorm.DeletedAt

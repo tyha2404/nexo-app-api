@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -136,6 +137,37 @@ type nineRouterService struct {
 	cacheExpiry    time.Time
 }
 
+// Upstream timeouts. Requests are always bound to the caller's context (the
+// HTTP request for /chat/stream), so a client disconnect cancels the upstream
+// call. The http.Client has no global Timeout because that would also cut
+// long streaming answers; instead each call kind gets its own deadline.
+const (
+	nineRouterDialTimeout           = 10 * time.Second
+	nineRouterTLSHandshakeTimeout   = 10 * time.Second
+	nineRouterResponseHeaderTimeout = 120 * time.Second // non-streaming tool-call completions return headers only when done
+	nineRouterListModelsTimeout     = 15 * time.Second
+	nineRouterEmbedTimeout          = 30 * time.Second
+	nineRouterCompletionTimeout     = 150 * time.Second
+	nineRouterStreamTimeout         = 5 * time.Minute
+)
+
+func newNineRouterTransport() *http.Transport {
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   nineRouterDialTimeout,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   nineRouterTLSHandshakeTimeout,
+		ResponseHeaderTimeout: nineRouterResponseHeaderTimeout,
+		ExpectContinueTimeout: 1 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConns:          20,
+		MaxIdleConnsPerHost:   10,
+		ForceAttemptHTTP2:     true,
+	}
+}
+
 func NewNineRouterService(cfg *config.Config, logger *zap.Logger) NineRouterService {
 	baseURL := cfg.NineRouterURL
 	baseURL = strings.TrimRight(baseURL, "/") + "/"
@@ -161,11 +193,16 @@ func NewNineRouterService(cfg *config.Config, logger *zap.Logger) NineRouterServ
 		model:          modelName,
 		embeddingModel: embeddingModel,
 		httpClient: &http.Client{
-			Timeout:   300 * time.Second,
-			Transport: httpclient.NewLoggingTransport("9Router-Gateway", logger),
+			Transport: newLoggingTransport(logger),
 		},
 		logger: logger,
 	}
+}
+
+func newLoggingTransport(logger *zap.Logger) http.RoundTripper {
+	lt := httpclient.NewLoggingTransport("9Router-Gateway", logger)
+	lt.Transport = newNineRouterTransport()
+	return lt
 }
 
 // NewRequestyService constructor alias
@@ -186,6 +223,9 @@ func (s *nineRouterService) ListModels(ctx context.Context) ([]string, error) {
 		return cached, nil
 	}
 	s.mu.RUnlock()
+
+	ctx, cancel := context.WithTimeout(ctx, nineRouterListModelsTimeout)
+	defer cancel()
 
 	url := s.baseURL + "models"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -228,9 +268,31 @@ func (s *nineRouterService) ListModels(ctx context.Context) ([]string, error) {
 	return result, nil
 }
 
+// isAllowedModel reports whether a client-requested model is one the server
+// offers: the configured NINE_ROUTER_MODEL or an ID returned by ListModels.
+// Arbitrary client strings are never forwarded upstream.
+func (s *nineRouterService) isAllowedModel(ctx context.Context, requestedModel string) bool {
+	if requestedModel == s.model {
+		return true
+	}
+	models, err := s.ListModels(ctx)
+	if err != nil {
+		return false
+	}
+	for _, m := range models {
+		if m == requestedModel {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *nineRouterService) resolveModel(ctx context.Context, requestedModel string) string {
 	if requestedModel != "" && requestedModel != "auto" && requestedModel != "default" {
-		return requestedModel
+		if s.isAllowedModel(ctx, requestedModel) {
+			return requestedModel
+		}
+		s.logger.Warn("ignoring model not offered by the server", zap.String("requested_model", requestedModel))
 	}
 	if s.model != "" && s.model != "auto" && s.model != "default" {
 		return s.model
@@ -270,6 +332,9 @@ func (s *nineRouterService) ChatCompletion(ctx context.Context, messages []NineR
 }
 
 func (s *nineRouterService) ChatCompletionWithModel(ctx context.Context, model string, messages []NineRouterMessage, tools []ToolDefinition) (*NineRouterChatResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, nineRouterCompletionTimeout)
+	defer cancel()
+
 	url := s.baseURL + "chat/completions"
 	effectiveModel := s.resolveModel(ctx, model)
 
@@ -329,6 +394,9 @@ func (s *nineRouterService) StreamChatCompletions(ctx context.Context, messages 
 }
 
 func (s *nineRouterService) StreamChatCompletionsWithModel(ctx context.Context, model string, messages []NineRouterMessage, onChunk func(delta string) error) error {
+	ctx, cancel := context.WithTimeout(ctx, nineRouterStreamTimeout)
+	defer cancel()
+
 	url := s.baseURL + "chat/completions"
 	effectiveModel := s.resolveModel(ctx, model)
 
@@ -373,6 +441,7 @@ func (s *nineRouterService) StreamChatCompletionsWithModel(ctx context.Context, 
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
@@ -402,6 +471,9 @@ func (s *nineRouterService) StreamChatCompletionsWithModel(ctx context.Context, 
 }
 
 func (s *nineRouterService) EmbedText(ctx context.Context, text string) ([]float32, error) {
+	ctx, cancel := context.WithTimeout(ctx, nineRouterEmbedTimeout)
+	defer cancel()
+
 	url := s.baseURL + "embeddings"
 	embedReq := NineRouterEmbedRequest{
 		Model: s.embeddingModel,

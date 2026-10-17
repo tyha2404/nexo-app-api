@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -94,7 +95,7 @@ func GetFinancialToolDefinitions() []ToolDefinition {
 						},
 						"walletName": map[string]interface{}{
 							"type":        "string",
-							"description": "Tên ví/tài khoản sử dụng (ví dụ: 'Tiền mặt', 'Techcombank', 'MoMo', 'Vietcombank'). Nếu người dùng không nhắc đến ví, hãy để trống để dùng ví mặc định.",
+							"description": "Tên ví/tài khoản sử dụng (ví dụ: 'Tiền mặt', 'Techcombank', 'MoMo', 'Vietcombank'). Nếu người dùng không nhắc đến ví, hãy để trống: hệ thống sẽ trả về danh sách ví để bạn hỏi lại người dùng (trừ khi chỉ có một ví).",
 						},
 						"description": map[string]interface{}{
 							"type":        "string",
@@ -447,7 +448,7 @@ func (s *chatService) executeFinancialTool(ctx context.Context, userID uuid.UUID
 	default:
 		return &FinancialToolResult{
 			ToolTitle:  fmt.Sprintf("Thực thi công cụ %s...", name),
-			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy công cụ %s"}`, name),
+			ResultJSON: toolErrorJSON(fmt.Sprintf("Không tìm thấy công cụ %s", name)),
 		}, nil
 	}
 }
@@ -563,11 +564,11 @@ func (s *chatService) toolListRecentTransactions(ctx context.Context, userID uui
 }
 
 func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
-	amount, _ := args["amount"].(float64)
-	if amount <= 0 {
+	amount, ok := toolPositiveAmount(args, "amount")
+	if !ok {
 		return &FinancialToolResult{
 			ToolTitle:  "Đang ghi nhận giao dịch mới...",
-			ResultJSON: `{"error": "Số tiền giao dịch (amount) phải lớn hơn 0"}`,
+			ResultJSON: toolErrorJSON("Số tiền giao dịch (amount) phải là số lớn hơn 0"),
 		}, nil
 	}
 
@@ -581,14 +582,34 @@ func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUI
 	description, _ := args["description"].(string)
 	txnDateStr, _ := args["transactionDate"].(string)
 
-	txnDate := time.Now()
+	txnDate := util.StartOfDay(util.Now())
 	if txnDateStr != "" {
 		if parsed, err := time.Parse("2006-01-02", txnDateStr); err == nil {
 			txnDate = parsed
 		}
 	}
 
-	// 1. Resolve Category: Find existing or automatically create new category if not matched
+	// 1. Resolve Wallet first (before any category is auto-created): exact name, then unique partial match. Never guess:
+	// a wrong wallet silently corrupts balances, so ask the user instead.
+	wallets, err := s.walletRepo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var targetWalletID *uuid.UUID
+	var targetWalletName string
+	if len(wallets) > 0 {
+		matched, matchErr := matchWalletByName(wallets, walletName)
+		if matchErr != nil {
+			return &FinancialToolResult{
+				ToolTitle:  "Cần xác nhận ví giao dịch",
+				ResultJSON: toolErrorJSON(matchErr.Error()),
+			}, nil
+		}
+		targetWalletID = &matched.ID
+		targetWalletName = matched.Name
+	}
+
+	// 2. Resolve Category: Find existing or automatically create new category if not matched
 	categories, err := s.categoryRepo.List(ctx, userID, txnTypeStr, 100, 0)
 	if err != nil {
 		return nil, err
@@ -597,12 +618,7 @@ func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUI
 	var targetCategory *model.Category
 	var isNewCategoryCreated bool
 	if categoryName != "" {
-		for i := range categories {
-			if strings.EqualFold(categories[i].Name, categoryName) || strings.Contains(strings.ToLower(categories[i].Name), strings.ToLower(categoryName)) {
-				targetCategory = &categories[i]
-				break
-			}
-		}
+		targetCategory = matchCategoryByName(categories, categoryName)
 
 		// If user specified a category name but none matched, create it dynamically
 		if targetCategory == nil {
@@ -635,27 +651,6 @@ func (s *chatService) toolCreateTransaction(ctx context.Context, userID uuid.UUI
 			targetCategory = newCat
 			isNewCategoryCreated = true
 		}
-	}
-
-	// 2. Resolve Wallet
-	wallets, _ := s.walletRepo.ListByUserID(ctx, userID)
-	var targetWalletID *uuid.UUID
-	var targetWalletName string
-	if len(wallets) > 0 {
-		var matched *model.Wallet
-		if walletName != "" {
-			for i := range wallets {
-				if strings.EqualFold(wallets[i].Name, walletName) || strings.Contains(strings.ToLower(wallets[i].Name), strings.ToLower(walletName)) {
-					matched = &wallets[i]
-					break
-				}
-			}
-		}
-		if matched == nil {
-			matched = &wallets[0]
-		}
-		targetWalletID = &matched.ID
-		targetWalletName = matched.Name
 	}
 
 	if description == "" {
@@ -802,7 +797,7 @@ func (s *chatService) toolCreateCategory(ctx context.Context, userID uuid.UUID, 
 		s.logger.Error("failed to create category from AI tool", zap.Error(err))
 		return &FinancialToolResult{
 			ToolTitle:  "Tạo danh mục mới thất bại",
-			ResultJSON: fmt.Sprintf(`{"error": "Không thể tạo danh mục: %s"}`, err.Error()),
+			ResultJSON: toolErrorJSON(fmt.Sprintf("Không thể tạo danh mục: %s", err.Error())),
 		}, nil
 	}
 
@@ -862,23 +857,20 @@ func (s *chatService) toolGetBudgetStatus(ctx context.Context, userID uuid.UUID,
 	var items []BudgetStatusItem
 	var exceededCategories []string
 
+	// One SQL aggregation for all categories (same expense definition as
+	// reports and targets) instead of loading each category's rows.
+	spentByCategory := map[uuid.UUID]float64{}
+	breakdown, err := s.reportService.GetCategoryBreakdown(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range breakdown.Items {
+		spentByCategory[item.CategoryID] = item.TotalAmount
+	}
+
 	for _, b := range budgets {
 		catName := b.CategoryName
-
-		// Calculate spent in category for date range
-		filters := map[string]interface{}{
-			"type":       string(model.TransactionTypeExpense),
-			"categoryId": b.CategoryID.String(),
-			"startDate":  startDate,
-			"endDate":    endDate,
-		}
-		txns, _, err := s.transactionRepo.ListByUserID(ctx, userID, 1000, 0, filters)
-		var spent float64
-		if err == nil {
-			for _, t := range txns {
-				spent += t.Amount
-			}
-		}
+		spent := spentByCategory[b.CategoryID]
 
 		remaining := b.Amount - spent
 		percent := 0.0
@@ -990,39 +982,54 @@ func (s *chatService) toolGetSpendingByCategory(ctx context.Context, userID uuid
 }
 
 func (s *chatService) toolTransferBetweenWallets(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
-	amount, _ := args["amount"].(float64)
-	if amount <= 0 {
+	amount, ok := toolPositiveAmount(args, "amount")
+	if !ok {
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi tham số chuyển tiền",
-			ResultJSON: `{"error": "Số tiền chuyển phải lớn hơn 0"}`,
+			ResultJSON: toolErrorJSON("Số tiền chuyển phải là số lớn hơn 0"),
+		}, nil
+	}
+	fee, ok := toolNonNegativeAmount(args, "fee")
+	if !ok {
+		return &FinancialToolResult{
+			ToolTitle:  "Lỗi tham số chuyển tiền",
+			ResultJSON: toolErrorJSON("Phí chuyển khoản (fee) phải là số không âm"),
 		}, nil
 	}
 
 	fromName, _ := args["fromWalletName"].(string)
 	toName, _ := args["toWalletName"].(string)
 	notes, _ := args["notes"].(string)
-	fee, _ := args["fee"].(float64)
 
 	wallets, err := s.walletRepo.ListByUserID(ctx, userID)
 	if err != nil || len(wallets) == 0 {
 		return nil, fmt.Errorf("không tìm thấy danh sách ví của bạn")
 	}
 
-	var fromWallet, toWallet *model.Wallet
-	for i := range wallets {
-		w := &wallets[i]
-		if fromWallet == nil && fromName != "" && (strings.EqualFold(w.Name, fromName) || strings.Contains(strings.ToLower(w.Name), strings.ToLower(fromName))) {
-			fromWallet = w
-		}
-		if toWallet == nil && toName != "" && (strings.EqualFold(w.Name, toName) || strings.Contains(strings.ToLower(w.Name), strings.ToLower(toName))) {
-			toWallet = w
-		}
-	}
-
-	if fromWallet == nil || toWallet == nil {
+	if strings.TrimSpace(fromName) == "" || strings.TrimSpace(toName) == "" {
 		return &FinancialToolResult{
 			ToolTitle:  "Chuyển tiền nội bộ",
-			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy ví nguồn '%s' hoặc ví đích '%s' trong hệ thống."}`, fromName, toName),
+			ResultJSON: toolErrorJSON(fmt.Sprintf("Cần nêu rõ cả ví nguồn và ví đích. Các ví hiện có: %s.", strings.Join(walletNames(wallets), ", "))),
+		}, nil
+	}
+	fromWallet, fromErr := matchWalletByName(wallets, fromName)
+	if fromErr != nil {
+		return &FinancialToolResult{
+			ToolTitle:  "Chuyển tiền nội bộ",
+			ResultJSON: toolErrorJSON("Ví nguồn: " + fromErr.Error()),
+		}, nil
+	}
+	toWallet, toErr := matchWalletByName(wallets, toName)
+	if toErr != nil {
+		return &FinancialToolResult{
+			ToolTitle:  "Chuyển tiền nội bộ",
+			ResultJSON: toolErrorJSON("Ví đích: " + toErr.Error()),
+		}, nil
+	}
+	if fromWallet.ID == toWallet.ID {
+		return &FinancialToolResult{
+			ToolTitle:  "Chuyển tiền nội bộ",
+			ResultJSON: toolErrorJSON("Ví nguồn và ví đích phải khác nhau"),
 		}, nil
 	}
 
@@ -1043,7 +1050,7 @@ func (s *chatService) toolTransferBetweenWallets(ctx context.Context, userID uui
 	if err != nil {
 		return &FinancialToolResult{
 			ToolTitle:  "Chuyển tiền nội bộ thất bại",
-			ResultJSON: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
+			ResultJSON: toolErrorJSON(err.Error()),
 		}, nil
 	}
 
@@ -1064,15 +1071,15 @@ func (s *chatService) toolTransferBetweenWallets(ctx context.Context, userID uui
 
 func (s *chatService) toolCreateDebt(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
 	title, _ := args["title"].(string)
-	amount, _ := args["totalAmount"].(float64)
+	amount, amountOK := toolPositiveAmount(args, "totalAmount")
 	typeStr, _ := args["type"].(string)
 	notes, _ := args["notes"].(string)
 	dueDateStr, _ := args["dueDate"].(string)
 
-	if title == "" || amount <= 0 {
+	if strings.TrimSpace(title) == "" || !amountOK {
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi tham số khoản nợ",
-			ResultJSON: `{"error": "Cần cung cấp tên khoản nợ và số tiền lớn hơn 0"}`,
+			ResultJSON: toolErrorJSON("Cần cung cấp tên khoản nợ và số tiền lớn hơn 0"),
 		}, nil
 	}
 
@@ -1123,13 +1130,13 @@ func (s *chatService) toolCreateDebt(ctx context.Context, userID uuid.UUID, args
 
 func (s *chatService) toolRecordDebtRepayment(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
 	debtTitle, _ := args["debtTitle"].(string)
-	amount, _ := args["amount"].(float64)
+	amount, amountOK := toolPositiveAmount(args, "amount")
 	notes, _ := args["notes"].(string)
 
-	if debtTitle == "" || amount <= 0 {
+	if strings.TrimSpace(debtTitle) == "" || !amountOK {
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi tham số trả nợ",
-			ResultJSON: `{"error": "Cần cung cấp tên khoản nợ và số tiền trả nợ"}`,
+			ResultJSON: toolErrorJSON("Cần cung cấp tên khoản nợ và số tiền trả nợ lớn hơn 0"),
 		}, nil
 	}
 
@@ -1141,19 +1148,12 @@ func (s *chatService) toolRecordDebtRepayment(ctx context.Context, userID uuid.U
 		}, nil
 	}
 
-	var matchedDebt *dto.DebtResponse
-	for i := range debts {
-		d := &debts[i]
-		if strings.Contains(strings.ToLower(d.Title), strings.ToLower(debtTitle)) || strings.Contains(strings.ToLower(debtTitle), strings.ToLower(d.Title)) {
-			matchedDebt = d
-			break
-		}
-	}
+	matchedDebt := matchDebtByTitle(debts, debtTitle)
 
 	if matchedDebt == nil {
 		return &FinancialToolResult{
 			ToolTitle:  "Ghi nhận trả nợ",
-			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy khoản nợ khớp với '%s'"}`, debtTitle),
+			ResultJSON: toolErrorJSON(fmt.Sprintf("Không tìm thấy khoản nợ khớp với '%s'", debtTitle)),
 		}, nil
 	}
 
@@ -1184,13 +1184,13 @@ func (s *chatService) toolRecordDebtRepayment(ctx context.Context, userID uuid.U
 
 func (s *chatService) toolSetBudget(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
 	categoryName, _ := args["categoryName"].(string)
-	amount, _ := args["amount"].(float64)
+	amount, amountOK := toolPositiveAmount(args, "amount")
 	periodStartStr, _ := args["periodStart"].(string)
 
-	if categoryName == "" || amount <= 0 {
+	if strings.TrimSpace(categoryName) == "" || !amountOK {
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi đặt hạn mức ngân sách",
-			ResultJSON: `{"error": "Cần cung cấp tên danh mục và hạn mức ngân sách hợp lệ"}`,
+			ResultJSON: toolErrorJSON("Cần cung cấp tên danh mục và hạn mức ngân sách lớn hơn 0"),
 		}, nil
 	}
 
@@ -1199,23 +1199,16 @@ func (s *chatService) toolSetBudget(ctx context.Context, userID uuid.UUID, args 
 		return nil, fmt.Errorf("không tìm thấy danh mục nào")
 	}
 
-	var targetCategory *model.Category
-	for i := range categories {
-		c := &categories[i]
-		if strings.EqualFold(c.Name, categoryName) || strings.Contains(strings.ToLower(c.Name), strings.ToLower(categoryName)) {
-			targetCategory = c
-			break
-		}
-	}
+	targetCategory := matchCategoryByName(categories, categoryName)
 
 	if targetCategory == nil {
 		return &FinancialToolResult{
 			ToolTitle:  "Đặt ngân sách",
-			ResultJSON: fmt.Sprintf(`{"error": "Không tìm thấy danh mục '%s' trong hệ thống của bạn"}`, categoryName),
+			ResultJSON: toolErrorJSON(fmt.Sprintf("Không tìm thấy danh mục '%s' trong hệ thống của bạn", categoryName)),
 		}, nil
 	}
 
-	periodStart := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
+	periodStart, _ := util.MonthRange(util.Now())
 	if periodStartStr != "" {
 		if t, err := time.Parse("2006-01-02", periodStartStr); err == nil {
 			periodStart = t
@@ -1253,7 +1246,7 @@ func (s *chatService) toolCompareFinancialPeriods(ctx context.Context, userID uu
 	m1, _ := args["firstMonth"].(string)
 	m2, _ := args["secondMonth"].(string)
 
-	now := time.Now()
+	now := util.Now()
 	if m1 == "" {
 		m1 = now.AddDate(0, -1, 0).Format("2006-01")
 	}
@@ -1300,7 +1293,7 @@ func (s *chatService) toolCompareFinancialPeriods(ctx context.Context, userID uu
 }
 
 func (s *chatService) toolGetFinancialTargets(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
-	now := time.Now()
+	now := util.Now()
 	month := int(now.Month())
 	year := now.Year()
 
@@ -1333,12 +1326,12 @@ func (s *chatService) toolGetFinancialTargets(ctx context.Context, userID uuid.U
 
 func (s *chatService) toolSetFinancialTarget(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
 	targetType, _ := args["targetType"].(string)
-	amount, _ := args["targetAmount"].(float64)
+	amount, amountOK := toolPositiveAmount(args, "targetAmount")
 
-	if targetType == "" || amount <= 0 {
+	if targetType == "" || !amountOK {
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi thiết lập mục tiêu",
-			ResultJSON: `{"error": "Cần cung cấp loại mục tiêu (EXPENSE/INVESTMENT) và số tiền lớn hơn 0"}`,
+			ResultJSON: toolErrorJSON("Cần cung cấp loại mục tiêu (EXPENSE/INVESTMENT) và số tiền lớn hơn 0"),
 		}, nil
 	}
 
@@ -1349,7 +1342,7 @@ func (s *chatService) toolSetFinancialTarget(ctx context.Context, userID uuid.UU
 		targetType = "INVESTMENT"
 	}
 
-	now := time.Now()
+	now := util.Now()
 	month := int(now.Month())
 	year := now.Year()
 
@@ -1405,11 +1398,11 @@ func (s *chatService) toolSetFinancialTarget(ctx context.Context, userID uuid.UU
 }
 
 func resolveDateRange(args map[string]interface{}) (startDate, endDate string) {
-	now := time.Now()
+	now := util.Now()
 	if m, ok := args["month"].(string); ok && m != "" {
 		if t, err := time.Parse("2006-01", m); err == nil {
-			start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.Local)
-			end := start.AddDate(0, 1, -1)
+			start, next := util.MonthRangeOf(t.Year(), t.Month())
+			end := next.AddDate(0, 0, -1)
 			return start.Format("2006-01-02"), end.Format("2006-01-02")
 		}
 	}
@@ -1417,8 +1410,9 @@ func resolveDateRange(args map[string]interface{}) (startDate, endDate string) {
 	if sd, ok := args["startDate"].(string); ok && sd != "" {
 		startDate = sd
 	} else {
-		// Default to first day of current month
-		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Format("2006-01-02")
+		// Default to first day of current month (app timezone)
+		monthStart, _ := util.MonthRange(now)
+		startDate = monthStart.Format("2006-01-02")
 	}
 
 	if ed, ok := args["endDate"].(string); ok && ed != "" {

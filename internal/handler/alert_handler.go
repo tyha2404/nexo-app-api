@@ -3,40 +3,36 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
+	"go.uber.org/zap"
 )
 
 type AlertHandler struct {
-	svc service.AlertService
+	svc          service.AlertService
+	errorHandler *ErrorHandler
 }
 
-func NewAlertHandler(svc service.AlertService) *AlertHandler {
-	return &AlertHandler{svc: svc}
+func NewAlertHandler(svc service.AlertService, log *zap.Logger) *AlertHandler {
+	return &AlertHandler{svc: svc, errorHandler: NewErrorHandler(log)}
 }
 
 func (h *AlertHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
+	page, limit := ParsePagination(r)
 
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit < 1 {
-		limit = 10
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "list_alerts")
+		return
 	}
-
-	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
+	userID := user.ID
 	items, total, err := h.svc.ListAlerts(r.Context(), userID, page, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to list alerts", "list_alerts")
 		return
 	}
 
@@ -54,13 +50,22 @@ func (h *AlertHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *AlertHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid ID format", http.StatusBadRequest)
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "delete_alert")
 		return
 	}
 
-	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "delete_alert")
+		return
+	}
+	userID := user.ID
 	if err := h.svc.DeleteAlert(r.Context(), userID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Alert not found", "delete_alert")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to delete alert", "delete_alert")
 		return
 	}
 

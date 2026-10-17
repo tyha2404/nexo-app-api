@@ -16,11 +16,11 @@ const (
 
 type MonthlyTarget struct {
 	ID           uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
-	UserID       uuid.UUID  `gorm:"type:uuid;not null;index:idx_user_target_month_type,unique" json:"userId"`
-	TargetType   TargetType `gorm:"type:varchar(20);not null;index:idx_user_target_month_type,unique" json:"targetType"`
+	UserID       uuid.UUID  `gorm:"type:uuid;not null;index:idx_user_target_month_type,unique,where:deleted_at IS NULL" json:"userId"`
+	TargetType   TargetType `gorm:"type:varchar(20);not null;index:idx_user_target_month_type,unique,where:deleted_at IS NULL" json:"targetType"`
 	TargetAmount float64    `gorm:"type:numeric(12,2);not null" json:"targetAmount"`
-	Month        int        `gorm:"not null;index:idx_user_target_month_type,unique" json:"month"`
-	Year         int        `gorm:"not null;index:idx_user_target_month_type,unique" json:"year"`
+	Month        int        `gorm:"not null;index:idx_user_target_month_type,unique,where:deleted_at IS NULL" json:"month"`
+	Year         int        `gorm:"not null;index:idx_user_target_month_type,unique,where:deleted_at IS NULL" json:"year"`
 	CreatedAt    time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt    time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
 	DeletedAt    DeletedAt  `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`

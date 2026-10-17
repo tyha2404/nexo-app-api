@@ -3,6 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
+	_ "time/tzdata" // embed the tz database so APP_TIMEZONE works on hosts without zoneinfo
 
 	"github.com/joho/godotenv"
 )
@@ -24,6 +27,46 @@ type Config struct {
 	NineRouterEmbeddingModel string
 	SupabaseURL              string
 	SupabaseJWKSURL          string
+	// CORSAllowedOrigins is the browser-origin allowlist (CORS_ALLOWED_ORIGINS,
+	// comma-separated). Production calls are same-origin through the nexo-web
+	// proxy, so this mostly matters for local development.
+	CORSAllowedOrigins []string
+	// AppTimezone is the IANA zone used for "today"/"this month" (APP_TIMEZONE).
+	AppTimezone string
+	// Web Push (VAPID). Push is disabled when either key is empty.
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDSubject    string
+}
+
+// PushEnabled reports whether both VAPID keys are configured.
+func (c *Config) PushEnabled() bool {
+	return c != nil && c.VAPIDPublicKey != "" && c.VAPIDPrivateKey != ""
+}
+
+// DefaultVAPIDSubject is used when VAPID_SUBJECT is unset. Apple rejects
+// localhost subjects, so production should set a real mailto: or https URL.
+const DefaultVAPIDSubject = "mailto:admin@example.com"
+
+// DefaultCORSAllowedOrigins are used when CORS_ALLOWED_ORIGINS is unset: the
+// Vite dev server. In production nexo-web's server.cjs serves the app and
+// proxies /api on the same origin, so no cross-origin entry is needed.
+const DefaultCORSAllowedOrigins = "http://localhost:5173,http://127.0.0.1:5173"
+
+// DefaultAppTimezone is the timezone of the app's users (Vietnam).
+const DefaultAppTimezone = "Asia/Ho_Chi_Minh"
+
+// ParseOrigins splits a comma-separated origin list, trimming blanks and
+// trailing slashes.
+func ParseOrigins(raw string) []string {
+	var origins []string
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
 }
 
 func LoadConfig() (*Config, error) {
@@ -66,6 +109,15 @@ func LoadConfig() (*Config, error) {
 		NineRouterEmbeddingModel: nineRouterEmbeddingModel,
 		SupabaseURL:              getEnv("SUPABASE_URL", ""),
 		SupabaseJWKSURL:          getEnv("SUPABASE_JWKS_URL", ""),
+		CORSAllowedOrigins:       ParseOrigins(getEnv("CORS_ALLOWED_ORIGINS", DefaultCORSAllowedOrigins)),
+		AppTimezone:              getEnv("APP_TIMEZONE", DefaultAppTimezone),
+		VAPIDPublicKey:           strings.TrimSpace(getEnv("VAPID_PUBLIC_KEY", "")),
+		VAPIDPrivateKey:          strings.TrimSpace(getEnv("VAPID_PRIVATE_KEY", "")),
+		VAPIDSubject:             strings.TrimSpace(getEnv("VAPID_SUBJECT", DefaultVAPIDSubject)),
+	}
+
+	if _, err := time.LoadLocation(c.AppTimezone); err != nil {
+		return nil, fmt.Errorf("APP_TIMEZONE %q is not a valid IANA timezone: %w", c.AppTimezone, err)
 	}
 
 	if c.SupabaseURL != "" && c.SupabaseJWKSURL == "" {

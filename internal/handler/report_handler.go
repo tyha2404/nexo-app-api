@@ -6,23 +6,29 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
+	"github.com/tyha2404/nexo-app-api/internal/util"
+	"go.uber.org/zap"
 )
 
 type ReportHandler struct {
-	svc service.ReportService
+	svc          service.ReportService
+	errorHandler *ErrorHandler
 }
 
-func NewReportHandler(svc service.ReportService) *ReportHandler {
-	return &ReportHandler{svc: svc}
+func NewReportHandler(svc service.ReportService, log *zap.Logger) *ReportHandler {
+	return &ReportHandler{svc: svc, errorHandler: NewErrorHandler(log)}
 }
 
 func (h *ReportHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_summary")
+		return
+	}
+	userID := user.ID
 
 	startDate := r.URL.Query().Get("startDate")
 	endDate := r.URL.Query().Get("endDate")
@@ -35,7 +41,7 @@ func (h *ReportHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.svc.GetSummary(r.Context(), userID, startDate, endDate)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get summary", "get_summary")
 		return
 	}
 
@@ -48,7 +54,12 @@ func (h *ReportHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReportHandler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_category_breakdown")
+		return
+	}
+	userID := user.ID
 
 	startDate := r.URL.Query().Get("startDate")
 	endDate := r.URL.Query().Get("endDate")
@@ -60,7 +71,7 @@ func (h *ReportHandler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Requ
 
 	res, err := h.svc.GetCategoryBreakdown(r.Context(), userID, startDate, endDate)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get category breakdown", "get_category_breakdown")
 		return
 	}
 
@@ -80,11 +91,17 @@ func (h *ReportHandler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Requ
 // @Produce json
 // @Param months query int false "Number of months (default: 12)"
 // @Security BearerAuth
-// @Success 200 {object} response.BaseResponse[dto.MonthlyTrendReport]
-// @Failure 500 {string} string
+// @Success 200 {object} MonthlyTrendResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /reports/monthly-trend [get]
 func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(constant.UserContextKey).(model.User).ID
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_monthly_trend")
+		return
+	}
+	userID := user.ID
 
 	monthsStr := r.URL.Query().Get("months")
 	months := 12
@@ -96,7 +113,7 @@ func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) 
 
 	res, err := h.svc.GetMonthlyTrend(r.Context(), userID, months)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get monthly trend", "get_monthly_trend")
 		return
 	}
 
@@ -109,7 +126,7 @@ func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) 
 }
 
 func parseRange(rangeParam string) (string, string) {
-	now := time.Now()
+	now := util.Now()
 	var start, end time.Time
 
 	switch rangeParam {
@@ -132,4 +149,11 @@ func parseRange(rangeParam string) (string, string) {
 	}
 
 	return start.Format("2006-01-02"), end.Format("2006-01-02")
+}
+
+// MonthlyTrendResponse describes the report envelope for Swagger.
+type MonthlyTrendResponse struct {
+	Status  int                    `json:"status"`
+	Success bool                   `json:"success"`
+	Data    dto.MonthlyTrendReport `json:"data"`
 }

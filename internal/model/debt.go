@@ -65,3 +65,24 @@ func (r *Repayment) BeforeCreate(tx *gorm.DB) (err error) {
 	}
 	return err
 }
+
+// Wallet effects of debts (single source of truth for create, repay and delete):
+//   - PAYABLE (I borrow):     creation +total to wallet, repayment -amount.
+//   - RECEIVABLE (I lend):    creation -total from wallet, repayment +amount.
+// Deleting a debt reverses the creation effect and every repayment effect.
+
+// DebtCreationWalletDelta is the balance change applied to the debt's wallet on creation.
+func DebtCreationWalletDelta(t DebtType, totalAmount float64) float64 {
+	switch t {
+	case DebtTypePayable:
+		return totalAmount
+	case DebtTypeReceivable:
+		return -totalAmount
+	}
+	return 0
+}
+
+// DebtRepaymentWalletDelta is the balance change applied to the repayment's wallet.
+func DebtRepaymentWalletDelta(t DebtType, amount float64) float64 {
+	return -DebtCreationWalletDelta(t, amount)
+}

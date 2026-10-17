@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tyha2404/nexo-app-api/internal/config"
@@ -108,6 +109,13 @@ func TestNineRouterService_ListModels(t *testing.T) {
 func TestNineRouterService_ChatCompletionWithDynamicModel(t *testing.T) {
 	var capturedModel string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			_ = json.NewEncoder(w).Encode(service.NineRouterModelsResponse{
+				Object: "list",
+				Data:   []service.NineRouterModelItem{{ID: "gemini-2.5-flash"}, {ID: "llama-3.3-70b-versatile"}},
+			})
+			return
+		}
 		var req service.NineRouterChatRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		capturedModel = req.Model
@@ -130,4 +138,66 @@ func TestNineRouterService_ChatCompletionWithDynamicModel(t *testing.T) {
 	}, nil)
 
 	assert.Equal(t, "llama-3.3-70b-versatile", capturedModel)
+}
+
+func TestNineRouterService_IgnoresModelNotOfferedByServer(t *testing.T) {
+	var capturedModel string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			_ = json.NewEncoder(w).Encode(service.NineRouterModelsResponse{
+				Object: "list",
+				Data:   []service.NineRouterModelItem{{ID: "gemini-2.5-flash"}},
+			})
+			return
+		}
+		var req service.NineRouterChatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		capturedModel = req.Model
+		_ = json.NewEncoder(w).Encode(service.NineRouterChatResponse{})
+	}))
+	defer server.Close()
+
+	svc := service.NewNineRouterService(&config.Config{
+		NineRouterURL:   server.URL + "/v1/",
+		NineRouterModel: "gemini-2.5-flash",
+	}, zap.NewNop())
+
+	_, _ = svc.ChatCompletionWithModel(context.Background(), "gpt-4o-expensive-unlisted", []service.NineRouterMessage{
+		{Role: "user", Content: "Test"},
+	}, nil)
+
+	assert.Equal(t, "gemini-2.5-flash", capturedModel, "arbitrary client model must not be forwarded upstream")
+}
+
+func TestNineRouterService_StreamCancelledWithContext(t *testing.T) {
+	started := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n"))
+		w.(http.Flusher).Flush()
+		close(started)
+		<-r.Context().Done() // hang until the client goes away
+	}))
+	defer server.Close()
+
+	svc := service.NewNineRouterService(&config.Config{
+		NineRouterURL:   server.URL + "/v1/",
+		NineRouterModel: "gemini-2.5-flash",
+	}, zap.NewNop())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- svc.StreamChatCompletionsWithModel(ctx, "", []service.NineRouterMessage{{Role: "user", Content: "hi"}}, func(string) error { return nil })
+	}()
+
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		assert.Error(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream did not stop after context cancellation")
+	}
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -9,7 +10,42 @@ import (
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/response"
+	"gorm.io/gorm"
 )
+
+const (
+	// DefaultPageLimit is the page size used when the client sends no (or an invalid) limit.
+	DefaultPageLimit = 10
+	// MaxPageLimit caps the page size a client may request. nexo-web asks for at most 50.
+	MaxPageLimit = 100
+)
+
+// ParsePagination reads `page` and `limit` from the query string.
+// page defaults to 1 (minimum 1); limit defaults to DefaultPageLimit and is
+// clamped to [1, MaxPageLimit]. Non-numeric values fall back to the defaults.
+func ParsePagination(r *http.Request) (page, limit int) {
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err = strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit < 1 {
+		limit = DefaultPageLimit
+	}
+	if limit > MaxPageLimit {
+		limit = MaxPageLimit
+	}
+
+	return page, limit
+}
+
+// IsNotFoundError reports whether err means the requested record does not
+// exist (or does not belong to the caller, which is reported the same way).
+func IsNotFoundError(err error) bool {
+	return errors.Is(err, constant.ErrNotFound) || errors.Is(err, gorm.ErrRecordNotFound)
+}
 
 // GetUserFromContext extracts the authenticated user from the request context
 func GetUserFromContext(r *http.Request) (*model.User, error) {
@@ -123,7 +159,7 @@ func IsAuthenticated(r *http.Request) bool {
 func RequireAuthentication(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !IsAuthenticated(r) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			response.SendError(w, http.StatusUnauthorized, "Unauthorized", constant.ErrUnauthorized)
 			return
 		}
 		next(w, r)

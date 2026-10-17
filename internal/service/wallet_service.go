@@ -3,19 +3,46 @@ package service
 import (
 	"context"
 	"errors"
-	"time"
+	"fmt"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
+	"math"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 var (
 	ErrWalletNotFound      = errors.New("wallet not found")
 	ErrSameWalletTransfer  = errors.New("fromWalletId and toWalletId cannot be the same")
-	ErrInsufficientBalance = errors.New("insufficient balance in source wallet")
+	ErrInsufficientBalance = constant.ErrInsufficientBalance
+	ErrInvalidTransfer     = fmt.Errorf("transfer amount must be > 0 and fee must not be negative: %w", constant.ErrInvalidInput)
+	// ErrAllocationPercentExceeded: a user's wallets may allocate at most 100% in total.
+	ErrAllocationPercentExceeded = repository.ErrAllocationPercentExceeded
+	ErrInvalidAllocationPercent  = fmt.Errorf("allocationPercent must be between 0 and 100: %w", constant.ErrInvalidInput)
 )
+
+// validateAllocationPercent rejects a wallet allocation that would push the
+// total of the user's wallets above 100%. excludeWalletID is the wallet being
+// updated (its current percent is replaced by percent).
+func (s *walletService) validateAllocationPercent(ctx context.Context, userID uuid.UUID, excludeWalletID *uuid.UUID, percent float64) error {
+	if percent < 0 || percent > 100 || math.IsNaN(percent) {
+		return ErrInvalidAllocationPercent
+	}
+	if percent == 0 {
+		return nil
+	}
+	others, err := s.repo.SumAllocationPercent(ctx, userID, excludeWalletID)
+	if err != nil {
+		return err
+	}
+	if others+percent > 100.0001 {
+		return ErrAllocationPercentExceeded
+	}
+	return nil
+}
 
 type WalletService interface {
 	CreateWallet(ctx context.Context, userID uuid.UUID, req dto.CreateWalletRequest) (*dto.WalletResponse, error)
@@ -43,6 +70,9 @@ func (s *walletService) CreateWallet(ctx context.Context, userID uuid.UUID, req 
 	isIncluded := true
 	if req.IsIncludedInTotal != nil {
 		isIncluded = *req.IsIncludedInTotal
+	}
+	if err := s.validateAllocationPercent(ctx, userID, nil, req.AllocationPercent); err != nil {
+		return nil, err
 	}
 
 	wallet := &model.Wallet{
@@ -115,6 +145,9 @@ func (s *walletService) UpdateWallet(ctx context.Context, userID uuid.UUID, id u
 		wallet.JarCategory = req.JarCategory
 	}
 	if req.AllocationPercent != nil {
+		if err := s.validateAllocationPercent(ctx, userID, &wallet.ID, *req.AllocationPercent); err != nil {
+			return nil, err
+		}
 		wallet.AllocationPercent = *req.AllocationPercent
 	}
 	if req.IsIncludedInTotal != nil {
@@ -139,7 +172,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, userID uuid.UUID, id u
 		wallet.PreviousBalance = req.PreviousBalance
 	}
 
-	if err := s.repo.Update(ctx, wallet); err != nil {
+	if err := s.repo.Update(ctx, wallet, req.Balance != nil); err != nil {
 		return nil, err
 	}
 
@@ -162,8 +195,12 @@ func (s *walletService) TransferMoney(ctx context.Context, userID uuid.UUID, req
 	if req.FromWalletID == req.ToWalletID {
 		return nil, ErrSameWalletTransfer
 	}
+	// Enforced here too, not only by DTO validation (other callers, e.g. AI tools).
+	if req.Fee < 0 || req.Amount <= 0 || math.IsNaN(req.Fee) || math.IsNaN(req.Amount) {
+		return nil, ErrInvalidTransfer
+	}
 
-	transferDate := time.Now()
+	transferDate := util.Now()
 	if req.TransferDate != nil && !req.TransferDate.IsZero() {
 		transferDate = req.TransferDate.Time
 	}

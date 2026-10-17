@@ -17,7 +17,10 @@ type User struct {
 	Role      string    `gorm:"type:varchar(20);default:'user';not null" json:"role"`
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt,omitempty"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt,omitempty"`
-	DeletedAt DeletedAt `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
+	// Users intentionally stay HARD-delete (plain *time.Time, not gorm.DeletedAt):
+	// deleting a user must cascade to all owned rows via FK ON DELETE CASCADE, and
+	// the Supabase sync trigger re-inserts by id / unique email.
+	DeletedAt *time.Time `gorm:"index" json:"deletedAt,omitempty" swaggertype:"string"`
 }
 
 // BeforeCreate GORM Hook to generate UUID v7

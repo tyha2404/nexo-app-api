@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 )
 
@@ -134,7 +135,7 @@ func TestAddRepayment_WithWallet_Receivable(t *testing.T) {
 	}
 
 	mockRepo.On("FindByID", mock.Anything, debtID, userID).Return(existingDebt, nil)
-	mockRepo.On("AddRepaymentWithWallet", mock.Anything, existingDebt, mock.MatchedBy(func(r *model.Repayment) bool {
+	mockRepo.On("AddRepaymentWithWallet", mock.Anything, mock.MatchedBy(func(d *model.Debt) bool { return d.ID == existingDebt.ID && d.UserID == userID }), mock.MatchedBy(func(r *model.Repayment) bool {
 		return r.Amount == 1000000 && r.WalletID == &walletID
 	}), &walletID, 1000000.0).Return(nil)
 
@@ -173,7 +174,7 @@ func TestAddRepayment_WithWallet_Payable(t *testing.T) {
 	}
 
 	mockRepo.On("FindByID", mock.Anything, debtID, userID).Return(existingDebt, nil)
-	mockRepo.On("AddRepaymentWithWallet", mock.Anything, existingDebt, mock.MatchedBy(func(r *model.Repayment) bool {
+	mockRepo.On("AddRepaymentWithWallet", mock.Anything, mock.MatchedBy(func(d *model.Debt) bool { return d.ID == existingDebt.ID && d.UserID == userID }), mock.MatchedBy(func(r *model.Repayment) bool {
 		return r.Amount == 10000000 && r.WalletID == &walletID
 	}), &walletID, -10000000.0).Return(nil)
 
@@ -189,4 +190,38 @@ func TestAddRepayment_WithWallet_Payable(t *testing.T) {
 	assert.Equal(t, float64(10000000), res.PaidAmount)
 	assert.Equal(t, float64(40000000), res.Remaining)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestAddRepayment_RejectsOverpaymentAndInvalidAmounts(t *testing.T) {
+	for _, amount := range []float64{-1, 0, 51} {
+		repo := new(MockDebtRepo)
+		userID, debtID := uuid.New(), uuid.New()
+		debt := &model.Debt{ID: debtID, UserID: userID, TotalAmount: 100, PaidAmount: 50}
+		repo.On("FindByID", mock.Anything, debtID, userID).Return(debt, nil)
+		_, err := service.NewDebtService(repo).AddRepayment(context.Background(), userID, debtID, dto.AddRepaymentRequest{Amount: amount})
+		assert.ErrorIs(t, err, service.ErrInvalidRepayment)
+		assert.Equal(t, 50.0, debt.PaidAmount)
+		repo.AssertNotCalled(t, "AddRepaymentWithWallet", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	}
+}
+
+func TestAddRepayment_RejectsCompletedDebt(t *testing.T) {
+	mockRepo := new(MockDebtRepo)
+	svc := service.NewDebtService(mockRepo)
+	userID, debtID := uuid.New(), uuid.New()
+	mockRepo.On("FindByID", mock.Anything, debtID, userID).Return(&model.Debt{ID: debtID, UserID: userID, TotalAmount: 100, PaidAmount: 100, Status: model.DebtStatusCompleted}, nil)
+
+	_, err := svc.AddRepayment(context.Background(), userID, debtID, dto.AddRepaymentRequest{Amount: 1})
+	assert.ErrorIs(t, err, service.ErrDebtAlreadyCompleted)
+	assert.ErrorIs(t, err, service.ErrInvalidRepayment)
+	mockRepo.AssertNotCalled(t, "AddRepaymentWithWallet", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestDeleteDebt_MapsNotFound(t *testing.T) {
+	mockRepo := new(MockDebtRepo)
+	svc := service.NewDebtService(mockRepo)
+	userID, debtID := uuid.New(), uuid.New()
+	mockRepo.On("Delete", mock.Anything, debtID, userID).Return(repository.ErrDebtNotFound)
+
+	assert.ErrorIs(t, svc.DeleteDebt(context.Background(), userID, debtID), service.ErrDebtNotFound)
 }

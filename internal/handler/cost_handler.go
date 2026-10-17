@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -36,6 +37,7 @@ func NewCostHandler(svc service.CostService, log *zap.Logger) *CostHandler {
 // @Param cost body dto.CreateCostRequest true "Cost object"
 // @Success 201 {object} model.Cost
 // @Failure 400 {string} string "Invalid request payload"
+// @Failure 404 {object} response.ErrorResponse "Category not found"
 // @Failure 500 {string} string "Failed to create cost"
 // @Router /costs [post]
 func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +66,10 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	createdCost, err := h.svc.Create(r.Context(), cost)
 	if err != nil {
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Category not found", "cost_create")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to create cost", "cost_create")
 		return
 	}
@@ -97,15 +103,13 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cost, err := h.svc.Get(r.Context(), id)
+	cost, err := h.svc.Get(r.Context(), user.ID, id)
 	if err != nil {
-		h.errorHandler.HandleError(w, err, http.StatusNotFound, "Cost not found", "cost_get")
-		return
-	}
-
-	// Verify user has access to this cost
-	if cost.UserID != user.ID {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusForbidden, "Forbidden access", "cost_get")
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Cost not found", "cost_get")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get cost", "cost_get")
 		return
 	}
 
@@ -155,28 +159,41 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Cost ID"
-// @Param cost body model.Cost true "Cost object"
+// @Param cost body dto.UpdateCostRequest true "Fields to update (owner cannot be changed)"
 // @Success 200 {object} model.Cost
 // @Failure 400 {string} string "Invalid cost ID or payload"
 // @Failure 404 {string} string "Cost not found"
 // @Failure 500 {string} string "Failed to update cost"
 // @Router /costs/{id} [put]
 func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "cost_update")
+		return
+	}
+
 	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid cost ID", "cost_update")
 		return
 	}
 
-	var req model.Cost
-	if err := h.validator.ValidatePartial(r, &req); err != nil {
+	var req dto.UpdateCostRequest
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
 		h.errorHandler.HandleValidationError(w, err, "cost_update")
 		return
 	}
-	req.ID = id
 
-	updatedCost, err := h.svc.Update(r.Context(), &req)
+	updatedCost, err := h.svc.Update(r.Context(), user.ID, id, req)
 	if err != nil {
+		if errors.Is(err, constant.ErrInvalidInput) {
+			h.errorHandler.HandleError(w, err, http.StatusBadRequest, "No fields to update", "cost_update")
+			return
+		}
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Cost or category not found", "cost_update")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to update cost", "cost_update")
 		return
 	}
@@ -196,13 +213,23 @@ func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Failed to delete cost"
 // @Router /costs/{id} [delete]
 func (h *CostHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "cost_delete")
+		return
+	}
+
 	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid cost ID", "cost_delete")
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Delete(r.Context(), user.ID, id); err != nil {
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Cost not found", "cost_delete")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to delete cost", "cost_delete")
 		return
 	}

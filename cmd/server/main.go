@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/tyha2404/nexo-app-api/internal/config"
@@ -36,6 +37,11 @@ func main() {
 	// Initialize JWT before using it
 	util.InitJWT(cfg)
 
+	// "Today"/"this month" are computed in the users' timezone, not the host's.
+	if err := util.SetAppTimezone(cfg.AppTimezone); err != nil {
+		log.Fatalf("invalid APP_TIMEZONE: %v", err)
+	}
+
 	logg, err := logger.New(cfg.LogLevel, cfg.AppEnv)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
@@ -53,11 +59,36 @@ func main() {
 	rolloverWorker := worker.NewMonthlyRolloverWorker(rolloverService, logg)
 	rolloverWorker.Start(context.Background())
 
-	r := router.New(gormDB, logg)
+	// Web Push: disabled (endpoints answer 503) when VAPID keys are missing.
+	pushService := router.NewPushServiceFromConfig(gormDB, cfg, logg)
+	var reminderWorker *worker.DailyReminderWorker
+	if pushService.Enabled() {
+		if os.Getenv("VAPID_SUBJECT") == "" {
+			logg.Warn("VAPID_SUBJECT is not set; using a placeholder subject (Apple may reject it)")
+		}
+		reminderService := service.NewPushReminderService(repository.NewReminderRepository(gormDB), pushService, logg)
+		reminderWorker = worker.NewDailyReminderWorker(reminderService, logg)
+		reminderWorker.Start()
+	} else {
+		logg.Info("web push disabled: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY not set")
+	}
+
+	r := router.New(gormDB, logg,
+		router.WithCORSAllowedOrigins(cfg.CORSAllowedOrigins),
+		router.WithPushService(pushService),
+	)
 
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: r,
+		Addr:              ":" + cfg.Port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		// WriteTimeout bounds normal JSON responses. The SSE chat stream
+		// (/chat/stream) lifts it per request with http.ResponseController,
+		// so long AI answers are not cut off.
+		WriteTimeout:   60 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	go func() {
@@ -69,18 +100,24 @@ func main() {
 	}()
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt)
+	// PM2 stops/reloads with SIGINT and falls back to SIGTERM; handle both.
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	logg.Sugar().Info("shutting down server...")
 
 	// Stop background workers
 	rolloverWorker.Stop()
+	if reminderWorker != nil {
+		reminderWorker.Stop()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logg.Sugar().Fatalf("server forced to shutdown: %v", err)
 	}
+	// Let in-flight background pushes finish (each is time-bounded).
+	pushService.Wait()
 
 	// Close Database connection pool
 	sqlDB, err := gormDB.DB()

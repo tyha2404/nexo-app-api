@@ -151,7 +151,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a paginated list of categories",
+                "description": "Get a paginated list of categories\nWithout page/limit the full list is returned; with either, results are paginated (default limit 10, max 100).",
                 "produces": [
                     "application/json"
                 ],
@@ -162,14 +162,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Limit",
-                        "name": "limit",
+                        "description": "Page number",
+                        "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Offset",
-                        "name": "offset",
+                        "description": "Page limit (default 10, max 100)",
+                        "name": "limit",
                         "in": "query"
                     },
                     {
@@ -189,10 +189,16 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Failed to list categories",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -235,13 +241,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid request payload",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to create category",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -281,19 +293,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid category ID",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Category not found",
+                        "description": "Category not found (or not owned by the caller)",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to get category",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -324,12 +342,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Category object",
+                        "description": "Fields to update",
                         "name": "category",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.Category"
+                            "$ref": "#/definitions/dto.UpdateCategoryRequest"
                         }
                     }
                 ],
@@ -343,19 +361,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid category ID or payload",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Category not found",
+                        "description": "Category not found (or not owned by the caller)",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to update category",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -390,19 +414,171 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid category ID",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Category not found",
+                        "description": "Category not found (or not owned by the caller)",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to delete category",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/actions/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancels a pending action proposed by the AI chat. Nothing is written.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Cancel an AI write proposal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Action ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatActionResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid action ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown action or another user's action",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Already confirmed or cancelled",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Proposal expired",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/actions/{id}/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Executes the pending action proposed by the AI chat (PENDING_CONFIRMATION card, data.actionId). Only the user who received the proposal can confirm it; proposals expire after 15 minutes. A second confirm returns 409.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Confirm an AI write proposal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Action ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatActionResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid action ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown action or another user's action",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Already confirmed or cancelled",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Proposal expired",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Execution rejected (e.g. wallet no longer exists, insufficient balance); the proposal stays pending",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -431,6 +607,18 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -485,6 +673,18 @@ const docTemplate = `{
                                 "$ref": "#/definitions/dto.ChatSessionResponse"
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -496,7 +696,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get messages for a specific session ID",
+                "description": "Get the newest 50 messages of a session, in chronological order (oldest first)",
                 "produces": [
                     "application/json"
                 ],
@@ -518,6 +718,30 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.ChatSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -554,6 +778,30 @@ const docTemplate = `{
                                 "type": "string"
                             }
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -565,7 +813,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stream financial advisory and tool responses using Requesty AI (OpenAI Compatible)",
+                "description": "Stream financial advisory and tool responses using Requesty AI (OpenAI Compatible)\nMessages longer than 4000 characters are rejected. ` + "`" + `model` + "`" + ` must be one of GET /chat/models (otherwise the server default is used). Rate limited to 20 messages per minute per user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -595,13 +843,25 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad Request (empty or too long message)",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many messages",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Streaming unsupported",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -709,6 +969,12 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "404": {
+                        "description": "Category not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Failed to create cost",
                         "schema": {
@@ -795,12 +1061,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Cost object",
+                        "description": "Fields to update (owner cannot be changed)",
                         "name": "cost",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.Cost"
+                            "$ref": "#/definitions/dto.UpdateCostRequest"
                         }
                     }
                 ],
@@ -982,6 +1248,18 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Wallet not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1020,6 +1298,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.StatementResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
@@ -1140,6 +1424,12 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
@@ -1162,7 +1452,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Record a payment against a monthly credit card statement",
+                "description": "Record a payment against a monthly credit card statement. Atomic: debits the source wallet (if given, must belong to the user), credits the card wallet and updates the statement in one DB transaction. Rejects payments above the remaining balance.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1199,6 +1489,73 @@ const docTemplate = `{
                         }
                     },
                     "400": {
+                        "description": "Invalid amount or overpayment",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Statement or wallet not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Statement already paid",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/debts/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-deletes the debt and its repayments and, in one DB transaction, reverses the wallet balance effects of the debt creation and of every repayment.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debts"
+                ],
+                "summary": "Delete a debt",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Debt ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
@@ -1211,7 +1568,268 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Debt not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/debts/{id}/repayments": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debts"
+                ],
+                "summary": "Record a debt repayment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Debt ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Repayment",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AddRepaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RepaymentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid amount, debt already completed, or repayment exceeds remaining balance",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Debt or wallet not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/push/subscriptions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upserts the browser PushSubscription by endpoint for the current user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "push"
+                ],
+                "summary": "Subscribe to push notifications",
+                "parameters": [
+                    {
+                        "description": "PushSubscription.toJSON()",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscribePushRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PushSubscriptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Push notifications disabled",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes the current user's subscription with that endpoint. Succeeds even if it does not exist.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "push"
+                ],
+                "summary": "Unsubscribe from push notifications",
+                "parameters": [
+                    {
+                        "description": "Endpoint to remove",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UnsubscribePushRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PushSubscriptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/push/vapid-public-key": {
+            "get": {
+                "description": "Public endpoint. Returns 503 when Web Push is not configured on the server (VAPID keys missing).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "push"
+                ],
+                "summary": "Get VAPID public key",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.VAPIDPublicKeyResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Push notifications disabled",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/monthly-trend": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get 12-month expense, income, target and average trend",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get monthly financial trend",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of months (default: 12)",
+                        "name": "months",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.MonthlyTrendResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -1242,6 +1860,12 @@ const docTemplate = `{
                 "summary": "List transactions",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "Search transaction descriptions (case-insensitive literal text)",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "Page number",
                         "name": "page",
@@ -1249,7 +1873,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "Page limit",
+                        "description": "Page limit (default 10, max 100)",
                         "name": "limit",
                         "in": "query"
                     }
@@ -1264,10 +1888,16 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -1278,7 +1908,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new transaction (Income or Expense)",
+                "description": "Create a new transaction (INCOME, EXPENSE or INVESTMENT). When walletId is set the wallet must belong to the user and its balance moves atomically: INCOME adds, EXPENSE and INVESTMENT (HOLDING) subtract, a closed INVESTMENT (SOLD/MATURED/CANCELLED) nets +realizedPnl.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1310,13 +1940,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Category or wallet not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -1356,19 +1998,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -1379,7 +2027,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update a transaction",
+                "description": "Update a transaction. The previous wallet effect is reversed and the new one applied atomically (wallet, amount, type or status change).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1418,13 +2066,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -1435,7 +2095,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete a transaction",
+                "description": "Soft-delete a transaction and reverse its effect on the wallet balance.",
                 "produces": [
                     "application/json"
                 ],
@@ -1468,6 +2128,18 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1479,24 +2151,35 @@ const docTemplate = `{
         },
         "/users": {
             "get": {
-                "description": "Get a paginated list of users",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a paginated list of users. Requires an admin token.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "users"
                 ],
-                "summary": "List users",
+                "summary": "List users (admin only)",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Limit",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page limit (default 10, max 100)",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Offset",
+                        "description": "Offset (legacy, overrides page)",
                         "name": "offset",
                         "in": "query"
                     }
@@ -1511,16 +2194,33 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin access required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Failed to list users",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
             },
             "post": {
-                "description": "Create a new user",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new user with the default \"user\" role. Requires an admin token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1530,7 +2230,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Create a new user",
+                "summary": "Create a new user (admin only)",
                 "parameters": [
                     {
                         "description": "User object",
@@ -1538,7 +2238,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.User"
+                            "$ref": "#/definitions/dto.CreateUserRequest"
                         }
                     }
                 ],
@@ -1552,13 +2252,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid request payload",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin access required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email or username already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to create user",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -1566,14 +2284,19 @@ const docTemplate = `{
         },
         "/users/{id}": {
             "get": {
-                "description": "Get a user by its ID",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a user by its ID. Requires an admin token.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "users"
                 ],
-                "summary": "Get a user by ID",
+                "summary": "Get a user by ID (admin only)",
                 "parameters": [
                     {
                         "type": "string",
@@ -1593,25 +2316,42 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid user ID",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin access required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to get user",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
             },
             "put": {
-                "description": "Update an existing user",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a user's username and/or email. Role and password cannot be changed here; any other fields in the body are ignored.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1621,7 +2361,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Update a user",
+                "summary": "Update a user (admin only)",
                 "parameters": [
                     {
                         "type": "string",
@@ -1631,12 +2371,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "User object",
+                        "description": "Fields to update",
                         "name": "user",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.User"
+                            "$ref": "#/definitions/dto.UpdateUserRequest"
                         }
                     }
                 ],
@@ -1650,29 +2390,52 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid user ID or payload",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin access required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email or username already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to update user",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
             },
             "delete": {
-                "description": "Delete a user by its ID",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a user by its ID. Requires an admin token.",
                 "tags": [
                     "users"
                 ],
-                "summary": "Delete a user",
+                "summary": "Delete a user (admin only)",
                 "parameters": [
                     {
                         "type": "string",
@@ -1692,19 +2455,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid user ID",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin access required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Failed to delete user",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -1717,7 +2492,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retrieve summary and all wallets of the user",
+                "description": "Retrieve summary and all wallets of the user. totalBalance only sums included wallets in baseCurrency (VND); totalsByCurrency lists each currency separately (no FX conversion).",
                 "produces": [
                     "application/json"
                 ],
@@ -1752,7 +2527,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new wallet for the user",
+                "description": "Create a new wallet for the user. 400 if the total allocationPercent of the user's wallets would exceed 100.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1809,7 +2584,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Automatically divide income amount into allocation wallets",
+                "description": "Automatically divide income amount into allocation wallets (relative balance updates in one DB transaction). 400 when no wallet has an allocation percent or the total exceeds 100%.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1850,6 +2625,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Wallet not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1866,7 +2647,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Transfer funds from one wallet to another",
+                "description": "Transfer funds from one wallet to another. Both wallets are row-locked; amount must be \u003e 0 and fee \u003e= 0; the source must cover amount + fee.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1903,6 +2684,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Wallet not found",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -1979,7 +2766,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update an existing wallet",
+                "description": "Update an existing wallet. Balance is only written when sent. 400 if the total allocationPercent would exceed 100.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2103,6 +2890,42 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.ActionCard": {
+            "type": "object",
+            "properties": {
+                "actionType": {
+                    "description": "ActionType: \"TRANSACTION_CREATED\", \"BUDGET_ALERT\", \"FINANCIAL_SUMMARY\", \"KNOWLEDGE_SOURCE\",\n\"PENDING_CONFIRMATION\" (AI write proposal; data has actionId, toolName,\nkind, status PENDING|CONFIRMED|CANCELLED|EXPIRED, expiresAt, amount,\ntype, categoryName, walletName, date, description, resultCard).",
+                    "type": "string"
+                },
+                "data": {},
+                "description": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AddRepaymentRequest": {
+            "type": "object",
+            "required": [
+                "amount"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "paidAt": {
+                    "type": "string"
+                },
+                "walletId": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AllocatedWalletDetail": {
             "type": "object",
             "properties": {
@@ -2165,6 +2988,32 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ChatActionResult": {
+            "type": "object",
+            "properties": {
+                "actionCard": {
+                    "description": "ActionCard is the card of the executed action (e.g. TRANSACTION_CREATED\nwith the new transaction id), only on confirm.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ActionCard"
+                        }
+                    ]
+                },
+                "actionId": {
+                    "type": "string"
+                },
+                "result": {
+                    "description": "Result is the created/updated entity returned by the tool, only on confirm."
+                },
+                "status": {
+                    "description": "Status is \"CONFIRMED\" or \"CANCELLED\".",
+                    "type": "string"
+                },
+                "toolName": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ChatMessageResponse": {
             "type": "object",
             "properties": {
@@ -2190,6 +3039,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "toolResults": {
+                    "description": "ToolResults is a JSON array of the ActionCards shown with this message.",
                     "type": "string"
                 }
             }
@@ -2326,6 +3176,33 @@ const docTemplate = `{
         "dto.CreateTransactionRequest": {
             "type": "object"
         },
+        "dto.CreateUserRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "john@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 8,
+                    "example": "password123"
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3,
+                    "example": "johndoe"
+                }
+            }
+        },
         "dto.CreateWalletRequest": {
             "type": "object",
             "required": [
@@ -2422,10 +3299,62 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.DebtResponse": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "dueDate": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "paidAmount": {
+                    "type": "number"
+                },
+                "remaining": {
+                    "type": "number"
+                },
+                "repayments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Repayment"
+                    }
+                },
+                "startDate": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/model.DebtStatus"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "totalAmount": {
+                    "type": "number"
+                },
+                "type": {
+                    "$ref": "#/definitions/model.DebtType"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                },
+                "walletId": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.LoginRequest": {
             "type": "object",
             "required": [
-                "email",
                 "password"
             ],
             "properties": {
@@ -2437,8 +3366,13 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "maxLength": 128,
-                    "minLength": 8,
+                    "minLength": 6,
                     "example": "password123"
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "johndoe"
                 }
             }
         },
@@ -2451,6 +3385,45 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/dto.UserResponse"
+                }
+            }
+        },
+        "dto.MonthlyTrendItem": {
+            "type": "object",
+            "properties": {
+                "expense": {
+                    "description": "Total expense for the month",
+                    "type": "number"
+                },
+                "income": {
+                    "description": "Total income for the month",
+                    "type": "number"
+                },
+                "label": {
+                    "description": "e.g. \"T10/25\"",
+                    "type": "string"
+                },
+                "month": {
+                    "description": "e.g. \"2025-10\"",
+                    "type": "string"
+                },
+                "target": {
+                    "description": "Budget / target for the month",
+                    "type": "number"
+                }
+            }
+        },
+        "dto.MonthlyTrendReport": {
+            "type": "object",
+            "properties": {
+                "averageExpense": {
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MonthlyTrendItem"
+                    }
                 }
             }
         },
@@ -2473,6 +3446,32 @@ const docTemplate = `{
                     "example": "2026-09-01"
                 },
                 "sourceWalletId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.PushSubscriptionKeys": {
+            "type": "object",
+            "required": [
+                "auth",
+                "p256dh"
+            ],
+            "properties": {
+                "auth": {
+                    "type": "string"
+                },
+                "p256dh": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.PushSubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "endpoint": {
                     "type": "string"
                 }
             }
@@ -2511,9 +3510,11 @@ const docTemplate = `{
             ],
             "properties": {
                 "message": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 4000
                 },
                 "model": {
+                    "description": "Model must be one of GET /chat/models; any other value is ignored and\nthe server default is used.",
                     "type": "string"
                 },
                 "sessionId": {
@@ -2603,6 +3604,21 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SubscribePushRequest": {
+            "type": "object",
+            "required": [
+                "endpoint",
+                "keys"
+            ],
+            "properties": {
+                "endpoint": {
+                    "type": "string"
+                },
+                "keys": {
+                    "$ref": "#/definitions/dto.PushSubscriptionKeys"
+                }
+            }
+        },
         "dto.TransactionResponse": {
             "type": "object",
             "properties": {
@@ -2637,6 +3653,10 @@ const docTemplate = `{
                 "realizedPnl": {
                     "type": "number",
                     "example": 50
+                },
+                "receiptUrl": {
+                    "type": "string",
+                    "example": "https://supabase.co/storage/v1/object/public/receipts/user/img.jpg"
                 },
                 "status": {
                     "type": "string",
@@ -2692,6 +3712,49 @@ const docTemplate = `{
                     "$ref": "#/definitions/dto.CustomTime"
                 }
             }
+        },
+        "dto.UnsubscribePushRequest": {
+            "type": "object",
+            "required": [
+                "endpoint"
+            ],
+            "properties": {
+                "endpoint": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UpdateCategoryRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "Updated description"
+                },
+                "excludeFromAverageDaily": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1,
+                    "example": "Food \u0026 Dining"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "INCOME",
+                        "EXPENSE",
+                        "INVESTMENT"
+                    ],
+                    "example": "EXPENSE"
+                }
+            }
+        },
+        "dto.UpdateCostRequest": {
+            "type": "object"
         },
         "dto.UpdateStatementRequest": {
             "type": "object",
@@ -2751,6 +3814,22 @@ const docTemplate = `{
         },
         "dto.UpdateTransactionRequest": {
             "type": "object"
+        },
+        "dto.UpdateUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "newemail@example.com"
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3,
+                    "example": "newusername"
+                }
+            }
         },
         "dto.UpdateWalletRequest": {
             "type": "object",
@@ -2861,6 +3940,14 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.VAPIDPublicKeyResponse": {
+            "type": "object",
+            "properties": {
+                "publicKey": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.WalletResponse": {
             "type": "object",
             "properties": {
@@ -2929,11 +4016,24 @@ const docTemplate = `{
         "dto.WalletSummaryResponse": {
             "type": "object",
             "properties": {
+                "baseCurrency": {
+                    "description": "BaseCurrency is the currency of TotalBalance.",
+                    "type": "string",
+                    "example": "VND"
+                },
                 "totalBalance": {
+                    "description": "TotalBalance sums only wallets in BaseCurrency (VND) that are included in total.",
                     "type": "number"
                 },
                 "totalWallets": {
                     "type": "integer"
+                },
+                "totalsByCurrency": {
+                    "description": "TotalsByCurrency sums included wallets per currency (no FX conversion).",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number"
+                    }
                 },
                 "wallets": {
                     "type": "array",
@@ -2972,6 +4072,37 @@ const docTemplate = `{
                 },
                 "userId": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.MonthlyTrendResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/dto.MonthlyTrendReport"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.RepaymentResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/dto.DebtResponse"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
                 }
             }
         },
@@ -3083,6 +4214,66 @@ const docTemplate = `{
                 }
             }
         },
+        "model.DebtStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "COMPLETED",
+                "OVERDUE"
+            ],
+            "x-enum-varnames": [
+                "DebtStatusPending",
+                "DebtStatusCompleted",
+                "DebtStatusOverdue"
+            ]
+        },
+        "model.DebtType": {
+            "type": "string",
+            "enum": [
+                "PAYABLE",
+                "RECEIVABLE"
+            ],
+            "x-enum-comments": {
+                "DebtTypePayable": "Tôi nợ",
+                "DebtTypeReceivable": "Người khác nợ tôi"
+            },
+            "x-enum-varnames": [
+                "DebtTypePayable",
+                "DebtTypeReceivable"
+            ]
+        },
+        "model.Repayment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "debtId": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "paidAt": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "walletId": {
+                    "type": "string"
+                }
+            }
+        },
         "model.StatementStatus": {
             "type": "string",
             "enum": [
@@ -3109,6 +4300,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "deletedAt": {
+                    "description": "Users intentionally stay HARD-delete (plain *time.Time, not gorm.DeletedAt):\ndeleting a user must cascade to all owned rows via FK ON DELETE CASCADE, and\nthe Supabase sync trigger re-inserts by id / unique email.",
                     "type": "string"
                 },
                 "email": {

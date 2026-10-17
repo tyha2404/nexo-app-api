@@ -6,10 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// MaxChatMessageLength is the maximum length of one user chat message, in
+// characters (runes). Longer messages are rejected with 400.
+const MaxChatMessageLength = 4000
+
 type SendMessageRequest struct {
 	SessionID *uuid.UUID `json:"sessionId,omitempty"`
-	Message   string     `json:"message" validate:"required"`
-	Model     *string    `json:"model,omitempty"`
+	Message   string     `json:"message" validate:"required" maxLength:"4000"`
+	// Model must be one of GET /chat/models; any other value is ignored and
+	// the server default is used.
+	Model *string `json:"model,omitempty"`
 }
 
 type ChatModelsResponse struct {
@@ -31,7 +37,8 @@ type ChatMessageResponse struct {
 	Content     string    `json:"content"`
 	Status      string    `json:"status"`
 	ToolCalls   *string   `json:"toolCalls,omitempty"`
-	ToolResults *string   `json:"toolResults,omitempty"`
+	// ToolResults is a JSON array of the ActionCards shown with this message.
+	ToolResults *string `json:"toolResults,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -48,8 +55,25 @@ type ChatStreamEvent struct {
 }
 
 type ActionCard struct {
-	ActionType  string      `json:"actionType"` // "TRANSACTION_CREATED", "BUDGET_ALERT", "FINANCIAL_SUMMARY", "KNOWLEDGE_SOURCE"
+	// ActionType: "TRANSACTION_CREATED", "BUDGET_ALERT", "FINANCIAL_SUMMARY", "KNOWLEDGE_SOURCE",
+	// "PENDING_CONFIRMATION" (AI write proposal; data has actionId, toolName,
+	// kind, status PENDING|CONFIRMED|CANCELLED|EXPIRED, expiresAt, amount,
+	// type, categoryName, walletName, date, description, resultCard).
+	ActionType  string      `json:"actionType"`
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
 	Data        interface{} `json:"data,omitempty"`
+}
+
+// ChatActionResult is returned by POST /chat/actions/{id}/confirm and /cancel.
+type ChatActionResult struct {
+	ActionID uuid.UUID `json:"actionId"`
+	// Status is "CONFIRMED" or "CANCELLED".
+	Status   string `json:"status"`
+	ToolName string `json:"toolName"`
+	// ActionCard is the card of the executed action (e.g. TRANSACTION_CREATED
+	// with the new transaction id), only on confirm.
+	ActionCard *ActionCard `json:"actionCard,omitempty"`
+	// Result is the created/updated entity returned by the tool, only on confirm.
+	Result interface{} `json:"result,omitempty"`
 }

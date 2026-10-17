@@ -2,8 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -15,14 +19,16 @@ import (
 )
 
 type ChatHandler struct {
-	chatService service.ChatService
-	log         *zap.Logger
+	chatService  service.ChatService
+	log          *zap.Logger
+	errorHandler *ErrorHandler
 }
 
 func NewChatHandler(chatService service.ChatService, log *zap.Logger) *ChatHandler {
 	return &ChatHandler{
-		chatService: chatService,
-		log:         log,
+		chatService:  chatService,
+		log:          log,
+		errorHandler: NewErrorHandler(log),
 	}
 }
 
@@ -35,32 +41,47 @@ func NewChatHandler(chatService service.ChatService, log *zap.Logger) *ChatHandl
 // @Security BearerAuth
 // @Param request body dto.SendMessageRequest true "Send Message Request"
 // @Success 200 {string} string "SSE stream of dto.ChatStreamEvent"
-// @Failure 400 {object} response.ErrorResponse "Bad Request"
+// @Description Messages longer than 4000 characters are rejected. `model` must be one of GET /chat/models (otherwise the server default is used). Rate limited to 20 messages per minute per user.
+// @Failure 400 {object} response.ErrorResponse "Bad Request (empty or too long message)"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 429 {object} response.ErrorResponse "Too many messages"
+// @Failure 500 {object} response.ErrorResponse "Streaming unsupported"
 // @Router /chat/stream [post]
 func (h *ChatHandler) StreamMessage(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 	if !ok || user.ID == uuid.Nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "stream_message")
 		return
 	}
 
 	var req dto.SendMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Error("failed to decode chat stream request", zap.Error(err))
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		h.errorHandler.HandleDecodeError(w, err, "stream_message")
 		return
 	}
 
-	if req.Message == "" {
-		http.Error(w, "Message cannot be empty", http.StatusBadRequest)
+	if strings.TrimSpace(req.Message) == "" {
+		h.errorHandler.HandleError(w, constant.ErrInvalidInput, http.StatusBadRequest, "Message cannot be empty", "stream_message")
+		return
+	}
+	if utf8.RuneCountInString(req.Message) > dto.MaxChatMessageLength {
+		h.errorHandler.HandleError(w, constant.ErrInvalidInput, http.StatusBadRequest,
+			fmt.Sprintf("Message is too long (max %d characters)", dto.MaxChatMessageLength), "stream_message")
 		return
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, errors.New("response writer does not support flushing"), http.StatusInternalServerError, "Streaming unsupported", "stream_message")
 		return
+	}
+
+	// The server's WriteTimeout (cmd/server/main.go) would cut long AI
+	// answers; lift the write deadline for this streaming response only.
+	// Streams are still bounded by the upstream stream timeout in
+	// NineRouterService and end when the client disconnects.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		h.log.Warn("failed to clear write deadline for chat stream", zap.Error(err))
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -94,18 +115,19 @@ func (h *ChatHandler) StreamMessage(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {array} dto.ChatSessionResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /chat/sessions [get]
 func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 	if !ok || user.ID == uuid.Nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "list_sessions")
 		return
 	}
 
 	sessions, err := h.chatService.ListSessions(r.Context(), user.ID, 30)
 	if err != nil {
-		h.log.Error("failed to list chat sessions", zap.Error(err))
-		http.Error(w, "Failed to list chat sessions", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to list chat sessions", "list_sessions")
 		return
 	}
 
@@ -120,30 +142,37 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 // GetSessionMessages returns messages in a chat session
 // @Summary Get session messages
-// @Description Get messages for a specific session ID
+// @Description Get the newest 50 messages of a session, in chronological order (oldest first)
 // @Tags chat
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Session ID"
 // @Success 200 {object} dto.ChatSessionResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /chat/sessions/{id} [get]
 func (h *ChatHandler) GetSessionMessages(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 	if !ok || user.ID == uuid.Nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_session_messages")
 		return
 	}
 
 	sessionID, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid session ID", "get_session_messages")
 		return
 	}
 
 	sess, err := h.chatService.GetSessionMessages(r.Context(), user.ID, sessionID, 50)
 	if err != nil {
-		h.log.Error("failed to get session messages", zap.Error(err))
-		http.Error(w, "Session not found", http.StatusNotFound)
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Session not found", "get_session_messages")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get session messages", "get_session_messages")
 		return
 	}
 
@@ -164,23 +193,30 @@ func (h *ChatHandler) GetSessionMessages(w http.ResponseWriter, r *http.Request)
 // @Security BearerAuth
 // @Param id path string true "Session ID"
 // @Success 200 {object} map[string]string
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /chat/sessions/{id} [delete]
 func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 	if !ok || user.ID == uuid.Nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_session")
 		return
 	}
 
 	sessionID, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid session ID", "delete_session")
 		return
 	}
 
 	if err := h.chatService.DeleteSession(r.Context(), user.ID, sessionID); err != nil {
-		h.log.Error("failed to delete chat session", zap.Error(err))
-		http.Error(w, "Failed to delete session", http.StatusInternalServerError)
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Session not found", "delete_session")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to delete session", "delete_session")
 		return
 	}
 
@@ -200,17 +236,18 @@ func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} map[string]string
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /chat/clear [post]
 func (h *ChatHandler) ClearSessions(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 	if !ok || user.ID == uuid.Nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "clear_sessions")
 		return
 	}
 
 	if err := h.chatService.ClearSessions(r.Context(), user.ID); err != nil {
-		h.log.Error("failed to clear chat sessions", zap.Error(err))
-		http.Error(w, "Failed to clear chat sessions", http.StatusInternalServerError)
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to clear chat sessions", "clear_sessions")
 		return
 	}
 
@@ -245,4 +282,90 @@ func (h *ChatHandler) ListModels(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data:    dto.ChatModelsResponse{Models: models},
 	})
+}
+
+// handleActionError maps pending-action errors to explicit HTTP statuses.
+func (h *ChatHandler) handleActionError(w http.ResponseWriter, err error, operation string) {
+	switch {
+	case errors.Is(err, service.ErrPendingActionHandled):
+		h.errorHandler.HandleError(w, err, http.StatusConflict, "Đề xuất này đã được xử lý trước đó", operation)
+	case errors.Is(err, service.ErrPendingActionExpired):
+		h.errorHandler.HandleError(w, err, http.StatusGone, "Đề xuất đã hết hạn, vui lòng yêu cầu lại trợ lý AI", operation)
+	case errors.Is(err, service.ErrPendingActionNotFound):
+		h.errorHandler.HandleError(w, err, http.StatusNotFound, "Không tìm thấy đề xuất (có thể đã hết hạn)", operation)
+	case errors.Is(err, service.ErrPendingActionFailed):
+		msg := strings.TrimPrefix(err.Error(), service.ErrPendingActionFailed.Error()+": ")
+		h.errorHandler.HandleError(w, err, http.StatusUnprocessableEntity, msg, operation)
+	default:
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Không thể xử lý đề xuất", operation)
+	}
+}
+
+// ConfirmAction executes an AI write proposal
+// @Summary Confirm an AI write proposal
+// @Description Executes the pending action proposed by the AI chat (PENDING_CONFIRMATION card, data.actionId). Only the user who received the proposal can confirm it; proposals expire after 15 minutes. A second confirm returns 409.
+// @Tags chat
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Action ID"
+// @Success 200 {object} dto.ChatActionResult
+// @Failure 400 {object} response.ErrorResponse "Invalid action ID"
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "Unknown action or another user's action"
+// @Failure 409 {object} response.ErrorResponse "Already confirmed or cancelled"
+// @Failure 410 {object} response.ErrorResponse "Proposal expired"
+// @Failure 422 {object} response.ErrorResponse "Execution rejected (e.g. wallet no longer exists, insufficient balance); the proposal stays pending"
+// @Failure 500 {object} response.ErrorResponse
+// @Router /chat/actions/{id}/confirm [post]
+func (h *ChatHandler) ConfirmAction(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "confirm_chat_action")
+		return
+	}
+	actionID, err := ParseUUIDFromPath(r, "id")
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid action ID", "confirm_chat_action")
+		return
+	}
+	result, err := h.chatService.ConfirmAction(r.Context(), user.ID, actionID)
+	if err != nil {
+		h.handleActionError(w, err, "confirm_chat_action")
+		return
+	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, result)
+}
+
+// CancelAction discards an AI write proposal
+// @Summary Cancel an AI write proposal
+// @Description Cancels a pending action proposed by the AI chat. Nothing is written.
+// @Tags chat
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Action ID"
+// @Success 200 {object} dto.ChatActionResult
+// @Failure 400 {object} response.ErrorResponse "Invalid action ID"
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "Unknown action or another user's action"
+// @Failure 409 {object} response.ErrorResponse "Already confirmed or cancelled"
+// @Failure 410 {object} response.ErrorResponse "Proposal expired"
+// @Failure 500 {object} response.ErrorResponse
+// @Router /chat/actions/{id}/cancel [post]
+func (h *ChatHandler) CancelAction(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "cancel_chat_action")
+		return
+	}
+	actionID, err := ParseUUIDFromPath(r, "id")
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid action ID", "cancel_chat_action")
+		return
+	}
+	result, err := h.chatService.CancelAction(r.Context(), user.ID, actionID)
+	if err != nil {
+		h.handleActionError(w, err, "cancel_chat_action")
+		return
+	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, result)
 }

@@ -35,15 +35,18 @@ func (r *knowledgeRepository) Update(ctx context.Context, knowledge *model.Finan
 	return r.db.WithContext(ctx).Save(knowledge).Error
 }
 
+// Knowledge chunks are re-seeded from internal/data/knowledge, not user data, so
+// they are hard-deleted (Unscoped) to avoid piling up soft-deleted embeddings on
+// every sync.
 func (r *knowledgeRepository) DeleteByTopic(ctx context.Context, topic string) error {
-	return r.db.WithContext(ctx).Where("topic = ?", topic).Delete(&model.FinancialKnowledge{}).Error
+	return r.db.WithContext(ctx).Unscoped().Where("topic = ?", topic).Delete(&model.FinancialKnowledge{}).Error
 }
 
 // ReplaceByTopic atomically deletes all existing chunks of a topic and inserts
 // the new set in a single transaction, so readers never observe a partial topic.
 func (r *knowledgeRepository) ReplaceByTopic(ctx context.Context, topic string, docs []*model.FinancialKnowledge) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("topic = ?", topic).Delete(&model.FinancialKnowledge{}).Error; err != nil {
+		if err := tx.Unscoped().Where("topic = ?", topic).Delete(&model.FinancialKnowledge{}).Error; err != nil {
 			return err
 		}
 		if len(docs) == 0 {

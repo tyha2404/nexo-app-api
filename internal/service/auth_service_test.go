@@ -14,6 +14,7 @@ type mockUserRepo struct {
 	usersByEmail    map[string]*model.User
 	usersByUsername map[string]*model.User
 	usersByID       map[uuid.UUID]*model.User
+	lastUpdates     map[string]interface{}
 }
 
 func newMockUserRepo() *mockUserRepo {
@@ -56,10 +57,24 @@ func (m *mockUserRepo) Update(ctx context.Context, user *model.User) error {
 }
 
 func (m *mockUserRepo) UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	u, ok := m.usersByID[id]
+	if !ok {
+		return constant.ErrNotFound
+	}
+	m.lastUpdates = updates
+	if v, ok := updates["username"].(string); ok {
+		u.Username = v
+	}
+	if v, ok := updates["email"].(string); ok {
+		u.Email = v
+	}
 	return nil
 }
 
 func (m *mockUserRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	if _, ok := m.usersByID[id]; !ok {
+		return constant.ErrNotFound
+	}
 	delete(m.usersByID, id)
 	return nil
 }

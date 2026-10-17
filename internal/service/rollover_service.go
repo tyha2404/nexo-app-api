@@ -125,6 +125,9 @@ func (s *rolloverService) ProcessRolloverForUser(ctx context.Context, userID uui
 	var budgetsToCreate []model.Budget
 	for _, b := range latestBudgets {
 		if !existingCategoryIDs[b.CategoryID] {
+			// Never create two budgets for one category, even if the repository
+			// returned several historical rows for it (first = latest).
+			existingCategoryIDs[b.CategoryID] = true
 			budgetsToCreate = append(budgetsToCreate, model.Budget{
 				UserID:      userID,
 				CategoryID:  b.CategoryID,

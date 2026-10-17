@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
@@ -22,6 +25,10 @@ type ChatService interface {
 	ClearSessions(ctx context.Context, userID uuid.UUID) error
 	ListAvailableModels(ctx context.Context) ([]string, error)
 	ProcessMessageStream(ctx context.Context, userID uuid.UUID, req dto.SendMessageRequest, eventChan chan<- dto.ChatStreamEvent) error
+	// ConfirmAction executes an AI write proposal (same user only, once).
+	ConfirmAction(ctx context.Context, userID, actionID uuid.UUID) (*dto.ChatActionResult, error)
+	// CancelAction discards an AI write proposal.
+	CancelAction(ctx context.Context, userID, actionID uuid.UUID) (*dto.ChatActionResult, error)
 }
 
 type chatService struct {
@@ -38,6 +45,22 @@ type chatService struct {
 	transactionRepo    repository.TransactionRepository
 	walletRepo         repository.WalletRepository
 	logger             *zap.Logger
+	pendingActions     PendingActionStore
+	historyMu          sync.Mutex
+	now                func() time.Time
+}
+
+// ChatServiceOption configures optional collaborators of the chat service.
+type ChatServiceOption func(*chatService)
+
+// WithPendingActionStore replaces the default in-memory proposal store.
+func WithPendingActionStore(store PendingActionStore) ChatServiceOption {
+	return func(s *chatService) { s.pendingActions = store }
+}
+
+// WithChatClock overrides the clock (tests).
+func WithChatClock(now func() time.Time) ChatServiceOption {
+	return func(s *chatService) { s.now = now }
 }
 
 func NewChatService(
@@ -54,8 +77,9 @@ func NewChatService(
 	transactionRepo repository.TransactionRepository,
 	walletRepo repository.WalletRepository,
 	logger *zap.Logger,
+	opts ...ChatServiceOption,
 ) ChatService {
-	return &chatService{
+	s := &chatService{
 		chatRepo:           chatRepo,
 		requestyService:    requestyService,
 		ragService:         ragService,
@@ -69,7 +93,18 @@ func NewChatService(
 		transactionRepo:    transactionRepo,
 		walletRepo:         walletRepo,
 		logger:             logger,
+		now:                util.Now,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	if s.pendingActions == nil {
+		s.pendingActions = NewInMemoryPendingActionStore(PendingActionTTL, time.Now)
+	}
+	if s.logger == nil {
+		s.logger = zap.NewNop()
+	}
+	return s
 }
 
 func (s *chatService) CreateSession(ctx context.Context, userID uuid.UUID, title string) (*dto.ChatSessionResponse, error) {
@@ -115,7 +150,14 @@ func (s *chatService) GetSessionMessages(ctx context.Context, userID, sessionID 
 		return nil, err
 	}
 
-	messages, err := s.chatRepo.ListMessagesBySessionID(ctx, sessionID, limit)
+	// Newest `limit` messages, returned oldest-first (chronological) so the UI
+	// shows the latest conversation; limit <= 0 returns the whole session.
+	var messages []model.ChatMessage
+	if limit > 0 {
+		messages, err = s.chatRepo.ListRecentMessagesBySessionID(ctx, sessionID, limit)
+	} else {
+		messages, err = s.chatRepo.ListMessagesBySessionID(ctx, sessionID, 0)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +269,58 @@ func withoutKnowledgeSearchTool(defs []ToolDefinition) []ToolDefinition {
 	return filtered
 }
 
+const (
+	// chatHistoryMaxMessages is how many stored messages of the session are
+	// sent upstream as context.
+	chatHistoryMaxMessages = 8
+	// chatHistoryMaxMessageRunes truncates each history message.
+	chatHistoryMaxMessageRunes = 4000
+	// chatHistoryMaxTotalRunes caps the history sent upstream; the oldest
+	// messages are dropped first.
+	chatHistoryMaxTotalRunes = 16000
+)
+
+// buildUpstreamMessages builds the system prompt + capped conversation
+// history (oldest → newest) sent to the model. skipID is the current AI
+// placeholder message.
+func buildUpstreamMessages(systemPrompt string, history []model.ChatMessage, skipID uuid.UUID) []RequestyMessage {
+	if len(history) > chatHistoryMaxMessages {
+		history = history[len(history)-chatHistoryMaxMessages:]
+	}
+
+	kept := make([]RequestyMessage, 0, len(history))
+	total := 0
+	// Walk newest → oldest so the latest turns survive the total budget.
+	for i := len(history) - 1; i >= 0; i-- {
+		msg := history[i]
+		if msg.ID == skipID || strings.TrimSpace(msg.Content) == "" {
+			continue
+		}
+		content := msg.Content
+		if runes := []rune(content); len(runes) > chatHistoryMaxMessageRunes {
+			content = string(runes[:chatHistoryMaxMessageRunes]) + "…"
+		}
+		n := utf8.RuneCountInString(content)
+		if total+n > chatHistoryMaxTotalRunes && len(kept) > 0 {
+			break
+		}
+		total += n
+
+		role := "user"
+		if msg.Role == model.ChatRoleModel {
+			role = "assistant"
+		}
+		kept = append(kept, RequestyMessage{Role: role, Content: content})
+	}
+
+	out := make([]RequestyMessage, 0, len(kept)+1)
+	out = append(out, RequestyMessage{Role: "system", Content: systemPrompt})
+	for i := len(kept) - 1; i >= 0; i-- {
+		out = append(out, kept[i])
+	}
+	return out
+}
+
 func (s *chatService) ProcessMessageStream(ctx context.Context, userID uuid.UUID, req dto.SendMessageRequest, eventChan chan<- dto.ChatStreamEvent) error {
 	defer close(eventChan)
 
@@ -309,7 +403,7 @@ func (s *chatService) ProcessMessageStream(ctx context.Context, userID uuid.UUID
 	}
 
 	// 4. Build System Prompt & Messages directly for Model
-	nowStr := time.Now().Format("2006-01-02")
+	nowStr := util.Now().Format("2006-01-02")
 	systemPrompt := fmt.Sprintf(`Bạn là Nexo AI Advisor - Trợ lý Cố vấn & Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.
 Hôm nay là: %s.
 
@@ -329,6 +423,10 @@ Hướng dẫn gọi tool cụ thể:
 10. Xu hướng chi tiêu qua các tháng -> gọi "get_monthly_trend".
 11. Danh mục đầu tư, tài sản -> gọi "get_investment_summary".
 12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có "KIẾN THỨC NỘI BỘ LIÊN QUAN" -> dùng ngay thông tin đó và KHÔNG gọi "search_financial_knowledge"; CHỈ gọi tool này khi thiếu thông tin.
+
+Quy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):
+- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả "pending_confirmation" nghĩa là đang chờ người dùng bấm "Xác nhận" trên thẻ đề xuất.
+- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm "Xác nhận" (hoặc "Huỷ").
 
 Quy tắc trả lời sau khi nhận kết quả từ Tool:
 - Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.
@@ -351,30 +449,12 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 	}
 
 	// 5. Load recent conversation history
-	recentMessages, err := s.chatRepo.ListMessagesBySessionID(ctx, session.ID, 8)
+	recentMessages, err := s.chatRepo.ListRecentMessagesBySessionID(ctx, session.ID, chatHistoryMaxMessages)
 	if err != nil {
 		s.logger.Warn("failed to list recent messages", zap.Error(err))
 	}
 
-	requestyMessages := make([]RequestyMessage, 0, len(recentMessages)+1)
-	requestyMessages = append(requestyMessages, RequestyMessage{
-		Role:    "system",
-		Content: systemPrompt,
-	})
-
-	for _, msg := range recentMessages {
-		if msg.ID == aiMsg.ID {
-			continue // Skip current placeholder
-		}
-		role := "user"
-		if msg.Role == model.ChatRoleModel {
-			role = "assistant"
-		}
-		requestyMessages = append(requestyMessages, RequestyMessage{
-			Role:    role,
-			Content: msg.Content,
-		})
-	}
+	requestyMessages := buildUpstreamMessages(systemPrompt, recentMessages, aiMsg.ID)
 
 	requestedModel := ""
 	if req.Model != nil {
@@ -391,6 +471,9 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 	toolChatResp, err := s.requestyService.ChatCompletionWithModel(ctx, requestedModel, requestyMessages, tools)
 
 	var fullAIResponse strings.Builder
+	// turnCards are the tool action cards of this turn, stored with the AI
+	// message so a reloaded session shows them (and their confirm status).
+	var turnCards []dto.ActionCard
 	if err == nil && toolChatResp != nil && len(toolChatResp.Choices) > 0 {
 		choice := toolChatResp.Choices[0]
 		if len(choice.Message.ToolCalls) > 0 {
@@ -403,6 +486,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 
 			// Collect tool results summary for fallback text if model returns empty response
 			var fallbackSummaries []string
+			hasProposal := false
 
 			// Execute each tool call
 			for _, tc := range choice.Message.ToolCalls {
@@ -415,16 +499,31 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 					Status:    "STREAMING",
 				}
 
-				toolRes, toolErr := s.executeFinancialTool(ctx, userID, tc)
+				var toolRes *FinancialToolResult
+				var toolErr error
+				if IsChatWriteTool(tc.Function.Name) {
+					// Writes need the user's confirmation: validate and propose only.
+					toolRes, toolErr = s.proposeWriteTool(ctx, userID, session.ID, aiMsg.ID, tc)
+				} else {
+					toolRes, toolErr = s.executeFinancialTool(ctx, userID, tc)
+				}
+				if toolErr == nil && toolRes == nil {
+					toolRes = &FinancialToolResult{ToolTitle: "Lỗi thực thi công cụ", ResultJSON: toolErrorJSON("Công cụ không trả về kết quả")}
+				}
 				if toolErr != nil {
 					s.logger.Error("tool execution error", zap.String("tool", tc.Function.Name), zap.Error(toolErr))
+					errJSON, _ := json.Marshal(map[string]string{"error": toolErr.Error()})
 					toolRes = &FinancialToolResult{
 						ToolTitle:  "Lỗi thực thi công cụ",
-						ResultJSON: fmt.Sprintf(`{"error": "%s"}`, toolErr.Error()),
+						ResultJSON: string(errJSON),
 					}
 				}
 
 				if toolRes.ActionCard != nil {
+					turnCards = append(turnCards, *toolRes.ActionCard)
+					if toolRes.ActionCard.ActionType == ActionTypePendingConfirmation {
+						hasProposal = true
+					}
 					if toolRes.ActionCard.Description != "" {
 						fallbackSummaries = append(fallbackSummaries, fmt.Sprintf("**%s**: %s", toolRes.ActionCard.Title, toolRes.ActionCard.Description))
 					}
@@ -480,7 +579,11 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 
 			// If AI model stream returned empty content after running tools, synthesize a fallback response from tool results
 			if strings.TrimSpace(fullAIResponse.String()) == "" && len(fallbackSummaries) > 0 {
-				fallbackText := "Đã hoàn thành yêu cầu của bạn:\n\n" + strings.Join(fallbackSummaries, "\n")
+				fallbackPrefix := "Đã hoàn thành yêu cầu của bạn:\n\n"
+				if hasProposal {
+					fallbackPrefix = "Mình đã chuẩn bị đề xuất, bạn kiểm tra và bấm **Xác nhận** để lưu:\n\n"
+				}
+				fallbackText := fallbackPrefix + strings.Join(fallbackSummaries, "\n")
 				fullAIResponse.Reset()
 				fullAIResponse.WriteString(fallbackText)
 				eventChan <- dto.ChatStreamEvent{
@@ -571,13 +674,19 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 		}
 	}
 
+	// Persist the final message even when the client has disconnected (ctx
+	// cancelled); otherwise it would stay STREAMING forever.
+	persistCtx, cancelPersist := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelPersist()
+
 	if err != nil {
 		s.logger.Error("failed to stream answer from AI", zap.Error(err))
 		errorContent := "Có lỗi khi kết nối tới AI: " + err.Error()
 		if fullAIResponse.Len() > 0 {
 			errorContent = fullAIResponse.String() + "\n\n⚠️ " + errorContent
 		}
-		_ = s.chatRepo.UpdateMessage(ctx, aiMsg.ID, errorContent, model.MessageStatusError)
+		_ = s.chatRepo.UpdateMessage(persistCtx, aiMsg.ID, errorContent, model.MessageStatusError)
+		s.persistActionCards(persistCtx, userID, aiMsg.ID, turnCards)
 
 		eventChan <- dto.ChatStreamEvent{
 			Type:         "error",
@@ -588,7 +697,8 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 		}
 	} else {
 		// Update status to SUCCESS in DB
-		_ = s.chatRepo.UpdateMessage(ctx, aiMsg.ID, fullAIResponse.String(), model.MessageStatusSuccess)
+		_ = s.chatRepo.UpdateMessage(persistCtx, aiMsg.ID, fullAIResponse.String(), model.MessageStatusSuccess)
+		s.persistActionCards(persistCtx, userID, aiMsg.ID, turnCards)
 
 		eventChan <- dto.ChatStreamEvent{
 			Type:      "done",

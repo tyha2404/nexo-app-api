@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -50,6 +51,14 @@ func (m *MockStatementRepo) Delete(ctx context.Context, id uuid.UUID, userID uui
 	return args.Error(0)
 }
 
+func (m *MockStatementRepo) PayStatement(ctx context.Context, userID, id uuid.UUID, amount float64, sourceWalletID *uuid.UUID) (*model.CreditCardStatement, error) {
+	args := m.Called(ctx, userID, id, amount, sourceWalletID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.CreditCardStatement), args.Error(1)
+}
+
 func TestCreditCardStatementService_CreateAndPayStatement(t *testing.T) {
 	stmtRepo := new(MockStatementRepo)
 	walletRepo := new(MockWalletRepo)
@@ -68,7 +77,7 @@ func TestCreditCardStatementService_CreateAndPayStatement(t *testing.T) {
 	}
 
 	walletRepo.On("GetByID", mock.Anything, walletID, userID).Return(wallet, nil)
-	walletRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+	walletRepo.On("UpdateStatementSnapshot", mock.Anything, walletID, userID, 5000000.0, 250000.0, 0.0).Return(nil)
 	stmtRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	req := dto.CreateStatementRequest{
@@ -106,8 +115,10 @@ func TestCreditCardStatementService_CreateAndPayStatement(t *testing.T) {
 		Status:           model.StatementStatusUnpaid,
 	}
 
-	stmtRepo.On("GetByID", mock.Anything, stmtID, userID).Return(stmtObj, nil)
-	stmtRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+	paid := *stmtObj
+	paid.PaidAmount = 5000000.0
+	paid.Status = model.StatementStatusPaid
+	stmtRepo.On("PayStatement", mock.Anything, userID, stmtID, 5000000.0, (*uuid.UUID)(nil)).Return(&paid, nil)
 
 	payReq := dto.PayStatementRequest{
 		Amount: 5000000.0,
@@ -119,4 +130,36 @@ func TestCreditCardStatementService_CreateAndPayStatement(t *testing.T) {
 	assert.Equal(t, 5000000.0, payRes.PaidAmount)
 	assert.Equal(t, 0.0, payRes.RemainingAmount)
 	assert.Equal(t, model.StatementStatusPaid, payRes.Status)
+}
+
+func TestCreditCardStatementService_PayStatement_PropagatesErrors(t *testing.T) {
+	userID, stmtID, srcID := uuid.New(), uuid.New(), uuid.New()
+	cases := []struct {
+		name    string
+		repoRes *model.CreditCardStatement
+		repoErr error
+		want    error
+	}{
+		{"not found", nil, nil, service.ErrStatementNotFound},
+		{"already paid", nil, service.ErrStatementAlreadyPaid, service.ErrStatementAlreadyPaid},
+		{"overpayment", nil, service.ErrStatementInvalidPayment, service.ErrStatementInvalidPayment},
+		{"source wallet missing", nil, errors.New("source wallet not found"), nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stmtRepo := new(MockStatementRepo)
+			walletRepo := new(MockWalletRepo)
+			svc := service.NewCreditCardStatementService(stmtRepo, walletRepo)
+			stmtRepo.On("PayStatement", mock.Anything, userID, stmtID, 100.0, &srcID).Return(tc.repoRes, tc.repoErr)
+
+			res, err := svc.PayStatement(context.Background(), userID, stmtID, dto.PayStatementRequest{Amount: 100, SourceWalletID: &srcID})
+			assert.Nil(t, res)
+			assert.Error(t, err)
+			if tc.want != nil {
+				assert.True(t, errors.Is(err, tc.want))
+			}
+			// No direct wallet writes outside the repository transaction.
+			walletRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
 }

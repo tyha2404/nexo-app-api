@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -35,9 +36,19 @@ func (m *MockWalletRepo) ListByUserID(ctx context.Context, userID uuid.UUID) ([]
 	return args.Get(0).([]model.Wallet), args.Error(1)
 }
 
-func (m *MockWalletRepo) Update(ctx context.Context, wallet *model.Wallet) error {
-	args := m.Called(ctx, wallet)
+func (m *MockWalletRepo) Update(ctx context.Context, wallet *model.Wallet, includeBalance bool) error {
+	args := m.Called(ctx, wallet, includeBalance)
 	return args.Error(0)
+}
+
+func (m *MockWalletRepo) UpdateStatementSnapshot(ctx context.Context, walletID, userID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error {
+	args := m.Called(ctx, walletID, userID, statementBalance, minimumPayment, previousBalance)
+	return args.Error(0)
+}
+
+func (m *MockWalletRepo) SumAllocationPercent(ctx context.Context, userID uuid.UUID, excludeWalletID *uuid.UUID) (float64, error) {
+	args := m.Called(ctx, userID, excludeWalletID)
+	return args.Get(0).(float64), args.Error(1)
 }
 
 func (m *MockWalletRepo) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
@@ -176,4 +187,60 @@ func TestWalletService_TransferMoney(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 5000000.0, resp.Amount)
+}
+
+func TestWalletService_TransferMoney_RejectsNegativeFee(t *testing.T) {
+	mockRepo := new(MockWalletRepo)
+	svc := service.NewWalletService(mockRepo)
+
+	_, err := svc.TransferMoney(context.Background(), uuid.New(), dto.TransferMoneyRequest{
+		FromWalletID: uuid.New(), ToWalletID: uuid.New(), Amount: 100000, Fee: -5000,
+	})
+	assert.True(t, errors.Is(err, service.ErrInvalidTransfer))
+	mockRepo.AssertNotCalled(t, "TransferMoney", mock.Anything, mock.Anything)
+}
+
+func TestWalletService_CreateWallet_RejectsAllocationOver100(t *testing.T) {
+	mockRepo := new(MockWalletRepo)
+	svc := service.NewWalletService(mockRepo)
+	userID := uuid.New()
+
+	mockRepo.On("SumAllocationPercent", mock.Anything, userID, (*uuid.UUID)(nil)).Return(80.0, nil)
+
+	_, err := svc.CreateWallet(context.Background(), userID, dto.CreateWalletRequest{Name: "Jar", Type: model.WalletTypeJar, AllocationPercent: 30})
+	assert.True(t, errors.Is(err, service.ErrAllocationPercentExceeded))
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+}
+
+func TestWalletService_CreateWallet_AllowsAllocationUpTo100(t *testing.T) {
+	mockRepo := new(MockWalletRepo)
+	svc := service.NewWalletService(mockRepo)
+	userID := uuid.New()
+
+	mockRepo.On("SumAllocationPercent", mock.Anything, userID, (*uuid.UUID)(nil)).Return(70.0, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
+
+	_, err := svc.CreateWallet(context.Background(), userID, dto.CreateWalletRequest{Name: "Jar", Type: model.WalletTypeJar, AllocationPercent: 30})
+	assert.NoError(t, err)
+}
+
+func TestWalletService_UpdateWallet_AllocationExcludesSelfAndKeepsBalance(t *testing.T) {
+	mockRepo := new(MockWalletRepo)
+	svc := service.NewWalletService(mockRepo)
+	userID, walletID := uuid.New(), uuid.New()
+	wallet := &model.Wallet{ID: walletID, UserID: userID, AllocationPercent: 50, Balance: 1000}
+
+	mockRepo.On("GetByID", mock.Anything, walletID, userID).Return(wallet, nil)
+	mockRepo.On("SumAllocationPercent", mock.Anything, userID, mock.MatchedBy(func(id *uuid.UUID) bool { return id != nil && *id == walletID })).Return(40.0, nil)
+	// Balance not sent -> includeBalance=false so a stale balance is never written.
+	mockRepo.On("Update", mock.Anything, wallet, false).Return(nil)
+
+	pct := 60.0
+	_, err := svc.UpdateWallet(context.Background(), userID, walletID, dto.UpdateWalletRequest{AllocationPercent: &pct})
+	assert.NoError(t, err)
+
+	pct = 61.0
+	_, err = svc.UpdateWallet(context.Background(), userID, walletID, dto.UpdateWalletRequest{AllocationPercent: &pct})
+	assert.True(t, errors.Is(err, service.ErrAllocationPercentExceeded))
+	mockRepo.AssertNumberOfCalls(t, "Update", 1)
 }

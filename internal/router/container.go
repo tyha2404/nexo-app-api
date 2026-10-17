@@ -28,6 +28,7 @@ type Container struct {
 	CreditCardStatementRepo repository.CreditCardStatementRepository
 	ChatRepo                repository.ChatRepository
 	KnowledgeRepo           repository.KnowledgeRepository
+	PushSubscriptionRepo    repository.PushSubscriptionRepository
 
 	// Services
 	AuthService                service.AuthService
@@ -46,6 +47,7 @@ type Container struct {
 	NineRouterService          service.NineRouterService
 	RAGService                 service.RAGService
 	ChatService                service.ChatService
+	PushService                service.PushService
 
 	// Handlers
 	HealthHandler              *handler.HealthHandler
@@ -63,10 +65,22 @@ type Container struct {
 	WalletHandler              *handler.WalletHandler
 	CreditCardStatementHandler *handler.CreditCardStatementHandler
 	ChatHandler                *handler.ChatHandler
+	PushHandler                *handler.PushHandler
 }
 
-// NewContainer initializes and wires all dependencies
-func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
+// NewPushServiceFromConfig builds the Web Push service. Push is disabled (the
+// service reports Enabled() == false) when the VAPID keys are missing.
+func NewPushServiceFromConfig(db *gorm.DB, cfg *config.Config, logger *zap.Logger) service.PushService {
+	vapid := service.VAPIDConfig{}
+	if cfg != nil {
+		vapid = service.VAPIDConfig{PublicKey: cfg.VAPIDPublicKey, PrivateKey: cfg.VAPIDPrivateKey, Subject: cfg.VAPIDSubject}
+	}
+	return service.NewPushService(repository.NewPushSubscriptionRepository(db), service.NewWebPushSender(vapid), vapid, logger)
+}
+
+// NewContainer initializes and wires all dependencies. pushService may be nil,
+// in which case one is built from the environment config.
+func NewContainer(db *gorm.DB, logger *zap.Logger, pushService service.PushService) *Container {
 	// 1. Initialize Repositories
 	userRepo := repository.NewUserRepo(db)
 	categoryRepo := repository.NewCategoryRepo(db)
@@ -81,6 +95,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	ccStatementRepo := repository.NewCreditCardStatementRepository(db)
 	chatRepo := repository.NewChatRepository(db)
 	knowledgeRepo := repository.NewKnowledgeRepository(db)
+	pushSubscriptionRepo := repository.NewPushSubscriptionRepository(db)
 
 	cfg, _ := config.LoadConfig()
 	if cfg == nil {
@@ -88,14 +103,18 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	}
 
 	// 2. Initialize Services
+	if pushService == nil {
+		pushService = NewPushServiceFromConfig(db, cfg, logger)
+	}
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
-	costService := service.NewCostService(costRepo)
-	transactionService := service.NewTransactionService(transactionRepo, categoryRepo, budgetRepo, alertRepo)
+	costService := service.NewCostService(costRepo, categoryRepo)
+	transactionService := service.NewTransactionService(transactionRepo, categoryRepo, budgetRepo, alertRepo, walletRepo,
+		service.WithBudgetAlertPush(pushService))
 	budgetService := service.NewBudgetService(budgetRepo, categoryRepo)
 	alertService := service.NewAlertService(alertRepo)
-	reportService := service.NewReportService(transactionRepo, targetRepo)
+	reportService := service.NewReportServiceWithRepository(repository.NewReportRepository(db))
 	targetService := service.NewTargetService(targetRepo)
 	debtService := service.NewDebtService(debtRepo)
 	presetService := service.NewPresetService(presetRepo, categoryRepo)
@@ -126,14 +145,15 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	costHandler := handler.NewCostHandler(costService, logger)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logger)
 	budgetHandler := handler.NewBudgetHandler(budgetService, logger)
-	alertHandler := handler.NewAlertHandler(alertService)
-	reportHandler := handler.NewReportHandler(reportService)
+	alertHandler := handler.NewAlertHandler(alertService, logger)
+	reportHandler := handler.NewReportHandler(reportService, logger)
 	targetHandler := handler.NewTargetHandler(targetService, logger)
 	debtHandler := handler.NewDebtHandler(debtService, logger)
 	presetHandler := handler.NewPresetHandler(presetService, logger)
 	walletHandler := handler.NewWalletHandler(walletService, logger)
 	ccStatementHandler := handler.NewCreditCardStatementHandler(ccStatementService, logger)
 	chatHandler := handler.NewChatHandler(chatService, logger)
+	pushHandler := handler.NewPushHandler(pushService, logger)
 
 	return &Container{
 		DB:                         db,
@@ -151,6 +171,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		CreditCardStatementRepo:    ccStatementRepo,
 		ChatRepo:                   chatRepo,
 		KnowledgeRepo:              knowledgeRepo,
+		PushSubscriptionRepo:       pushSubscriptionRepo,
 		AuthService:                authService,
 		UserService:                userService,
 		CategoryService:            categoryService,
@@ -167,6 +188,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		NineRouterService:          nineRouterService,
 		RAGService:                 ragService,
 		ChatService:                chatService,
+		PushService:                pushService,
 		HealthHandler:              healthHandler,
 		AuthHandler:                authHandler,
 		UserHandler:                userHandler,
@@ -182,5 +204,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		WalletHandler:              walletHandler,
 		CreditCardStatementHandler: ccStatementHandler,
 		ChatHandler:                chatHandler,
+		PushHandler:                pushHandler,
 	}
 }

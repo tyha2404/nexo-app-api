@@ -1,10 +1,9 @@
 package dto
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
 type CreateStatementRequest struct {
@@ -76,12 +75,11 @@ func ToStatementResponse(s *model.CreditCardStatement) StatementResponse {
 	}
 
 	status := s.Status
-	now := time.Now()
 	// Evaluate status dynamically if unpaid/partially paid and overdue
 	if status == model.StatementStatusUnpaid || status == model.StatementStatusPartiallyPaid {
 		if s.PaidAmount >= s.StatementBalance && s.StatementBalance > 0 {
 			status = model.StatementStatusPaid
-		} else if now.After(s.DueDate) && remaining > 0 {
+		} else if util.IsPastDate(s.DueDate) && remaining > 0 { // due today is not overdue (app TZ)
 			status = model.StatementStatusOverdue
 		} else if s.PaidAmount > 0 {
 			status = model.StatementStatusPartiallyPaid

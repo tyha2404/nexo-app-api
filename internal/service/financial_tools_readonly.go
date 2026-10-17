@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -206,7 +206,7 @@ func runTool(res *FinancialToolResult, err error) *FinancialToolResult {
 	if err != nil {
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi thực thi công cụ",
-			ResultJSON: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
+			ResultJSON: toolErrorJSON(err.Error()),
 		}
 	}
 	return res
@@ -368,10 +368,11 @@ func (s *chatService) toolListCategories(ctx context.Context, userID uuid.UUID, 
 
 	// Spending this month per category (EXPENSE only)
 	spentByCategory := map[uuid.UUID]float64{}
-	now := time.Now()
+	now := util.Now()
+	monthStart, _ := util.MonthRange(now)
 	breakdown, err := s.reportService.GetCategoryBreakdown(
 		ctx, userID,
-		time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Format("2006-01-02"),
+		monthStart.Format("2006-01-02"),
 		now.Format("2006-01-02"),
 	)
 	if err == nil {
@@ -433,7 +434,7 @@ func (s *chatService) toolGetMonthlyTrend(ctx context.Context, userID uuid.UUID,
 		monthsBack = 12
 	}
 
-	now := time.Now()
+	currentMonthStart, _ := util.MonthRange(util.Now())
 	type MonthPoint struct {
 		Month       string  `json:"month"`
 		Income      float64 `json:"income"`
@@ -446,8 +447,9 @@ func (s *chatService) toolGetMonthlyTrend(ctx context.Context, userID uuid.UUID,
 	points := make([]MonthPoint, 0, monthsBack)
 	totalIncome, totalExpense := 0.0, 0.0
 	for i := monthsBack - 1; i >= 0; i-- {
-		t := now.AddDate(0, -i, 0)
-		start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.Local)
+		// Step back from the 1st of the month: AddDate on e.g. the 31st
+		// would overflow into the next month and repeat months.
+		start := currentMonthStart.AddDate(0, -i, 0)
 		end := start.AddDate(0, 1, -1)
 
 		summary, err := s.reportService.GetSummary(ctx, userID, start.Format("2006-01-02"), end.Format("2006-01-02"))
@@ -528,7 +530,7 @@ func (s *chatService) toolGetWalletDetail(ctx context.Context, userID uuid.UUID,
 	txns, total, err := s.transactionRepo.SearchByUserID(ctx, userID, limit, 0, map[string]interface{}{
 		"walletId":  matched.ID.String(),
 		"startDate": "1970-01-01",
-		"endDate":   time.Now().Format("2006-01-02"),
+		"endDate":   util.Now().Format("2006-01-02"),
 	})
 	if err != nil {
 		return nil, err

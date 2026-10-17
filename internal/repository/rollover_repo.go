@@ -82,12 +82,15 @@ func (r *rolloverRepository) GetMonthlyBudgetsForPeriod(ctx context.Context, use
 
 func (r *rolloverRepository) GetLatestMonthlyBudgetsBefore(ctx context.Context, userID uuid.UUID, periodStart time.Time) ([]model.Budget, error) {
 	var budgets []model.Budget
-	// Using PostgreSQL DISTINCT ON to fetch the latest budget per category before the target date
+	// PostgreSQL DISTINCT ON keeps exactly one row per category: the first one in
+	// ORDER BY, i.e. the latest period_start. (A plain DISTINCT over every column
+	// incl. id returned every historical budget.) GORM still appends the
+	// soft-delete filter (deleted_at IS NULL) to this query.
 	err := r.db.WithContext(ctx).
 		Model(&model.Budget{}).
+		Select("DISTINCT ON (category_id) *").
 		Where("user_id = ? AND period_type = ? AND period_start < ?", userID, "monthly", periodStart).
-		Order("category_id, period_start DESC").
-		Distinct("category_id, amount, id, user_id, period_type, period_start, created_at, updated_at, deleted_at").
+		Order("category_id, period_start DESC, created_at DESC").
 		Find(&budgets).Error
 	if err != nil {
 		return nil, err
@@ -108,5 +111,18 @@ func (r *rolloverRepository) CreateBudgets(ctx context.Context, budgets []model.
 	if len(budgets) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).Create(&budgets).Error
+	// Idempotent: a concurrent or repeated rollover never duplicates a budget.
+	// Relies on the partial unique index idx_budgets_user_category_period
+	// (user_id, category_id, period_type, period_start) WHERE deleted_at IS NULL.
+	return r.db.WithContext(ctx).
+		Clauses(budgetPeriodOnConflictDoNothing()).
+		Create(&budgets).Error
+}
+
+func budgetPeriodOnConflictDoNothing() clause.OnConflict {
+	return clause.OnConflict{
+		Columns:     []clause.Column{{Name: "user_id"}, {Name: "category_id"}, {Name: "period_type"}, {Name: "period_start"}},
+		TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "deleted_at IS NULL"}}},
+		DoNothing:   true,
+	}
 }
