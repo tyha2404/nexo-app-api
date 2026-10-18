@@ -317,3 +317,40 @@ func TestTransactionPreloadsSoftDeletedCategoryName(t *testing.T) {
 	require.Len(t, list, 1)
 	require.Equal(t, "Old", list[0].Category.Name)
 }
+
+func TestTransactionWalletDetachInvestmentAndOwnership(t *testing.T) {
+	db := testDatabase(t)
+	repo := NewTransactionRepository(db)
+	ctx := context.Background()
+	user, wallet := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
+
+	tx := &model.Transaction{UserID: user, CategoryID: uuid.New(), WalletID: &wallet, Amount: 200, Type: model.TransactionTypeExpense, TransactionDate: time.Now()}
+	require.NoError(t, repo.Create(ctx, tx))
+	require.Equal(t, 800.0, walletBalance(t, db, wallet))
+
+	// Detaching the wallet reverses the effect and clears the flag.
+	tx.WalletID = nil
+	require.NoError(t, repo.Update(ctx, tx))
+	require.False(t, tx.BalanceApplied)
+	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
+
+	// Deleting a row with no wallet touches nothing.
+	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
+
+	// Holding investment debits the amount; realizing it applies only the PnL.
+	inv := &model.Transaction{UserID: user, CategoryID: uuid.New(), WalletID: &wallet, Amount: 500, Type: model.TransactionTypeInvestment, TransactionDate: time.Now()}
+	require.NoError(t, repo.Create(ctx, inv))
+	require.Equal(t, 500.0, walletBalance(t, db, wallet))
+	sold, pnl := model.InvestmentStatusSold, 120.0
+	inv.Status, inv.RealizedPnL = &sold, &pnl
+	require.NoError(t, repo.Update(ctx, inv))
+	require.Equal(t, 1120.0, walletBalance(t, db, wallet))
+
+	// Another user cannot update the row, and the balance is untouched.
+	stolen := *inv
+	stolen.UserID, stolen.Amount = uuid.New(), 1
+	require.Error(t, repo.Update(ctx, &stolen))
+	require.Equal(t, 1120.0, walletBalance(t, db, wallet))
+}
