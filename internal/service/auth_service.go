@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -11,6 +12,7 @@ import (
 type AuthService interface {
 	Login(ctx context.Context, identifier string, password string) (*model.User, error)
 	Register(ctx context.Context, user *model.User) (*model.User, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 }
 
 type authService struct {
@@ -102,4 +104,31 @@ func (s *authService) Register(ctx context.Context, user *model.User) (*model.Us
 	createdUser.Password = ""
 
 	return createdUser, nil
+}
+
+// ChangePassword replaces the password of a locally registered user after
+// verifying the current one. Supabase-synced users have an empty local hash
+// and must change their password through Supabase Auth instead.
+func (s *authService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if user.Password == "" {
+		return constant.ErrPasswordManagedExternally
+	}
+	if err := user.CheckPassword(currentPassword); err != nil {
+		return constant.ErrInvalidCredentials
+	}
+	if currentPassword == newPassword {
+		return constant.ErrSamePassword
+	}
+
+	user.Password = newPassword
+	if err := user.HashPassword(); err != nil {
+		return err
+	}
+
+	return s.repo.UpdateFields(ctx, userID, map[string]interface{}{"password": user.Password})
 }

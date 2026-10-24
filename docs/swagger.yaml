@@ -67,6 +67,21 @@ definitions:
       totalAllocated:
         type: number
     type: object
+  dto.ChangePasswordRequest:
+    properties:
+      currentPassword:
+        example: password123
+        maxLength: 128
+        type: string
+      newPassword:
+        example: newpassword456
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - currentPassword
+    - newPassword
+    type: object
   dto.ChatActionResult:
     properties:
       actionCard:
@@ -1014,6 +1029,50 @@ info:
   title: Nexo API
   version: "1.0"
 paths:
+  /auth/change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change the authenticated user's password after verifying the current
+        one. Accounts that sign in through Supabase Auth must change it there.
+      parameters:
+      - description: Current and new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request payload, wrong current password or unchanged
+            password
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "409":
+          description: Password is managed by Supabase Auth
+          schema:
+            type: string
+        "500":
+          description: Failed to change password
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:

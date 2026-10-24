@@ -15,4 +15,8 @@ var (
 	ErrInvalidCredentials  = errors.New("invalid email or password")
 	ErrInsufficientBalance = errors.New("insufficient balance in source wallet")
 	ErrAlreadyExists       = errors.New("already exists")
+	ErrSamePassword        = errors.New("new password must differ from the current one")
+	// ErrPasswordManagedExternally: the account signs in through Supabase Auth
+	// (the local password column is empty), so its password is changed there.
+	ErrPasswordManagedExternally = errors.New("password is managed by Supabase Auth")
 )

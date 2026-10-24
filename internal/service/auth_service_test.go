@@ -68,6 +68,9 @@ func (m *mockUserRepo) UpdateFields(ctx context.Context, id uuid.UUID, updates m
 	if v, ok := updates["email"].(string); ok {
 		u.Email = v
 	}
+	if v, ok := updates["password"].(string); ok {
+		u.Password = v
+	}
 	return nil
 }
 
@@ -170,5 +173,55 @@ func TestAuthService_Login(t *testing.T) {
 	_, err = svc.Login(context.Background(), "login@example.com", "wrongpassword")
 	if !errors.Is(err, constant.ErrInvalidCredentials) {
 		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	}
+}
+
+func TestAuthService_ChangePassword(t *testing.T) {
+	repo := newMockUserRepo()
+	svc := NewAuthService(repo)
+	ctx := context.Background()
+
+	user := &model.User{Username: "pwuser", Email: "pw@example.com", Password: "oldpassword"}
+	_ = user.HashPassword()
+	_ = repo.Create(ctx, user)
+
+	// Wrong current password
+	err := svc.ChangePassword(ctx, user.ID, "wrongpassword", "newpassword123")
+	if !errors.Is(err, constant.ErrInvalidCredentials) {
+		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	}
+
+	// Same password
+	err = svc.ChangePassword(ctx, user.ID, "oldpassword", "oldpassword")
+	if !errors.Is(err, constant.ErrSamePassword) {
+		t.Errorf("expected ErrSamePassword, got %v", err)
+	}
+
+	// Success: new password logs in, old one no longer does
+	if err := svc.ChangePassword(ctx, user.ID, "oldpassword", "newpassword123"); err != nil {
+		t.Fatalf("failed to change password: %v", err)
+	}
+	if _, ok := repo.lastUpdates["password"]; !ok || len(repo.lastUpdates) != 1 {
+		t.Errorf("expected only the password column to be updated, got %v", repo.lastUpdates)
+	}
+	if _, err := svc.Login(ctx, "pw@example.com", "newpassword123"); err != nil {
+		t.Errorf("expected login with new password to succeed, got %v", err)
+	}
+	if _, err := svc.Login(ctx, "pw@example.com", "oldpassword"); !errors.Is(err, constant.ErrInvalidCredentials) {
+		t.Errorf("expected old password to be rejected, got %v", err)
+	}
+
+	// Supabase-synced user (empty local hash)
+	sbUser := &model.User{Username: "sbuser", Email: "sb@example.com"}
+	_ = repo.Create(ctx, sbUser)
+	err = svc.ChangePassword(ctx, sbUser.ID, "anything", "newpassword123")
+	if !errors.Is(err, constant.ErrPasswordManagedExternally) {
+		t.Errorf("expected ErrPasswordManagedExternally, got %v", err)
+	}
+
+	// Unknown user
+	err = svc.ChangePassword(ctx, uuid.New(), "oldpassword", "newpassword123")
+	if !errors.Is(err, constant.ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }

@@ -23,6 +23,11 @@ type RegisterRequest struct {
 	Password string `json:"password" example:"password123" validate:"required,min=8,max=128"`
 }
 
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" example:"password123" validate:"required,max=128"`
+	NewPassword     string `json:"newPassword" example:"newpassword456" validate:"required,min=8,max=128"`
+}
+
 type UserResponse struct {
 	ID        string `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Username  string `json:"username" example:"johndoe"`

@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// AuthLimitPerMinute is how many login/register attempts one client IP may
-// make per minute (shared between the two endpoints).
+// AuthLimitPerMinute is how many login/register/change-password attempts one
+// client IP may make per minute (shared between the endpoints).
 const AuthLimitPerMinute = 10
 
 type AuthRouter struct {
@@ -40,6 +40,7 @@ func (r *AuthRouter) RegisterRoutes(router chi.Router) {
 		authRoute.Group(func(protectedRoute chi.Router) {
 			protectedRoute.Use(middleware.AuthMiddleware)
 			protectedRoute.Get("/whoami", r.handler.WhoAmI)
+			protectedRoute.With(r.authLimiter.Middleware).Post("/change-password", r.handler.ChangePassword)
 		})
 	})
 }

@@ -137,3 +137,47 @@ func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 
 	h.errorHandler.HandleSuccess(w, http.StatusOK, user)
 }
+
+// ChangePassword changes the current user's password
+// @Summary Change password
+// @Description Change the authenticated user's password after verifying the current one. Accounts that sign in through Supabase Auth must change it there.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.ChangePasswordRequest true "Current and new password"
+// @Success 200 {object} map[string]string
+// @Failure 400 {string} string "Invalid request payload, wrong current password or unchanged password"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 409 {string} string "Password is managed by Supabase Auth"
+// @Failure 500 {string} string "Failed to change password"
+// @Router /auth/change-password [post]
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized access", "change_password")
+		return
+	}
+
+	var req dto.ChangePasswordRequest
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "change_password")
+		return
+	}
+
+	// A wrong current password is a 400, not a 401: clients treat 401 as an
+	// expired session and log the user out.
+	err = h.svc.ChangePassword(r.Context(), user.ID, req.CurrentPassword, req.NewPassword)
+	switch {
+	case err == nil:
+		h.errorHandler.HandleSuccess(w, http.StatusOK, map[string]string{"message": "Password changed"})
+	case errors.Is(err, constant.ErrInvalidCredentials):
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Current password is incorrect", "change_password")
+	case errors.Is(err, constant.ErrSamePassword):
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "New password must differ from the current one", "change_password")
+	case errors.Is(err, constant.ErrPasswordManagedExternally):
+		h.errorHandler.HandleError(w, err, http.StatusConflict, "Password is managed by Supabase Auth", "change_password")
+	default:
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to change password", "change_password")
+	}
+}
