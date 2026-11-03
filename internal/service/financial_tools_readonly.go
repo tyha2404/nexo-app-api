@@ -183,30 +183,33 @@ func getReadOnlyToolDefinitions() []ToolDefinition {
 func (s *chatService) executeReadOnlyFinancialTool(ctx context.Context, userID uuid.UUID, name string, args map[string]interface{}) (*FinancialToolResult, bool) {
 	switch name {
 	case "search_transactions":
-		return runTool(s.toolSearchTransactions(ctx, userID, args)), true
+		return s.runTool(s.toolSearchTransactions(ctx, userID, args)), true
 	case "list_categories":
-		return runTool(s.toolListCategories(ctx, userID, args)), true
+		return s.runTool(s.toolListCategories(ctx, userID, args)), true
 	case "get_monthly_trend":
-		return runTool(s.toolGetMonthlyTrend(ctx, userID, args)), true
+		return s.runTool(s.toolGetMonthlyTrend(ctx, userID, args)), true
 	case "get_wallet_detail":
-		return runTool(s.toolGetWalletDetail(ctx, userID, args)), true
+		return s.runTool(s.toolGetWalletDetail(ctx, userID, args)), true
 	case "get_debt_detail":
-		return runTool(s.toolGetDebtDetail(ctx, userID, args)), true
+		return s.runTool(s.toolGetDebtDetail(ctx, userID, args)), true
 	case "get_investment_summary":
-		return runTool(s.toolGetInvestmentSummary(ctx, userID, args)), true
+		return s.runTool(s.toolGetInvestmentSummary(ctx, userID, args)), true
 	case "search_financial_knowledge":
-		return runTool(s.toolSearchFinancialKnowledge(ctx, userID, args)), true
+		return s.runTool(s.toolSearchFinancialKnowledge(ctx, userID, args)), true
 	default:
 		return nil, false
 	}
 }
 
 // runTool converts a tool handler result/error into a FinancialToolResult.
-func runTool(res *FinancialToolResult, err error) *FinancialToolResult {
+func (s *chatService) runTool(res *FinancialToolResult, err error) *FinancialToolResult {
 	if err != nil {
+		if !isBusinessError(err) {
+			s.logger.Error("read-only AI tool failed", zap.Error(err))
+		}
 		return &FinancialToolResult{
 			ToolTitle:  "Lỗi thực thi công cụ",
-			ResultJSON: toolErrorJSON(err.Error()),
+			ResultJSON: toolErrorJSON(toolErrorMessage(err)),
 		}
 	}
 	return res

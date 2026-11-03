@@ -10,6 +10,9 @@ import (
 type UserRouter struct {
 	handler *handler.UserHandler
 	logger  *zap.Logger
+	// RoleLookup, when set, re-checks the admin role in the database on
+	// every request instead of trusting the role baked into the token.
+	RoleLookup middleware.RoleLookup
 }
 
 // NewUserRouter creates a new instance of UserRouter
@@ -27,6 +30,9 @@ func (r *UserRouter) RegisterRoutes(router chi.Router) {
 	router.Route("/users", func(usersRoute chi.Router) {
 		usersRoute.Use(middleware.AuthMiddleware)
 		usersRoute.Use(middleware.AdminOnly)
+		if r.RoleLookup != nil {
+			usersRoute.Use(middleware.RequireCurrentRole("admin", r.RoleLookup))
+		}
 		usersRoute.Post("/", r.handler.Create)
 		usersRoute.Get("/", r.handler.List)
 		usersRoute.Get("/{id}", r.handler.Get)

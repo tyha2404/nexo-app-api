@@ -11,6 +11,10 @@ import (
 // ChatStreamLimitPerMinute is how many AI chat messages one user may send per minute.
 const ChatStreamLimitPerMinute = 20
 
+// ChatStreamMaxBodyBytes caps the /chat/stream body: a 4000-rune message
+// (up to 16 KB of UTF-8) plus a few small fields.
+const ChatStreamMaxBodyBytes = 64 << 10
+
 type ChatRouter struct {
 	handler       *handler.ChatHandler
 	streamLimiter *middleware.RateLimiter
@@ -28,7 +32,7 @@ func (r *ChatRouter) RegisterRoutes(router chi.Router) {
 	router.Route("/chat", func(router chi.Router) {
 		router.Use(middleware.AuthMiddleware)
 		// Rate limited per user (the key needs the user from AuthMiddleware).
-		router.With(r.streamLimiter.Middleware).Post("/stream", r.handler.StreamMessage)
+		router.With(r.streamLimiter.Middleware, middleware.MaxBodyBytes(ChatStreamMaxBodyBytes)).Post("/stream", r.handler.StreamMessage)
 		router.Get("/models", r.handler.ListModels)
 		router.Get("/sessions", r.handler.ListSessions)
 		router.Get("/sessions/{id}", r.handler.GetSessionMessages)

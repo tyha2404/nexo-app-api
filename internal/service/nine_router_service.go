@@ -130,11 +130,14 @@ type nineRouterService struct {
 	baseURL        string
 	model          string
 	embeddingModel string
-	httpClient     *http.Client
-	logger         *zap.Logger
-	mu             sync.RWMutex
-	cachedModels   []string
-	cacheExpiry    time.Time
+	// allowedModels, when non-empty, restricts which upstream models are
+	// offered to (and accepted from) clients (NINE_ROUTER_ALLOWED_MODELS).
+	allowedModels map[string]struct{}
+	httpClient    *http.Client
+	logger        *zap.Logger
+	mu            sync.RWMutex
+	cachedModels  []string
+	cacheExpiry   time.Time
 }
 
 // Upstream timeouts. Requests are always bound to the caller's context (the
@@ -187,11 +190,20 @@ func NewNineRouterService(cfg *config.Config, logger *zap.Logger) NineRouterServ
 		embeddingModel = "embedding-3"
 	}
 
+	var allowedModels map[string]struct{}
+	if len(cfg.NineRouterAllowedModels) > 0 {
+		allowedModels = make(map[string]struct{}, len(cfg.NineRouterAllowedModels))
+		for _, m := range cfg.NineRouterAllowedModels {
+			allowedModels[m] = struct{}{}
+		}
+	}
+
 	return &nineRouterService{
 		apiKey:         apiKey,
 		baseURL:        baseURL,
 		model:          modelName,
 		embeddingModel: embeddingModel,
+		allowedModels:  allowedModels,
 		httpClient: &http.Client{
 			Transport: newLoggingTransport(logger),
 		},
@@ -255,9 +267,15 @@ func (s *nineRouterService) ListModels(ctx context.Context) ([]string, error) {
 
 	result := make([]string, 0, len(modelsResp.Data))
 	for _, m := range modelsResp.Data {
-		if m.ID != "" {
-			result = append(result, m.ID)
+		if m.ID == "" {
+			continue
 		}
+		if s.allowedModels != nil {
+			if _, ok := s.allowedModels[m.ID]; !ok {
+				continue
+			}
+		}
+		result = append(result, m.ID)
 	}
 
 	s.mu.Lock()
@@ -269,7 +287,8 @@ func (s *nineRouterService) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // isAllowedModel reports whether a client-requested model is one the server
-// offers: the configured NINE_ROUTER_MODEL or an ID returned by ListModels.
+// offers: the configured NINE_ROUTER_MODEL or an ID returned by ListModels
+// (which is already narrowed to NINE_ROUTER_ALLOWED_MODELS when set).
 // Arbitrary client strings are never forwarded upstream.
 func (s *nineRouterService) isAllowedModel(ctx context.Context, requestedModel string) bool {
 	if requestedModel == s.model {

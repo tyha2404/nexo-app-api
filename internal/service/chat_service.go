@@ -199,6 +199,9 @@ const (
 	// ragAutoInjectMinScore filters out weak semantic matches; fallback-flagged
 	// results are always excluded regardless of this threshold.
 	ragAutoInjectMinScore = 0.30
+	// maxToolCallsPerTurn caps how many tool calls of one model turn are
+	// executed, bounding DB work and proposals per chat message.
+	maxToolCallsPerTurn = 5
 )
 
 // autoInjectKnowledge grounds the system prompt with internal knowledge that
@@ -476,6 +479,12 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 	var turnCards []dto.ActionCard
 	if err == nil && toolChatResp != nil && len(toolChatResp.Choices) > 0 {
 		choice := toolChatResp.Choices[0]
+		if len(choice.Message.ToolCalls) > maxToolCallsPerTurn {
+			// Drop the extra calls from the assistant message too: every
+			// tool_call it carries must be answered by a tool message.
+			s.logger.Warn("truncating tool calls", zap.Int("requested", len(choice.Message.ToolCalls)))
+			choice.Message.ToolCalls = choice.Message.ToolCalls[:maxToolCallsPerTurn]
+		}
 		if len(choice.Message.ToolCalls) > 0 {
 			// Append assistant tool_calls message
 			requestyMessages = append(requestyMessages, RequestyMessage{
@@ -512,7 +521,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 				}
 				if toolErr != nil {
 					s.logger.Error("tool execution error", zap.String("tool", tc.Function.Name), zap.Error(toolErr))
-					errJSON, _ := json.Marshal(map[string]string{"error": toolErr.Error()})
+					errJSON, _ := json.Marshal(map[string]string{"error": toolErrorMessage(toolErr)})
 					toolRes = &FinancialToolResult{
 						ToolTitle:  "Lỗi thực thi công cụ",
 						ResultJSON: string(errJSON),
@@ -681,7 +690,10 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 
 	if err != nil {
 		s.logger.Error("failed to stream answer from AI", zap.Error(err))
-		errorContent := "Có lỗi khi kết nối tới AI: " + err.Error()
+		// The upstream error can carry the gateway URL or raw response body;
+		// it stays in the log, the user gets a generic message.
+		const clientErrorMessage = "Có lỗi khi kết nối tới AI, vui lòng thử lại sau"
+		errorContent := clientErrorMessage
 		if fullAIResponse.Len() > 0 {
 			errorContent = fullAIResponse.String() + "\n\n⚠️ " + errorContent
 		}
@@ -690,7 +702,7 @@ Quy tắc trả lời sau khi nhận kết quả từ Tool:
 
 		eventChan <- dto.ChatStreamEvent{
 			Type:         "error",
-			ErrorMessage: err.Error(),
+			ErrorMessage: clientErrorMessage,
 			SessionID:    &session.ID,
 			MessageID:    &aiMsg.ID,
 			Status:       "ERROR",

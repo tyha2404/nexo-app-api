@@ -61,6 +61,8 @@ func main() {
 
 	r := router.New(gormDB, logg,
 		router.WithCORSAllowedOrigins(cfg.CORSAllowedOrigins),
+		router.WithSwaggerDisabled(cfg.IsProduction()),
+		router.WithLocalRegisterDisabled(!cfg.LocalRegisterEnabled),
 	)
 
 	srv := &http.Server{
@@ -78,7 +80,9 @@ func main() {
 
 	go func() {
 		logg.Sugar().Infow("starting server", "addr", srv.Addr)
-		logg.Sugar().Infoln("swagger docs: http://localhost:" + cfg.Port + "/swagger/index.html")
+		if !cfg.IsProduction() {
+			logg.Sugar().Infoln("swagger docs: http://localhost:" + cfg.Port + "/swagger/index.html")
+		}
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logg.Sugar().Fatalf("listen: %v", err)
 		}

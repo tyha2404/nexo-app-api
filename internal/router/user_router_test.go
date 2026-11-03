@@ -105,3 +105,19 @@ func TestAuthRoutes_LoginIsRateLimited(t *testing.T) {
 		t.Fatalf("expected 429 after %d attempts, got %d", AuthLimitPerMinute, last)
 	}
 }
+
+func TestAuthRoutes_RegisterCanBeDisabled(t *testing.T) {
+	ar := NewAuthRouter(handler.NewAuthHandler(nil, zap.NewNop()), zap.NewNop())
+	ar.DisableRegister = true
+	r := chi.NewRouter()
+	ar.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/register",
+		bytes.NewBufferString(`{"username":"squatter","email":"victim@example.com","password":"password123"}`))
+	req.RemoteAddr = "203.0.113.51:1234"
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when local register is disabled, got %d", rr.Code)
+	}
+}

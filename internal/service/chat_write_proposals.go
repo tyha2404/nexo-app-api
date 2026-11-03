@@ -399,7 +399,8 @@ func previewSetTarget(args map[string]interface{}) (*writeProposal, *FinancialTo
 	if targetType == "" || !amountOK {
 		return nil, proposalError("Lỗi thiết lập mục tiêu", "Cần cung cấp loại mục tiêu (EXPENSE/INVESTMENT) và số tiền lớn hơn 0")
 	}
-	switch strings.ToUpper(targetType) {
+	targetType = strings.ToUpper(targetType)
+	switch targetType {
 	case "SPENDING_LIMIT", "SPENDING":
 		targetType = "EXPENSE"
 	case "SAVINGS":
@@ -412,6 +413,9 @@ func previewSetTarget(args map[string]interface{}) (*writeProposal, *FinancialTo
 	}
 	if v, ok := args["year"].(float64); ok && v > 0 {
 		year = int(v)
+	}
+	if err := validateTarget(targetType, amount, month, year); err != nil {
+		return nil, proposalError("Lỗi thiết lập mục tiêu", err.Error())
 	}
 	typeVi := "Hạn mức chi tiêu tối đa"
 	if targetType == "INVESTMENT" {
@@ -440,7 +444,18 @@ func toolResultError(resultJSON string) string {
 // isBusinessError reports errors caused by the request (not the server).
 func isBusinessError(err error) bool {
 	return errors.Is(err, constant.ErrInvalidInput) || errors.Is(err, constant.ErrInsufficientBalance) ||
-		errors.Is(err, constant.ErrNotFound) || errors.Is(err, constant.ErrAlreadyExists)
+		errors.Is(err, constant.ErrNotFound) || errors.Is(err, constant.ErrAlreadyExists) ||
+		errors.Is(err, ErrSameWalletTransfer)
+}
+
+// toolErrorMessage is the error text shown to the model and the user. Only
+// business errors are passed through; anything else (DB, driver, upstream)
+// may carry internal details, so it is logged by the caller and replaced.
+func toolErrorMessage(err error) string {
+	if isBusinessError(err) {
+		return err.Error()
+	}
+	return "Có lỗi hệ thống, vui lòng thử lại sau"
 }
 
 // ConfirmAction executes a pending AI write proposal through the same tool

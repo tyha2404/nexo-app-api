@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -25,7 +27,28 @@ func NewTargetService(repo repository.TargetRepository) TargetService {
 	return &targetService{repo: repo}
 }
 
+// validateTarget enforces the same rules as dto.UpsertTargetRequest's tags,
+// for callers that do not go through the HTTP validator (the AI tools).
+func validateTarget(targetType string, amount float64, month, year int) error {
+	if targetType != string(model.TargetTypeExpense) && targetType != string(model.TargetTypeInvestment) {
+		return fmt.Errorf("loại mục tiêu phải là EXPENSE hoặc INVESTMENT: %w", constant.ErrInvalidInput)
+	}
+	if amount <= 0 || amount > maxTargetAmount {
+		return fmt.Errorf("số tiền mục tiêu không hợp lệ: %w", constant.ErrInvalidInput)
+	}
+	if month < 1 || month > 12 || year < 2000 || year > 2100 {
+		return fmt.Errorf("tháng/năm không hợp lệ: %w", constant.ErrInvalidInput)
+	}
+	return nil
+}
+
+// maxTargetAmount fits monthly_targets.target_amount numeric(12,2).
+const maxTargetAmount = 9999999999
+
 func (s *targetService) UpsertTarget(ctx context.Context, userID uuid.UUID, req *dto.UpsertTargetRequest) error {
+	if err := validateTarget(req.TargetType, req.TargetAmount, req.Month, req.Year); err != nil {
+		return err
+	}
 	target := &model.MonthlyTarget{
 		UserID:       userID,
 		TargetType:   model.TargetType(req.TargetType),

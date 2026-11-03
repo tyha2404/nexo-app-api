@@ -137,7 +137,7 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := ParseQueryIntWithValidation(r, "limit", 10, 1)
+	limit := min(ParseQueryIntWithValidation(r, "limit", 10, 1), MaxPageLimit)
 	offset := ParseQueryIntWithValidation(r, "offset", 0, 0)
 
 	filters := BuildFilterMap(r, []string{"startDate", "endDate"})

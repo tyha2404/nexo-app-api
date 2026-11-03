@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService interface {
@@ -18,6 +21,13 @@ type AuthService interface {
 type authService struct {
 	repo repository.UserRepo
 }
+
+// dummyPasswordHash is compared against when there is no hash to check, to
+// keep login timing uniform.
+var dummyPasswordHash = sync.OnceValue(func() []byte {
+	hash, _ := bcrypt.GenerateFromPassword([]byte("nexo-timing-equaliser"), bcrypt.DefaultCost)
+	return hash
+})
 
 func NewAuthService(repo repository.UserRepo) AuthService {
 	return &authService{
@@ -39,13 +49,20 @@ func (s *authService) Login(ctx context.Context, identifier string, password str
 		user, err = s.repo.FindByUsername(ctx, identifier)
 		if err != nil {
 			if err == constant.ErrNotFound {
+				// Spend the same bcrypt time as a wrong password, so the
+				// response time doesn't reveal whether the account exists.
+				_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(password))
 				return nil, constant.ErrInvalidCredentials
 			}
 			return nil, err
 		}
 	}
 
-	// 2. Verify password hash
+	// 2. Verify password hash. Supabase accounts have no local hash.
+	if user.Password == "" {
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(password))
+		return nil, constant.ErrInvalidCredentials
+	}
 	if err := user.CheckPassword(password); err != nil {
 		return nil, constant.ErrInvalidCredentials
 	}
@@ -61,6 +78,8 @@ func (s *authService) Login(ctx context.Context, identifier string, password str
 }
 
 func (s *authService) Register(ctx context.Context, user *model.User) (*model.User, error) {
+	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
+
 	// Validate user data
 	if err := user.Validate(); err != nil {
 		return nil, err

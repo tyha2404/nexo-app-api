@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/util"
@@ -77,4 +78,30 @@ func AdminOnly(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RoleLookup returns a user's current role from the database.
+type RoleLookup func(ctx context.Context, userID uuid.UUID) (string, error)
+
+// RequireCurrentRole re-checks the caller's role in the database. The role in
+// a token is a snapshot from login, so without this a demoted or deleted
+// admin keeps admin access until the token expires. Use it after AdminOnly.
+func RequireCurrentRole(role string, lookup RoleLookup) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+			if !ok {
+				render.Status(r, http.StatusUnauthorized)
+				render.JSON(w, r, map[string]string{"error": "User not found in context"})
+				return
+			}
+			current, err := lookup(r.Context(), user.ID)
+			if err != nil || current != role {
+				render.Status(r, http.StatusForbidden)
+				render.JSON(w, r, map[string]string{"error": "Admin access required"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

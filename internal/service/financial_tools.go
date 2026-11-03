@@ -797,7 +797,7 @@ func (s *chatService) toolCreateCategory(ctx context.Context, userID uuid.UUID, 
 		s.logger.Error("failed to create category from AI tool", zap.Error(err))
 		return &FinancialToolResult{
 			ToolTitle:  "Tạo danh mục mới thất bại",
-			ResultJSON: toolErrorJSON(fmt.Sprintf("Không thể tạo danh mục: %s", err.Error())),
+			ResultJSON: toolErrorJSON("Không thể tạo danh mục: " + toolErrorMessage(err)),
 		}, nil
 	}
 
@@ -1048,9 +1048,12 @@ func (s *chatService) toolTransferBetweenWallets(ctx context.Context, userID uui
 
 	res, err := s.walletService.TransferMoney(ctx, userID, transferReq)
 	if err != nil {
+		if !isBusinessError(err) {
+			s.logger.Error("failed to transfer money from AI tool", zap.Error(err))
+		}
 		return &FinancialToolResult{
 			ToolTitle:  "Chuyển tiền nội bộ thất bại",
-			ResultJSON: toolErrorJSON(err.Error()),
+			ResultJSON: toolErrorJSON(toolErrorMessage(err)),
 		}, nil
 	}
 
@@ -1336,9 +1339,10 @@ func (s *chatService) toolSetFinancialTarget(ctx context.Context, userID uuid.UU
 	}
 
 	// Normalize target type
-	if strings.ToUpper(targetType) == "SPENDING_LIMIT" || strings.ToUpper(targetType) == "SPENDING" {
+	targetType = strings.ToUpper(targetType)
+	if targetType == "SPENDING_LIMIT" || targetType == "SPENDING" {
 		targetType = "EXPENSE"
-	} else if strings.ToUpper(targetType) == "SAVINGS" {
+	} else if targetType == "SAVINGS" {
 		targetType = "INVESTMENT"
 	}
 

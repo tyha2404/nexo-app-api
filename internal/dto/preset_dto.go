@@ -6,22 +6,22 @@ import (
 )
 
 type CreatePresetRequest struct {
-	CategoryID  uuid.UUID `json:"categoryId" binding:"required"`
-	Name        string    `json:"name" binding:"required"`
-	Amount      float64   `json:"amount" binding:"required"`
-	Type        string    `json:"type" binding:"required"`
-	Description string    `json:"description"`
-	Icon        string    `json:"icon"`
+	CategoryID  uuid.UUID `json:"categoryId" validate:"required"`
+	Name        string    `json:"name" validate:"required,max=100"`
+	Amount      float64   `json:"amount" validate:"required,gt=0,lte=9999999999"`
+	Type        string    `json:"type" validate:"required,oneof=INCOME EXPENSE INVESTMENT"`
+	Description string    `json:"description" validate:"max=255"`
+	Icon        string    `json:"icon" validate:"max=50"`
 	SortOrder   int       `json:"sortOrder"`
 }
 
 type UpdatePresetRequest struct {
 	CategoryID  *uuid.UUID `json:"categoryId"`
-	Name        *string    `json:"name"`
-	Amount      *float64   `json:"amount"`
-	Type        *string    `json:"type"`
-	Description *string    `json:"description"`
-	Icon        *string    `json:"icon"`
+	Name        *string    `json:"name" validate:"omitempty,min=1,max=100"`
+	Amount      *float64   `json:"amount" validate:"omitempty,gt=0,lte=9999999999"`
+	Type        *string    `json:"type" validate:"omitempty,oneof=INCOME EXPENSE INVESTMENT"`
+	Description *string    `json:"description" validate:"omitempty,max=255"`
+	Icon        *string    `json:"icon" validate:"omitempty,max=50"`
 	SortOrder   *int       `json:"sortOrder"`
 }
 

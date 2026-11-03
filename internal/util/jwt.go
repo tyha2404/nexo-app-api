@@ -89,9 +89,12 @@ func ValidateToken(tokenString string) (*Claims, error) {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			return jwtKey, nil
-		})
+		}, jwt.WithExpirationRequired())
 
-		if err == nil && token.Valid {
+		// Every token this API issues carries a user id. A valid signature
+		// without one (e.g. a Supabase anon/service key, should JWT_SECRET
+		// ever equal the Supabase legacy JWT secret) is not a user.
+		if err == nil && token.Valid && claims.ID != uuid.Nil {
 			return claims, nil
 		}
 	}
@@ -103,7 +106,10 @@ func ValidateToken(tokenString string) (*Claims, error) {
 
 		set, err := jwksCache.Get(ctx, jwksURL)
 		if err == nil {
-			parsedToken, err := jwxjwt.Parse([]byte(tokenString), jwxjwt.WithKeySet(set), jwxjwt.WithValidate(true))
+			// Supabase user access tokens have aud "authenticated"; this
+			// rejects other token kinds signed by the same project keys.
+			parsedToken, err := jwxjwt.Parse([]byte(tokenString), jwxjwt.WithKeySet(set), jwxjwt.WithValidate(true),
+				jwxjwt.WithAudience("authenticated"))
 			if err == nil {
 				sub := parsedToken.Subject()
 				userUUID, err := uuid.Parse(sub)
@@ -111,11 +117,14 @@ func ValidateToken(tokenString string) (*Claims, error) {
 					emailClaim, _ := parsedToken.Get("email")
 					emailStr, _ := emailClaim.(string)
 
+					// Only signed-in end users are accepted ("anon" and
+					// "service_role" are not users of this API), and they
+					// are always plain users here: admin is a local role.
 					roleClaim, _ := parsedToken.Get("role")
-					roleStr, _ := roleClaim.(string)
-					if roleStr == "" || roleStr == "authenticated" {
-						roleStr = "user"
+					if roleStr, _ := roleClaim.(string); roleStr != "authenticated" {
+						return nil, jwt.ErrTokenInvalidClaims
 					}
+					roleStr := "user"
 
 					username := emailStr
 					if strings.Contains(emailStr, "@") {

@@ -1,7 +1,10 @@
 package router
 
 import (
+	"context"
+
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/config"
 	"github.com/tyha2404/nexo-app-api/internal/middleware"
 	"go.uber.org/zap"
@@ -13,6 +16,14 @@ type Options struct {
 	// CORSAllowedOrigins is the browser-origin allowlist. When nil,
 	// config.DefaultCORSAllowedOrigins is used.
 	CORSAllowedOrigins []string
+	// MaxBodyBytes caps request bodies. When 0,
+	// middleware.DefaultMaxBodyBytes is used.
+	MaxBodyBytes int64
+	// DisableSwagger hides /swagger (production).
+	DisableSwagger bool
+	// DisableLocalRegister turns off POST /auth/register, so accounts are
+	// only created through Supabase Auth, which verifies the email.
+	DisableLocalRegister bool
 }
 
 // Option mutates Options.
@@ -21,6 +32,16 @@ type Option func(*Options)
 // WithCORSAllowedOrigins sets the CORS origin allowlist.
 func WithCORSAllowedOrigins(origins []string) Option {
 	return func(o *Options) { o.CORSAllowedOrigins = origins }
+}
+
+// WithSwaggerDisabled hides the Swagger UI and spec.
+func WithSwaggerDisabled(disabled bool) Option {
+	return func(o *Options) { o.DisableSwagger = disabled }
+}
+
+// WithLocalRegisterDisabled turns off local (non-Supabase) registration.
+func WithLocalRegisterDisabled(disabled bool) Option {
+	return func(o *Options) { o.DisableLocalRegister = disabled }
 }
 
 // New creates a new router with all routes configured
@@ -32,12 +53,16 @@ func New(db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
 	if options.CORSAllowedOrigins == nil {
 		options.CORSAllowedOrigins = config.ParseOrigins(config.DefaultCORSAllowedOrigins)
 	}
+	if options.MaxBodyBytes == 0 {
+		options.MaxBodyBytes = middleware.DefaultMaxBodyBytes
+	}
 
 	r := chi.NewRouter()
 
 	// Add logging and CORS middleware
 	r.Use(middleware.NewCORSMiddleware(options.CORSAllowedOrigins))
 	r.Use(middleware.LoggingMiddleware(logger))
+	r.Use(middleware.MaxBodyBytes(options.MaxBodyBytes))
 
 	// Initialize dependency container
 	container := NewContainer(db, logger)
@@ -45,7 +70,15 @@ func New(db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
 	// Initialize routers using handlers from the container
 	healthRouter := NewHealthRouter(container.HealthHandler)
 	authRouter := NewAuthRouter(container.AuthHandler, logger)
+	authRouter.DisableRegister = options.DisableLocalRegister
 	userRouter := NewUserRouter(container.UserHandler, logger)
+	userRouter.RoleLookup = func(ctx context.Context, id uuid.UUID) (string, error) {
+		u, err := container.UserRepo.GetByID(ctx, id)
+		if err != nil {
+			return "", err
+		}
+		return u.Role, nil
+	}
 	categoryRouter := NewCategoryRouter(container.CategoryHandler, logger)
 	costRouter := NewCostRouter(container.CostHandler, logger)
 	transactionRouter := NewTransactionRouter(container.TransactionHandler, middleware.AuthMiddleware)
@@ -79,7 +112,9 @@ func New(db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
 	})
 
 	// Register Swagger UI route
-	AddSwaggerRoute(r)
+	if !options.DisableSwagger {
+		AddSwaggerRoute(r)
+	}
 
 	return r
 }

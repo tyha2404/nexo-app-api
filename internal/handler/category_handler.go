@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
@@ -18,10 +19,11 @@ type CategoryHandler struct {
 	svc          service.CategoryService
 	log          *zap.Logger
 	errorHandler *ErrorHandler
+	validator    *validator.Validate
 }
 
 func NewCategoryHandler(svc service.CategoryService, log *zap.Logger) *CategoryHandler {
-	return &CategoryHandler{svc: svc, log: log, errorHandler: NewErrorHandler(log)}
+	return &CategoryHandler{svc: svc, log: log, errorHandler: NewErrorHandler(log), validator: validator.New()}
 }
 
 // Create handles the creation of a new category record
@@ -48,6 +50,10 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errorHandler.HandleDecodeError(w, err, "create_category")
+		return
+	}
+	if err := h.validator.Struct(req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "create_category")
 		return
 	}
 
@@ -218,6 +224,10 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req dto.UpdateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errorHandler.HandleDecodeError(w, err, "update_category")
+		return
+	}
+	if err := h.validator.Struct(req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "update_category")
 		return
 	}
 

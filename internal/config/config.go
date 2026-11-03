@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata" // embed the tz database so APP_TIMEZONE works on hosts without zoneinfo
@@ -25,12 +26,19 @@ type Config struct {
 	NineRouterAPIKey         string
 	NineRouterModel          string
 	NineRouterEmbeddingModel string
-	SupabaseURL              string
-	SupabaseJWKSURL          string
+	// NineRouterAllowedModels limits the models users may pick for chat
+	// (NINE_ROUTER_ALLOWED_MODELS, comma-separated). Empty offers every model
+	// the gateway lists.
+	NineRouterAllowedModels []string
+	SupabaseURL             string
+	SupabaseJWKSURL         string
 	// CORSAllowedOrigins is the browser-origin allowlist (CORS_ALLOWED_ORIGINS,
 	// comma-separated). Production calls are same-origin through the nexo-web
 	// proxy, so this mostly matters for local development.
 	CORSAllowedOrigins []string
+	// LocalRegisterEnabled allows POST /auth/register (LOCAL_REGISTER_ENABLED).
+	// Defaults to false in production, where sign-up goes through Supabase.
+	LocalRegisterEnabled bool
 	// AppTimezone is the IANA zone used for "today"/"this month" (APP_TIMEZONE).
 	AppTimezone string
 }
@@ -94,11 +102,14 @@ func LoadConfig() (*Config, error) {
 		NineRouterAPIKey:         nineRouterAPIKey,
 		NineRouterModel:          nineRouterModel,
 		NineRouterEmbeddingModel: nineRouterEmbeddingModel,
+		NineRouterAllowedModels:  splitList(getEnv("NINE_ROUTER_ALLOWED_MODELS", "")),
 		SupabaseURL:              getEnv("SUPABASE_URL", ""),
 		SupabaseJWKSURL:          getEnv("SUPABASE_JWKS_URL", ""),
 		CORSAllowedOrigins:       ParseOrigins(getEnv("CORS_ALLOWED_ORIGINS", DefaultCORSAllowedOrigins)),
 		AppTimezone:              getEnv("APP_TIMEZONE", DefaultAppTimezone),
 	}
+
+	c.LocalRegisterEnabled = getEnv("LOCAL_REGISTER_ENABLED", strconv.FormatBool(!c.IsProduction())) == "true"
 
 	if _, err := time.LoadLocation(c.AppTimezone); err != nil {
 		return nil, fmt.Errorf("APP_TIMEZONE %q is not a valid IANA timezone: %w", c.AppTimezone, err)
@@ -118,6 +129,22 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return c, nil
+}
+
+// splitList splits a comma-separated list, dropping blank entries.
+func splitList(raw string) []string {
+	var out []string
+	for _, v := range strings.Split(raw, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// IsProduction reports whether APP_ENV is "production".
+func (c *Config) IsProduction() bool {
+	return c.AppEnv == "production"
 }
 
 func getEnv(key, fallback string) string {

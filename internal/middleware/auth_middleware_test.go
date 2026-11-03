@@ -108,3 +108,40 @@ func TestAdminOnly_Middleware(t *testing.T) {
 		t.Errorf("expected 200 OK for admin, got %d", rrAdmin.Code)
 	}
 }
+
+func TestRequireCurrentRole_UsesDatabaseRole(t *testing.T) {
+	dbRoles := map[uuid.UUID]string{}
+	lookup := func(_ context.Context, id uuid.UUID) (string, error) {
+		role, ok := dbRoles[id]
+		if !ok {
+			return "", constant.ErrNotFound
+		}
+		return role, nil
+	}
+	handlerToTest := RequireCurrentRole("admin", lookup)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	serve := func(id uuid.UUID) int {
+		req := httptest.NewRequest("GET", "/admin-only", nil)
+		// The token still says admin in every case.
+		ctx := context.WithValue(req.Context(), constant.UserContextKey, model.User{ID: id, Role: "admin"})
+		rr := httptest.NewRecorder()
+		handlerToTest.ServeHTTP(rr, req.WithContext(ctx))
+		return rr.Code
+	}
+
+	admin, demoted, deleted := uuid.New(), uuid.New(), uuid.New()
+	dbRoles[admin] = "admin"
+	dbRoles[demoted] = "user"
+
+	if code := serve(admin); code != http.StatusOK {
+		t.Errorf("current admin: expected 200, got %d", code)
+	}
+	if code := serve(demoted); code != http.StatusForbidden {
+		t.Errorf("demoted admin: expected 403, got %d", code)
+	}
+	if code := serve(deleted); code != http.StatusForbidden {
+		t.Errorf("deleted admin: expected 403, got %d", code)
+	}
+}

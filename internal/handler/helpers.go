@@ -133,22 +133,6 @@ func SetCommonHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-XSS-Protection", "1; mode=block")
 }
 
-// GetClientIP extracts the client IP from the request
-func GetClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first (for proxies)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
-	}
-
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
-}
-
 // IsAuthenticated checks if the user is authenticated
 func IsAuthenticated(r *http.Request) bool {
 	_, err := GetUserFromContext(r)
