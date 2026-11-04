@@ -312,6 +312,38 @@ definitions:
       time.Time:
         type: string
     type: object
+  dto.DailyReport:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.DailyReportItem'
+        type: array
+      maxExpense:
+        description: Highest single-day expense, for color scaling
+        type: number
+      month:
+        description: e.g. "2026-11"
+        type: string
+      totalExpense:
+        type: number
+      totalIncome:
+        type: number
+    type: object
+  dto.DailyReportItem:
+    properties:
+      count:
+        description: Number of transactions that day (all types)
+        type: integer
+      date:
+        description: e.g. "2026-11-04"
+        type: string
+      expense:
+        description: Total expense that day
+        type: number
+      income:
+        description: Total income that day
+        type: number
+    type: object
   dto.DebtResponse:
     properties:
       createdAt:
@@ -506,6 +538,25 @@ definitions:
       walletName:
         type: string
     type: object
+  dto.TagSummary:
+    properties:
+      count:
+        example: 12
+        type: integer
+      lastUsed:
+        description: latest transaction date with this tag
+        example: "2026-11-04"
+        type: string
+      name:
+        example: Du lịch Đà Lạt
+        type: string
+      totalExpense:
+        example: 8500000
+        type: number
+      totalIncome:
+        example: 0
+        type: number
+    type: object
   dto.TransactionResponse:
     properties:
       amount:
@@ -538,6 +589,12 @@ definitions:
       status:
         example: HOLDING
         type: string
+      tags:
+        example:
+        - Du lịch Đà Lạt
+        items:
+          type: string
+        type: array
       transactionDate:
         example: "2024-01-15T00:00:00Z"
         type: string
@@ -821,6 +878,15 @@ definitions:
       userId:
         type: string
     type: object
+  handler.DailyReportResponse:
+    properties:
+      data:
+        $ref: '#/definitions/dto.DailyReport'
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
   handler.MonthlyTrendResponse:
     properties:
       data:
@@ -836,6 +902,17 @@ definitions:
         $ref: '#/definitions/dto.DebtResponse'
       message:
         type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.TagListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.TagSummary'
+        type: array
       status:
         type: integer
       success:
@@ -2132,6 +2209,39 @@ paths:
       summary: Record a debt repayment
       tags:
       - Debts
+  /reports/daily:
+    get:
+      description: Per-day income, expense and transaction count for every day of
+        the month (days without transactions are zero), for the spending calendar.
+      parameters:
+      - description: 'Month as YYYY-MM (default: current month in the app timezone)'
+        in: query
+        name: month
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.DailyReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get daily income/expense for a month
+      tags:
+      - Reports
   /reports/monthly-trend:
     get:
       consumes:
@@ -2162,6 +2272,30 @@ paths:
       summary: Get monthly financial trend
       tags:
       - Reports
+  /tags:
+    get:
+      description: Every tag used on the user's transactions, with count, total expense/income
+        and last use date. Most recently used first (for suggestions).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TagListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List transaction tags
+      tags:
+      - transactions
   /transactions:
     get:
       description: List transactions
@@ -2169,6 +2303,10 @@ paths:
       - description: Search transaction descriptions (case-insensitive literal text)
         in: query
         name: keyword
+        type: string
+      - description: Only transactions carrying this tag (exact match)
+        in: query
+        name: tag
         type: string
       - description: Page number
         in: query
@@ -2361,6 +2499,45 @@ paths:
       security:
       - BearerAuth: []
       summary: Update a transaction
+      tags:
+      - transactions
+  /transactions/{id}/restore:
+    post:
+      description: 'Undo a delete: clears the soft delete and re-applies the wallet
+        effect (when the wallet still exists). Only the owner''s deleted transactions
+        can be restored.'
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TransactionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: No deleted transaction with this id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Restore a deleted transaction
       tags:
       - transactions
   /users:

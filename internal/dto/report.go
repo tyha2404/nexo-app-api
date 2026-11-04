@@ -33,3 +33,21 @@ type MonthlyTrendReport struct {
 	AverageExpense float64            `json:"averageExpense"`
 	Items          []MonthlyTrendItem `json:"items"`
 }
+
+// DailyReportItem is one calendar day of the daily report.
+type DailyReportItem struct {
+	Date    string  `json:"date"`    // e.g. "2026-11-04"
+	Income  float64 `json:"income"`  // Total income that day
+	Expense float64 `json:"expense"` // Total expense that day
+	Count   int64   `json:"count"`   // Number of transactions that day (all types)
+}
+
+// DailyReport has one item per day of the month (days without transactions
+// are zero), for the spending calendar.
+type DailyReport struct {
+	Month        string            `json:"month"` // e.g. "2026-11"
+	Items        []DailyReportItem `json:"items"`
+	TotalIncome  float64           `json:"totalIncome"`
+	TotalExpense float64           `json:"totalExpense"`
+	MaxExpense   float64           `json:"maxExpense"` // Highest single-day expense, for color scaling
+}

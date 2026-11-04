@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
@@ -125,6 +127,43 @@ func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// GetDailyReport handles GET /reports/daily
+// @Summary Get daily income/expense for a month
+// @Description Per-day income, expense and transaction count for every day of the month (days without transactions are zero), for the spending calendar.
+// @Tags Reports
+// @Produce json
+// @Param month query string false "Month as YYYY-MM (default: current month in the app timezone)"
+// @Security BearerAuth
+// @Success 200 {object} DailyReportResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /reports/daily [get]
+func (h *ReportHandler) GetDailyReport(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_daily_report")
+		return
+	}
+
+	res, err := h.svc.GetDailyReport(r.Context(), user.ID, r.URL.Query().Get("month"))
+	if err != nil {
+		if errors.Is(err, constant.ErrInvalidInput) {
+			h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid month, expected YYYY-MM", "get_daily_report")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get daily report", "get_daily_report")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response.BaseResponse[dto.DailyReport]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *res,
+	})
+}
+
 func parseRange(rangeParam string) (string, string) {
 	now := util.Now()
 	var start, end time.Time
@@ -156,4 +195,11 @@ type MonthlyTrendResponse struct {
 	Status  int                    `json:"status"`
 	Success bool                   `json:"success"`
 	Data    dto.MonthlyTrendReport `json:"data"`
+}
+
+// DailyReportResponse describes the daily report envelope for Swagger.
+type DailyReportResponse struct {
+	Status  int             `json:"status"`
+	Success bool            `json:"success"`
+	Data    dto.DailyReport `json:"data"`
 }

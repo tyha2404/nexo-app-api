@@ -53,6 +53,15 @@ type MonthlyTotal struct {
 	Expense float64
 }
 
+// DailyTotal is income/expense and the transaction count for one calendar
+// day ("YYYY-MM-DD").
+type DailyTotal struct {
+	Date    string
+	Income  float64
+	Expense float64
+	Count   int64
+}
+
 // ReportRepository runs report aggregations in SQL (SUM / GROUP BY) instead
 // of loading rows into Go. Date strings are "YYYY-MM-DD" and inclusive; empty
 // or malformed bounds are ignored (open range), matching ListByUserID.
@@ -60,6 +69,9 @@ type ReportRepository interface {
 	GetTransactionTotals(ctx context.Context, userID uuid.UUID, startDate, endDate string) (TransactionTotals, error)
 	GetExpenseByCategory(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]CategoryTotal, error)
 	GetMonthlyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]MonthlyTotal, error)
+	// GetDailyIncomeExpense returns one row per day that has transactions
+	// (days without transactions are omitted), ordered by date.
+	GetDailyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]DailyTotal, error)
 	// ListTargetsInRange returns targets of one type for every month in
 	// [from, to] (inclusive, by year/month) in a single query.
 	ListTargetsInRange(ctx context.Context, userID uuid.UUID, targetType model.TargetType, from, to time.Time) ([]model.MonthlyTarget, error)
@@ -167,6 +179,29 @@ func (r *reportRepository) GetMonthlyIncomeExpense(ctx context.Context, userID u
 	out := make([]MonthlyTotal, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, MonthlyTotal{Month: row.Month, Income: row.Income, Expense: row.Expense})
+	}
+	return out, nil
+}
+
+func (r *reportRepository) GetDailyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]DailyTotal, error) {
+	var rows []struct {
+		Day     string
+		Income  float64
+		Expense float64
+		Count   int64
+	}
+	err := transactionsInRange(r.db.WithContext(ctx), userID, startDate, endDate).
+		Select("to_char(transactions.transaction_date, 'YYYY-MM-DD') AS day, " +
+			sqlSumIncome + " AS income, " + sqlSumExpense + " AS expense, COUNT(*) AS count").
+		Group("to_char(transactions.transaction_date, 'YYYY-MM-DD')").
+		Order("day").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DailyTotal, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, DailyTotal{Date: row.Day, Income: row.Income, Expense: row.Expense, Count: row.Count})
 	}
 	return out, nil
 }

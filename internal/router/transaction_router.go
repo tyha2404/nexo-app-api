@@ -27,5 +27,6 @@ func (r *TransactionRouter) RegisterRoutes(router chi.Router) {
 		router.Get("/{id}", r.handler.GetTransaction)
 		router.Put("/{id}", r.handler.UpdateTransaction)
 		router.Delete("/{id}", r.handler.DeleteTransaction)
+		router.Post("/{id}/restore", r.handler.RestoreTransaction)
 	})
 }

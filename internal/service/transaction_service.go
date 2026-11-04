@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,11 @@ type TransactionService interface {
 	ListTransactions(ctx context.Context, userID uuid.UUID, page, limit int, filters map[string]interface{}) ([]dto.TransactionResponse, int64, *dto.TransactionSummaryDTO, error)
 	UpdateTransaction(ctx context.Context, userID, id uuid.UUID, req dto.UpdateTransactionRequest) (*dto.TransactionResponse, error)
 	DeleteTransaction(ctx context.Context, userID, id uuid.UUID) error
+	// RestoreTransaction undoes a delete (soft delete) and returns the
+	// restored transaction.
+	RestoreTransaction(ctx context.Context, userID, id uuid.UUID) (*dto.TransactionResponse, error)
+	// ListTags returns the user's tags with usage totals, most recent first.
+	ListTags(ctx context.Context, userID uuid.UUID) ([]dto.TagSummary, error)
 }
 
 type transactionService struct {
@@ -86,6 +92,7 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 		Type:            model.TransactionType(req.Type),
 		Description:     req.Description,
 		ReceiptURL:      req.ReceiptURL,
+		Tags:            NormalizeTags(req.Tags),
 		TransactionDate: req.TransactionDate.Time,
 	}
 
@@ -220,6 +227,9 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 	if req.ReceiptURL != nil {
 		transaction.ReceiptURL = req.ReceiptURL
 	}
+	if req.Tags != nil {
+		transaction.Tags = NormalizeTags(*req.Tags)
+	}
 	if req.TransactionDate != nil {
 		transaction.TransactionDate = req.TransactionDate.Time
 	}
@@ -247,6 +257,49 @@ func (s *transactionService) DeleteTransaction(ctx context.Context, userID, id u
 	}
 
 	return s.transactionRepo.Delete(ctx, id)
+}
+
+func (s *transactionService) RestoreTransaction(ctx context.Context, userID, id uuid.UUID) (*dto.TransactionResponse, error) {
+	if err := s.transactionRepo.Restore(ctx, userID, id); err != nil {
+		return nil, err
+	}
+	return s.GetTransaction(ctx, userID, id)
+}
+
+func (s *transactionService) ListTags(ctx context.Context, userID uuid.UUID) ([]dto.TagSummary, error) {
+	rows, err := s.transactionRepo.ListTags(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.TagSummary, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, dto.TagSummary{
+			Name:         row.Name,
+			Count:        row.Count,
+			TotalExpense: row.TotalExpense,
+			TotalIncome:  row.TotalIncome,
+			LastUsed:     row.LastUsed.Format("2006-01-02"),
+		})
+	}
+	return out, nil
+}
+
+// NormalizeTags trims each tag, collapses inner whitespace, drops a leading
+// '#', removes empty ones and de-duplicates case-insensitively (the first
+// spelling wins). Order is kept. Length/count limits are validated on the DTO.
+func NormalizeTags(tags []string) model.StringArray {
+	out := model.StringArray{}
+	seen := make(map[string]bool, len(tags))
+	for _, tag := range tags {
+		tag = strings.Join(strings.Fields(strings.TrimPrefix(strings.TrimSpace(tag), "#")), " ")
+		key := strings.ToLower(tag)
+		if tag == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, tag)
+	}
+	return out
 }
 
 func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionResponse {
@@ -279,6 +332,7 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		RealizedPnL:     t.RealizedPnL,
 		Description:     t.Description,
 		ReceiptURL:      t.ReceiptURL,
+		Tags:            append([]string{}, t.Tags...),
 		TransactionDate: t.TransactionDate.Format("2006-01-02"),
 		CreatedAt:       t.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       t.UpdatedAt.Format(time.RFC3339),

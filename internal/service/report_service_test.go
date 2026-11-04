@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"github.com/tyha2404/nexo-app-api/internal/util"
@@ -23,6 +24,9 @@ type fakeReportRepo struct {
 	monthlyEnd   string
 	targetFrom   time.Time
 	targetTo     time.Time
+	daily        []repository.DailyTotal
+	dailyStart   string
+	dailyEnd     string
 }
 
 func (f *fakeReportRepo) GetTransactionTotals(ctx context.Context, userID uuid.UUID, startDate, endDate string) (repository.TransactionTotals, error) {
@@ -34,6 +38,10 @@ func (f *fakeReportRepo) GetExpenseByCategory(ctx context.Context, userID uuid.U
 func (f *fakeReportRepo) GetMonthlyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]repository.MonthlyTotal, error) {
 	f.monthlyStart, f.monthlyEnd = startDate, endDate
 	return f.monthly, nil
+}
+func (f *fakeReportRepo) GetDailyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]repository.DailyTotal, error) {
+	f.dailyStart, f.dailyEnd = startDate, endDate
+	return f.daily, nil
 }
 func (f *fakeReportRepo) ListTargetsInRange(ctx context.Context, userID uuid.UUID, targetType model.TargetType, from, to time.Time) ([]model.MonthlyTarget, error) {
 	f.targetCalls++
@@ -111,4 +119,43 @@ func TestReportService_DerivesSQLRepoFromTargetRepo(t *testing.T) {
 	svc := NewReportService(nil, nil)
 	_, err := svc.GetSummary(context.Background(), uuid.New(), "", "")
 	assert.ErrorIs(t, err, errReportRepositoryUnavailable)
+}
+
+func TestReportService_GetDailyReportFillsEveryDay(t *testing.T) {
+	repo := &fakeReportRepo{daily: []repository.DailyTotal{
+		{Date: "2026-02-03", Income: 10_000_000, Count: 1},
+		{Date: "2026-02-14", Expense: 1_200_000, Count: 3},
+		{Date: "2026-02-28", Expense: 300_000, Income: 50_000, Count: 2},
+	}}
+	res, err := NewReportServiceWithRepository(repo).GetDailyReport(context.Background(), uuid.New(), "2026-02")
+	require.NoError(t, err)
+
+	assert.Equal(t, "2026-02-01", repo.dailyStart)
+	assert.Equal(t, "2026-02-28", repo.dailyEnd)
+	assert.Equal(t, "2026-02", res.Month)
+	require.Len(t, res.Items, 28)
+	assert.Equal(t, "2026-02-01", res.Items[0].Date)
+	assert.Zero(t, res.Items[0].Count)
+	assert.Equal(t, 1_200_000.0, res.Items[13].Expense)
+	assert.EqualValues(t, 3, res.Items[13].Count)
+	assert.Equal(t, 10_050_000.0, res.TotalIncome)
+	assert.Equal(t, 1_500_000.0, res.TotalExpense)
+	assert.Equal(t, 1_200_000.0, res.MaxExpense)
+}
+
+func TestReportService_GetDailyReportRejectsBadMonth(t *testing.T) {
+	svc := NewReportServiceWithRepository(&fakeReportRepo{})
+	for _, month := range []string{"2026-13", "11/2026", "2026-1-01"} {
+		_, err := svc.GetDailyReport(context.Background(), uuid.New(), month)
+		require.ErrorIs(t, err, constant.ErrInvalidInput, month)
+	}
+}
+
+func TestReportService_GetDailyReportDefaultsToCurrentMonth(t *testing.T) {
+	repo := &fakeReportRepo{}
+	res, err := NewReportServiceWithRepository(repo).GetDailyReport(context.Background(), uuid.New(), "")
+	require.NoError(t, err)
+	start, _ := util.MonthRange(util.Now())
+	assert.Equal(t, start.Format("2006-01"), res.Month)
+	assert.Equal(t, start.Format("2006-01-02"), repo.dailyStart)
 }

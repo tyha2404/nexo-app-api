@@ -133,6 +133,7 @@ func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Reque
 // ListTransactions returns a list of transactions
 // @Summary List transactions
 // @Param keyword query string false "Search transaction descriptions (case-insensitive literal text)"
+// @Param tag query string false "Only transactions carrying this tag (exact match)"
 // @Description List transactions
 // @Tags transactions
 // @Produce json
@@ -146,7 +147,7 @@ func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Reque
 func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
 	page, limit := ParsePagination(r)
 
-	filters := BuildFilterMap(r, []string{"type", "status", "categoryId", "startDate", "endDate", "keyword"})
+	filters := BuildFilterMap(r, []string{"type", "status", "categoryId", "startDate", "endDate", "keyword", "tag"})
 
 	user, err := GetUserFromContext(r)
 	if err != nil {
@@ -270,4 +271,86 @@ func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Transaction deleted successfully"})
+}
+
+// RestoreTransaction undoes the deletion of a transaction
+// @Summary Restore a deleted transaction
+// @Description Undo a delete: clears the soft delete and re-applies the wallet effect (when the wallet still exists). Only the owner's deleted transactions can be restored.
+// @Tags transactions
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Transaction ID"
+// @Success 200 {object} dto.TransactionResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "No deleted transaction with this id"
+// @Failure 500 {object} response.ErrorResponse
+// @Router /transactions/{id}/restore [post]
+func (h *TransactionHandler) RestoreTransaction(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "restore_transaction")
+		return
+	}
+
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "restore_transaction")
+		return
+	}
+
+	transaction, err := h.transactionService.RestoreTransaction(r.Context(), user.ID, id)
+	if err != nil {
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Deleted transaction not found", "restore_transaction")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to restore transaction", "restore_transaction")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response.BaseResponse[dto.TransactionResponse]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *transaction,
+	})
+}
+
+// ListTags returns the user's transaction tags
+// @Summary List transaction tags
+// @Description Every tag used on the user's transactions, with count, total expense/income and last use date. Most recently used first (for suggestions).
+// @Tags transactions
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} TagListResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /tags [get]
+func (h *TransactionHandler) ListTags(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "list_tags")
+		return
+	}
+
+	tags, err := h.transactionService.ListTags(r.Context(), user.ID)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to list tags", "list_tags")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(TagListResponse{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    tags,
+	})
+}
+
+// TagListResponse describes the tag list envelope for Swagger.
+type TagListResponse struct {
+	Status  int              `json:"status"`
+	Success bool             `json:"success"`
+	Data    []dto.TagSummary `json:"data"`
 }

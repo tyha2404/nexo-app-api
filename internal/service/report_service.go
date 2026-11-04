@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -16,6 +18,10 @@ type ReportService interface {
 	GetSummary(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.SummaryReport, error)
 	GetCategoryBreakdown(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.CategoryBreakdownReport, error)
 	GetMonthlyTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error)
+	// GetDailyReport returns per-day income/expense for a month ("YYYY-MM";
+	// empty means the current month in the app timezone). An invalid month
+	// is constant.ErrInvalidInput.
+	GetDailyReport(ctx context.Context, userID uuid.UUID, month string) (*dto.DailyReport, error)
 }
 
 // errReportRepositoryUnavailable is returned when the service was built
@@ -147,4 +153,43 @@ func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, m
 		AverageExpense: totalExpenseSum / float64(months),
 		Items:          items,
 	}, nil
+}
+
+func (s *reportService) GetDailyReport(ctx context.Context, userID uuid.UUID, month string) (*dto.DailyReport, error) {
+	if s.reportRepo == nil {
+		return nil, errReportRepositoryUnavailable
+	}
+	var start, next time.Time
+	if month == "" {
+		start, next = util.MonthRange(util.Now())
+	} else {
+		parsed, err := time.Parse("2006-01", month)
+		if err != nil {
+			return nil, fmt.Errorf("month must be YYYY-MM: %w", constant.ErrInvalidInput)
+		}
+		start, next = util.MonthRangeOf(parsed.Year(), parsed.Month())
+	}
+	end := next.AddDate(0, 0, -1)
+
+	rows, err := s.reportRepo.GetDailyIncomeExpense(ctx, userID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	byDate := make(map[string]repository.DailyTotal, len(rows))
+	for _, row := range rows {
+		byDate[row.Date] = row
+	}
+
+	report := &dto.DailyReport{Month: start.Format("2006-01"), Items: make([]dto.DailyReportItem, 0, end.Day())}
+	for d := start; d.Before(next); d = d.AddDate(0, 0, 1) {
+		date := d.Format("2006-01-02")
+		row := byDate[date]
+		report.Items = append(report.Items, dto.DailyReportItem{Date: date, Income: row.Income, Expense: row.Expense, Count: row.Count})
+		report.TotalIncome += row.Income
+		report.TotalExpense += row.Expense
+		if row.Expense > report.MaxExpense {
+			report.MaxExpense = row.Expense
+		}
+	}
+	return report, nil
 }

@@ -35,6 +35,8 @@ type Transaction struct {
 	RealizedPnL *float64          `gorm:"column:realized_pnl;type:numeric(15,2);default:0.00" json:"realizedPnl,omitempty"`
 	Description *string           `gorm:"type:text" json:"description,omitempty"`
 	ReceiptURL  *string           `gorm:"type:varchar(1024)" json:"receiptUrl,omitempty"`
+	// Tags are free-form labels (e.g. "Du lịch Đà Lạt") that cut across categories.
+	Tags StringArray `gorm:"type:text[];not null;default:'{}'" json:"tags"`
 	// BalanceApplied is true when WalletBalanceEffect() has actually been applied
 	// to the wallet. Rows created before wallet effects existed stay false, so
 	// editing/deleting them never reverses an effect that was never applied.

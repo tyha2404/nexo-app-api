@@ -192,3 +192,63 @@ func TestTransactionRejectsForeignCategory(t *testing.T) {
 	require.ErrorIs(t, err, constant.ErrNotFound)
 	require.Equal(t, before, repo.stored.CategoryID)
 }
+
+type restoreStub struct {
+	transactionStub
+	restoredFor uuid.UUID
+	restoreErr  error
+}
+
+func (r *restoreStub) Restore(_ context.Context, userID, _ uuid.UUID) error {
+	r.restoredFor = userID
+	return r.restoreErr
+}
+
+func TestRestoreTransactionReturnsRestoredRow(t *testing.T) {
+	userID := uuid.New()
+	repo := &restoreStub{transactionStub: transactionStub{stored: &model.Transaction{ID: uuid.New(), UserID: userID, Amount: 10, Type: model.TransactionTypeExpense, TransactionDate: time.Now()}}}
+	res, err := service.NewTransactionService(repo, nil, nil, nil, nil).RestoreTransaction(context.Background(), userID, repo.stored.ID)
+	require.NoError(t, err)
+	require.Equal(t, userID, repo.restoredFor)
+	require.Equal(t, repo.stored.ID, res.ID)
+}
+
+func TestRestoreTransactionNotFound(t *testing.T) {
+	repo := &restoreStub{restoreErr: constant.ErrNotFound}
+	_, err := service.NewTransactionService(repo, nil, nil, nil, nil).RestoreTransaction(context.Background(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, constant.ErrNotFound)
+}
+
+func TestNormalizeTags(t *testing.T) {
+	require.Equal(t, model.StringArray{}, service.NormalizeTags(nil))
+	require.Equal(t,
+		model.StringArray{"Du lịch Đà Lạt", "công tác"},
+		service.NormalizeTags([]string{"  Du   lịch  Đà Lạt ", "#công tác", "du lịch đà lạt", "", "  ", "#"}),
+	)
+}
+
+func TestCreateAndUpdateTransactionTags(t *testing.T) {
+	userID, categoryID := uuid.New(), uuid.New()
+	repo := &transactionStub{}
+	cat := &categoryStub{category: &model.Category{ID: categoryID, UserID: userID, Type: model.CategoryType("EXPENSE")}}
+	svc := service.NewTransactionService(repo, cat, &budgetStub{}, &alertStub{}, nil)
+
+	created, err := svc.CreateTransaction(context.Background(), userID, dto.CreateTransactionRequest{
+		CategoryID: categoryID, Amount: 10, Type: "EXPENSE", Tags: []string{"#Đà Lạt", "đà lạt", "Ăn vặt"},
+		TransactionDate: dto.CustomTime{Time: time.Now()},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"Đà Lạt", "Ăn vặt"}, created.Tags)
+
+	// Omitted tags keep the list; an empty list clears it.
+	amount := 20.0
+	updated, err := svc.UpdateTransaction(context.Background(), userID, repo.stored.ID, dto.UpdateTransactionRequest{Amount: &amount})
+	require.NoError(t, err)
+	require.Equal(t, []string{"Đà Lạt", "Ăn vặt"}, updated.Tags)
+
+	empty := []string{}
+	updated, err = svc.UpdateTransaction(context.Background(), userID, repo.stored.ID, dto.UpdateTransactionRequest{Tags: &empty})
+	require.NoError(t, err)
+	require.NotNil(t, updated.Tags, "serialised as [] not null")
+	require.Empty(t, updated.Tags)
+}

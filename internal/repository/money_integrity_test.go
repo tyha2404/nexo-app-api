@@ -354,3 +354,133 @@ func TestTransactionWalletDetachInvestmentAndOwnership(t *testing.T) {
 	require.Error(t, repo.Update(ctx, &stolen))
 	require.Equal(t, 1120.0, walletBalance(t, db, wallet))
 }
+
+func TestTransactionRestoreReappliesWalletEffect(t *testing.T) {
+	db := testDatabase(t)
+	repo := NewTransactionRepository(db)
+	ctx := context.Background()
+	user, wallet := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
+
+	tx := &model.Transaction{UserID: user, CategoryID: uuid.New(), WalletID: &wallet, Amount: 200, Type: model.TransactionTypeExpense, TransactionDate: time.Now()}
+	require.NoError(t, repo.Create(ctx, tx))
+
+	// A live row and another user's row cannot be restored.
+	require.ErrorIs(t, repo.Restore(ctx, user, tx.ID), constant.ErrNotFound)
+	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
+	require.ErrorIs(t, repo.Restore(ctx, uuid.New(), tx.ID), constant.ErrNotFound)
+
+	require.NoError(t, repo.Restore(ctx, user, tx.ID))
+	require.Equal(t, 800.0, walletBalance(t, db, wallet))
+	got, err := repo.GetByID(ctx, tx.ID)
+	require.NoError(t, err)
+	require.True(t, got.BalanceApplied)
+
+	// Restoring twice is a not-found, not a second debit.
+	require.ErrorIs(t, repo.Restore(ctx, user, tx.ID), constant.ErrNotFound)
+	require.Equal(t, 800.0, walletBalance(t, db, wallet))
+
+	// Delete again reverses again.
+	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
+}
+
+func TestTransactionRestoreAfterWalletDeletedClearsFlag(t *testing.T) {
+	db := testDatabase(t)
+	repo := NewTransactionRepository(db)
+	ctx := context.Background()
+	user, wallet := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
+	tx := &model.Transaction{UserID: user, CategoryID: uuid.New(), WalletID: &wallet, Amount: 200, Type: model.TransactionTypeExpense, TransactionDate: time.Now()}
+	require.NoError(t, repo.Create(ctx, tx))
+	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, db.Exec("UPDATE wallets SET deleted_at = now() WHERE id = ?", wallet).Error)
+
+	require.NoError(t, repo.Restore(ctx, user, tx.ID))
+	got, err := repo.GetByID(ctx, tx.ID)
+	require.NoError(t, err)
+	require.False(t, got.BalanceApplied, "effect not applied, so a later delete must not reverse it")
+}
+
+func TestLegacyTransactionRestoreDoesNotApply(t *testing.T) {
+	db := testDatabase(t)
+	repo := NewTransactionRepository(db)
+	ctx := context.Background()
+	user, wallet := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
+	legacy := insertLegacyTransaction(t, db, user, wallet, 200)
+
+	require.NoError(t, repo.Delete(ctx, legacy.ID))
+	require.NoError(t, repo.Restore(ctx, user, legacy.ID))
+	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
+}
+
+func TestDailyIncomeExpenseGroupsByDayAndSkipsDeleted(t *testing.T) {
+	db := testDatabase(t)
+	txRepo := NewTransactionRepository(db)
+	reports := NewReportRepository(db)
+	ctx := context.Background()
+	user := uuid.New()
+	day := func(d int) time.Time { return time.Date(2026, 3, d, 0, 0, 0, 0, time.UTC) }
+	add := func(d int, typ model.TransactionType, amount float64) *model.Transaction {
+		tx := &model.Transaction{UserID: user, CategoryID: uuid.New(), Amount: amount, Type: typ, TransactionDate: day(d)}
+		require.NoError(t, txRepo.Create(ctx, tx))
+		return tx
+	}
+	add(2, model.TransactionTypeExpense, 100)
+	add(2, model.TransactionTypeExpense, 50)
+	add(2, model.TransactionTypeIncome, 1000)
+	add(9, model.TransactionTypeInvestment, 500)
+	deleted := add(9, model.TransactionTypeExpense, 999)
+	require.NoError(t, txRepo.Delete(ctx, deleted.ID))
+	add(31, model.TransactionTypeExpense, 70) // outside the range below
+
+	rows, err := reports.GetDailyIncomeExpense(ctx, user, "2026-03-01", "2026-03-30")
+	require.NoError(t, err)
+	require.Equal(t, []DailyTotal{
+		{Date: "2026-03-02", Income: 1000, Expense: 150, Count: 3},
+		{Date: "2026-03-09", Count: 1},
+	}, rows)
+}
+
+func TestTransactionTagsRoundTripFilterAndList(t *testing.T) {
+	db := testDatabase(t)
+	repo := NewTransactionRepository(db)
+	ctx := context.Background()
+	user := uuid.New()
+	add := func(day int, typ model.TransactionType, amount float64, tags ...string) *model.Transaction {
+		tx := &model.Transaction{UserID: user, CategoryID: uuid.New(), Amount: amount, Type: typ, Tags: tags, TransactionDate: time.Date(2026, 4, day, 0, 0, 0, 0, time.UTC)}
+		require.NoError(t, repo.Create(ctx, tx))
+		return tx
+	}
+	add(1, model.TransactionTypeExpense, 100, "Đà Lạt", `quote "x"`)
+	add(2, model.TransactionTypeExpense, 50, "Đà Lạt")
+	add(3, model.TransactionTypeIncome, 70, "Công tác")
+	untagged := add(4, model.TransactionTypeExpense, 9)
+	gone := add(5, model.TransactionTypeExpense, 999, "Đà Lạt")
+	require.NoError(t, repo.Delete(ctx, gone.ID))
+
+	got, err := repo.GetByID(ctx, untagged.ID)
+	require.NoError(t, err)
+	require.Equal(t, model.StringArray{}, got.Tags, "default '{}' scans as empty, not nil")
+
+	list, total, err := repo.ListByUserID(ctx, user, 10, 0, map[string]interface{}{"tag": "Đà Lạt"})
+	require.NoError(t, err)
+	require.EqualValues(t, 2, total)
+	require.Contains(t, list[1].Tags, `quote "x"`)
+
+	sum, _, count, _, _, _, err := repo.GetSummaryByUserID(ctx, user, map[string]interface{}{"tag": "Đà Lạt"})
+	require.NoError(t, err)
+	require.EqualValues(t, 2, count)
+	require.Equal(t, 150.0, sum)
+
+	tags, err := repo.ListTags(ctx, user)
+	require.NoError(t, err)
+	require.Len(t, tags, 3)
+	require.Equal(t, "Công tác", tags[0].Name) // most recently used first
+	require.Equal(t, 70.0, tags[0].TotalIncome)
+	require.Equal(t, "Đà Lạt", tags[1].Name)
+	require.EqualValues(t, 2, tags[1].Count)
+	require.Equal(t, 150.0, tags[1].TotalExpense)
+}

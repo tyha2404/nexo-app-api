@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,7 +22,32 @@ type TransactionRepository interface {
 	SearchByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
 	Update(ctx context.Context, transaction *model.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	// Restore undoes the soft delete of one of the user's transactions and
+	// re-applies its wallet effect. Returns ErrNotFound when no deleted
+	// transaction with that id belongs to the user.
+	Restore(ctx context.Context, userID, id uuid.UUID) error
 	CountTransactionsInRange(ctx context.Context, userID uuid.UUID, start, end time.Time) (int64, error)
+	// ListTags returns every tag on the user's live transactions with usage
+	// totals, most recently used first.
+	ListTags(ctx context.Context, userID uuid.UUID) ([]TagUsage, error)
+}
+
+// TagUsage is one tag with how often and how much it was used.
+type TagUsage struct {
+	Name         string
+	Count        int64
+	TotalExpense float64
+	TotalIncome  float64
+	LastUsed     time.Time
+}
+
+// withTagFilter keeps rows carrying the "tag" filter (exact match). It uses
+// `tags @> ARRAY[tag]`, which the GIN index on transactions.tags serves.
+func withTagFilter(q *gorm.DB, column string, filters map[string]interface{}) *gorm.DB {
+	if tag, ok := filters["tag"].(string); ok && strings.TrimSpace(tag) != "" {
+		return q.Where(column+" @> ?", model.StringArray{strings.TrimSpace(tag)})
+	}
+	return q
 }
 
 type transactionRepository struct {
@@ -125,6 +151,7 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 	if keyword, ok := filters["keyword"].(string); ok && strings.TrimSpace(keyword) != "" {
 		query = query.Where("description ILIKE ?", "%"+escapeLike(strings.TrimSpace(keyword))+"%")
 	}
+	query = withTagFilter(query, "tags", filters)
 
 	// Filter by Type
 	if t, ok := filters["type"].(string); ok && t != "" {
@@ -181,6 +208,7 @@ func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID u
 		if keyword, ok := filters["keyword"].(string); ok && strings.TrimSpace(keyword) != "" {
 			q = q.Where("transactions.description ILIKE ?", "%"+escapeLike(strings.TrimSpace(keyword))+"%")
 		}
+		q = withTagFilter(q, "transactions.tags", filters)
 		if t, ok := filters["type"].(string); ok && t != "" {
 			q = q.Where("transactions.type = ?", t)
 		}
@@ -305,6 +333,7 @@ func (r *transactionRepository) SearchByUserID(ctx context.Context, userID uuid.
 	if t, ok := filters["type"].(string); ok && t != "" && t != "ALL" {
 		query = query.Where("type = ?", t)
 	}
+	query = withTagFilter(query, "tags", filters)
 
 	if c, ok := filters["categoryId"].(string); ok && c != "" {
 		if catID, err := uuid.Parse(c); err == nil {
@@ -385,6 +414,34 @@ func (r *transactionRepository) Delete(ctx context.Context, id uuid.UUID) error 
 	})
 }
 
+// Restore clears deleted_at and puts back the wallet effect that Delete
+// reversed. The effect is re-applied only when the row had it applied
+// (balance_applied) and the wallet is still live; otherwise balance_applied is
+// cleared so a later edit or delete never reverses an effect that isn't there.
+func (r *transactionRepository) Restore(ctx context.Context, userID, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var old model.Transaction
+		err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ? AND deleted_at IS NOT NULL", id, userID).
+			First(&old).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("transaction %w", constant.ErrNotFound)
+		}
+		if err != nil {
+			return err
+		}
+		applied := false
+		if old.BalanceApplied {
+			if applied, err = applyWalletEffect(tx, old.WalletID, old.UserID, old.WalletBalanceEffect()); err != nil {
+				return err
+			}
+		}
+		return tx.Unscoped().Model(&model.Transaction{}).
+			Where("id = ?", id).
+			Updates(map[string]interface{}{"deleted_at": nil, "balance_applied": applied}).Error
+	})
+}
+
 func (r *transactionRepository) CountTransactionsInRange(ctx context.Context, userID uuid.UUID, start, end time.Time) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
@@ -392,6 +449,34 @@ func (r *transactionRepository) CountTransactionsInRange(ctx context.Context, us
 		Where("user_id = ? AND transaction_date >= ? AND transaction_date <= ?", userID, start, end).
 		Count(&count).Error
 	return count, err
+}
+
+func (r *transactionRepository) ListTags(ctx context.Context, userID uuid.UUID) ([]TagUsage, error) {
+	var rows []struct {
+		Name         string
+		Count        int64
+		TotalExpense float64
+		TotalIncome  float64
+		LastUsed     time.Time
+	}
+	err := r.db.WithContext(ctx).
+		Table("transactions, unnest(transactions.tags) AS tag").
+		Where("transactions.user_id = ? AND transactions.deleted_at IS NULL", userID).
+		Select("tag AS name, COUNT(*) AS count, " +
+			sqlSumExpense + " AS total_expense, " +
+			sqlSumIncome + " AS total_income, " +
+			"MAX(transactions.transaction_date) AS last_used").
+		Group("tag").
+		Order("last_used DESC, count DESC, name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TagUsage, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, TagUsage(row))
+	}
+	return out, nil
 }
 
 // Escape SQL LIKE wildcards so the search field matches literal text.

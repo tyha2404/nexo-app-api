@@ -1717,6 +1717,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/reports/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Per-day income, expense and transaction count for every day of the month (days without transactions are zero), for the spending calendar.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get daily income/expense for a month",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Month as YYYY-MM (default: current month in the app timezone)",
+                        "name": "month",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.DailyReportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/reports/monthly-trend": {
             "get": {
                 "security": [
@@ -1765,6 +1816,43 @@ const docTemplate = `{
                 }
             }
         },
+        "/tags": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every tag used on the user's transactions, with count, total expense/income and last use date. Most recently used first (for suggestions).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "List transaction tags",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.TagListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/transactions": {
             "get": {
                 "security": [
@@ -1785,6 +1873,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Search transaction descriptions (case-insensitive literal text)",
                         "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only transactions carrying this tag (exact match)",
+                        "name": "tag",
                         "in": "query"
                     },
                     {
@@ -2058,6 +2152,64 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/transactions/{id}/restore": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Undo a delete: clears the soft delete and re-applies the wallet effect (when the wallet still exists). Only the owner's deleted transactions can be restored.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Restore a deleted transaction",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.TransactionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "No deleted transaction with this id",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -3241,6 +3393,52 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.DailyReport": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.DailyReportItem"
+                    }
+                },
+                "maxExpense": {
+                    "description": "Highest single-day expense, for color scaling",
+                    "type": "number"
+                },
+                "month": {
+                    "description": "e.g. \"2026-11\"",
+                    "type": "string"
+                },
+                "totalExpense": {
+                    "type": "number"
+                },
+                "totalIncome": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.DailyReportItem": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "Number of transactions that day (all types)",
+                    "type": "integer"
+                },
+                "date": {
+                    "description": "e.g. \"2026-11-04\"",
+                    "type": "string"
+                },
+                "expense": {
+                    "description": "Total expense that day",
+                    "type": "number"
+                },
+                "income": {
+                    "description": "Total income that day",
+                    "type": "number"
+                }
+            }
+        },
         "dto.DebtResponse": {
             "type": "object",
             "properties": {
@@ -3520,6 +3718,32 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.TagSummary": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "lastUsed": {
+                    "description": "latest transaction date with this tag",
+                    "type": "string",
+                    "example": "2026-11-04"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Du lịch Đà Lạt"
+                },
+                "totalExpense": {
+                    "type": "number",
+                    "example": 8500000
+                },
+                "totalIncome": {
+                    "type": "number",
+                    "example": 0
+                }
+            }
+        },
         "dto.TransactionResponse": {
             "type": "object",
             "properties": {
@@ -3562,6 +3786,15 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "HOLDING"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "Du lịch Đà Lạt"
+                    ]
                 },
                 "transactionDate": {
                     "type": "string",
@@ -3957,6 +4190,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.DailyReportResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/dto.DailyReport"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
         "handler.MonthlyTrendResponse": {
             "type": "object",
             "properties": {
@@ -3979,6 +4226,23 @@ const docTemplate = `{
                 },
                 "message": {
                     "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.TagListResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.TagSummary"
+                    }
                 },
                 "status": {
                     "type": "integer"
