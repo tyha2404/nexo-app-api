@@ -440,7 +440,7 @@ func TestDailyIncomeExpenseGroupsByDayAndSkipsDeleted(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []DailyTotal{
 		{Date: "2026-03-02", Income: 1000, Expense: 150, Count: 3},
-		{Date: "2026-03-09", Count: 1},
+		{Date: "2026-03-09", Investment: 500, Count: 1},
 	}, rows)
 }
 

@@ -17,6 +17,7 @@ import (
 //   - expense: type = EXPENSE
 //   - active investment: type = INVESTMENT that is still HOLDING (or legacy NULL status)
 //   - realized PnL: sum over all INVESTMENT rows
+//   - invested (daily calendar): INVESTMENT amount of every status, on the day it was made
 //
 // Wallet transfers and debts/repayments live in their own tables
 // (wallet_transfers, debts, repayments), so they are never counted here.
@@ -28,6 +29,7 @@ const (
 	sqlSumIncome           = "COALESCE(SUM(CASE WHEN transactions.type = 'INCOME' THEN transactions.amount ELSE 0 END), 0)"
 	sqlSumExpense          = "COALESCE(SUM(CASE WHEN transactions.type = 'EXPENSE' THEN transactions.amount ELSE 0 END), 0)"
 	sqlSumActiveInvestment = "COALESCE(SUM(CASE WHEN transactions.type = 'INVESTMENT' AND (transactions.status IS NULL OR transactions.status = 'HOLDING') THEN transactions.amount ELSE 0 END), 0)"
+	sqlSumInvestment       = "COALESCE(SUM(CASE WHEN transactions.type = 'INVESTMENT' THEN transactions.amount ELSE 0 END), 0)"
 	sqlSumRealizedPnL      = "COALESCE(SUM(CASE WHEN transactions.type = 'INVESTMENT' THEN COALESCE(transactions.realized_pnl, 0) ELSE 0 END), 0)"
 )
 
@@ -53,13 +55,15 @@ type MonthlyTotal struct {
 	Expense float64
 }
 
-// DailyTotal is income/expense and the transaction count for one calendar
-// day ("YYYY-MM-DD").
+// DailyTotal is income/expense/investment and the transaction count for one
+// calendar day ("YYYY-MM-DD"). Investment counts every status (money put in
+// that day), unlike the HOLDING-only "active investment" total.
 type DailyTotal struct {
-	Date    string
-	Income  float64
-	Expense float64
-	Count   int64
+	Date       string
+	Income     float64
+	Expense    float64
+	Investment float64
+	Count      int64
 }
 
 // ReportRepository runs report aggregations in SQL (SUM / GROUP BY) instead
@@ -185,14 +189,16 @@ func (r *reportRepository) GetMonthlyIncomeExpense(ctx context.Context, userID u
 
 func (r *reportRepository) GetDailyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]DailyTotal, error) {
 	var rows []struct {
-		Day     string
-		Income  float64
-		Expense float64
-		Count   int64
+		Day        string
+		Income     float64
+		Expense    float64
+		Investment float64
+		Count      int64
 	}
 	err := transactionsInRange(r.db.WithContext(ctx), userID, startDate, endDate).
 		Select("to_char(transactions.transaction_date, 'YYYY-MM-DD') AS day, " +
-			sqlSumIncome + " AS income, " + sqlSumExpense + " AS expense, COUNT(*) AS count").
+			sqlSumIncome + " AS income, " + sqlSumExpense + " AS expense, " +
+			sqlSumInvestment + " AS investment, COUNT(*) AS count").
 		Group("to_char(transactions.transaction_date, 'YYYY-MM-DD')").
 		Order("day").
 		Scan(&rows).Error
@@ -201,7 +207,7 @@ func (r *reportRepository) GetDailyIncomeExpense(ctx context.Context, userID uui
 	}
 	out := make([]DailyTotal, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, DailyTotal{Date: row.Day, Income: row.Income, Expense: row.Expense, Count: row.Count})
+		out = append(out, DailyTotal{Date: row.Day, Income: row.Income, Expense: row.Expense, Investment: row.Investment, Count: row.Count})
 	}
 	return out, nil
 }

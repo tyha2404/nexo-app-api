@@ -3415,6 +3415,9 @@ const docTemplate = `{
                 },
                 "totalIncome": {
                     "type": "number"
+                },
+                "totalInvestment": {
+                    "type": "number"
                 }
             }
         },
@@ -3435,6 +3438,10 @@ const docTemplate = `{
                 },
                 "income": {
                     "description": "Total income that day",
+                    "type": "number"
+                },
+                "investment": {
+                    "description": "Investment is the amount invested that day (INVESTMENT of any status)",
                     "type": "number"
                 }
             }

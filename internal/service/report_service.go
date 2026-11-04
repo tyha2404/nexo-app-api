@@ -184,9 +184,10 @@ func (s *reportService) GetDailyReport(ctx context.Context, userID uuid.UUID, mo
 	for d := start; d.Before(next); d = d.AddDate(0, 0, 1) {
 		date := d.Format("2006-01-02")
 		row := byDate[date]
-		report.Items = append(report.Items, dto.DailyReportItem{Date: date, Income: row.Income, Expense: row.Expense, Count: row.Count})
+		report.Items = append(report.Items, dto.DailyReportItem{Date: date, Income: row.Income, Expense: row.Expense, Investment: row.Investment, Count: row.Count})
 		report.TotalIncome += row.Income
 		report.TotalExpense += row.Expense
+		report.TotalInvestment += row.Investment
 		if row.Expense > report.MaxExpense {
 			report.MaxExpense = row.Expense
 		}

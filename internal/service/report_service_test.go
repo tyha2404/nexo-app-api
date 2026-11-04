@@ -125,7 +125,7 @@ func TestReportService_GetDailyReportFillsEveryDay(t *testing.T) {
 	repo := &fakeReportRepo{daily: []repository.DailyTotal{
 		{Date: "2026-02-03", Income: 10_000_000, Count: 1},
 		{Date: "2026-02-14", Expense: 1_200_000, Count: 3},
-		{Date: "2026-02-28", Expense: 300_000, Income: 50_000, Count: 2},
+		{Date: "2026-02-28", Expense: 300_000, Income: 50_000, Investment: 2_000_000, Count: 3},
 	}}
 	res, err := NewReportServiceWithRepository(repo).GetDailyReport(context.Background(), uuid.New(), "2026-02")
 	require.NoError(t, err)
@@ -141,6 +141,8 @@ func TestReportService_GetDailyReportFillsEveryDay(t *testing.T) {
 	assert.Equal(t, 10_050_000.0, res.TotalIncome)
 	assert.Equal(t, 1_500_000.0, res.TotalExpense)
 	assert.Equal(t, 1_200_000.0, res.MaxExpense)
+	assert.Equal(t, 2_000_000.0, res.Items[27].Investment)
+	assert.Equal(t, 2_000_000.0, res.TotalInvestment)
 }
 
 func TestReportService_GetDailyReportRejectsBadMonth(t *testing.T) {
