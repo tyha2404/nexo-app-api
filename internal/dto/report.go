@@ -34,6 +34,34 @@ type MonthlyTrendReport struct {
 	Items          []MonthlyTrendItem `json:"items"`
 }
 
+// NetWorthPoint is net worth at the end of one month and what moved it.
+// Net worth = cumulative income − expense + realized investment PnL, the same
+// formula as the dashboard's "Tổng tài sản" (debts and wallet transfers move
+// money between places without changing it).
+type NetWorthPoint struct {
+	Month       string  `json:"month" example:"2026-11"`
+	Label       string  `json:"label" example:"T11/26"`
+	Income      float64 `json:"income"`
+	Expense     float64 `json:"expense"`
+	RealizedPnL float64 `json:"realizedPnL"`
+	// Change = Income − Expense + RealizedPnL for the month.
+	Change   float64 `json:"change"`
+	NetWorth float64 `json:"netWorth"`
+}
+
+// NetWorthReport is the month-end net worth series, oldest first, ending with
+// the current month. Leading months before the user's first transaction are
+// left out (at least two points are kept).
+type NetWorthReport struct {
+	Items []NetWorthPoint `json:"items"`
+	// Opening is net worth just before the first item's month.
+	Opening float64 `json:"opening"`
+	// Current is the last item's NetWorth.
+	Current float64 `json:"current"`
+	// PeriodChange is Current − Opening.
+	PeriodChange float64 `json:"periodChange"`
+}
+
 // DailyReportItem is one calendar day of the daily report.
 type DailyReportItem struct {
 	Date    string  `json:"date"`    // e.g. "2026-11-04"

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,9 +28,12 @@ type fakeReportRepo struct {
 	daily        []repository.DailyTotal
 	dailyStart   string
 	dailyEnd     string
+	totalsStart  string
+	totalsEnd    string
 }
 
 func (f *fakeReportRepo) GetTransactionTotals(ctx context.Context, userID uuid.UUID, startDate, endDate string) (repository.TransactionTotals, error) {
+	f.totalsStart, f.totalsEnd = startDate, endDate
 	return f.totals, nil
 }
 func (f *fakeReportRepo) GetExpenseByCategory(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]repository.CategoryTotal, error) {
@@ -160,4 +164,71 @@ func TestReportService_GetDailyReportDefaultsToCurrentMonth(t *testing.T) {
 	start, _ := util.MonthRange(util.Now())
 	assert.Equal(t, start.Format("2006-01"), res.Month)
 	assert.Equal(t, start.Format("2006-01-02"), repo.dailyStart)
+}
+
+func TestReportService_GetNetWorthTrend_CumulatesFromOpening(t *testing.T) {
+	monthStart, next := util.MonthRange(util.Now())
+	key := func(offset int) string { return monthStart.AddDate(0, offset, 0).Format("2006-01") }
+
+	repo := &fakeReportRepo{
+		// Before the window: 30M in, 21M out, 1M realized → opening 10M.
+		totals: repository.TransactionTotals{Income: 30_000_000, Expense: 21_000_000, RealizedPnL: 1_000_000, ActiveInvestment: 5_000_000},
+		monthly: []repository.MonthlyTotal{
+			{Month: key(-1), Income: 20_000_000, Expense: 9_000_000, RealizedPnL: 1_000_000},
+			{Month: key(0), Expense: 3_000_000},
+		},
+	}
+	res, err := NewReportServiceWithRepository(repo).GetNetWorthTrend(context.Background(), uuid.New(), 3)
+	require.NoError(t, err)
+
+	require.Len(t, res.Items, 3)
+	assert.Equal(t, key(-2), res.Items[0].Month)
+	assert.Equal(t, 10_000_000.0, res.Items[0].NetWorth, "a quiet month keeps the opening balance")
+	assert.Equal(t, 12_000_000.0, res.Items[1].Change)
+	assert.Equal(t, 22_000_000.0, res.Items[1].NetWorth)
+	assert.Equal(t, -3_000_000.0, res.Items[2].Change)
+	assert.Equal(t, 19_000_000.0, res.Items[2].NetWorth)
+	assert.Equal(t, 10_000_000.0, res.Opening)
+	assert.Equal(t, 19_000_000.0, res.Current)
+	assert.Equal(t, 9_000_000.0, res.PeriodChange)
+	assert.Equal(t, fmt.Sprintf("T%02d/%s", int(monthStart.Month()), monthStart.Format("06")), res.Items[2].Label)
+
+	// Opening = everything up to the day before the window; months cover the window exactly.
+	windowStart := monthStart.AddDate(0, -2, 0)
+	assert.Equal(t, "", repo.totalsStart)
+	assert.Equal(t, windowStart.AddDate(0, 0, -1).Format("2006-01-02"), repo.totalsEnd)
+	assert.Equal(t, windowStart.Format("2006-01-02"), repo.monthlyStart)
+	assert.Equal(t, next.AddDate(0, 0, -1).Format("2006-01-02"), repo.monthlyEnd)
+}
+
+func TestReportService_GetNetWorthTrend_NewUserStartsAtFirstActivity(t *testing.T) {
+	monthStart, _ := util.MonthRange(util.Now())
+	key := func(offset int) string { return monthStart.AddDate(0, offset, 0).Format("2006-01") }
+
+	repo := &fakeReportRepo{monthly: []repository.MonthlyTotal{
+		{Month: key(-3), Income: 5_000_000},
+		{Month: key(-1), Expense: 1_000_000},
+	}}
+	res, err := NewReportServiceWithRepository(repo).GetNetWorthTrend(context.Background(), uuid.New(), 12)
+	require.NoError(t, err)
+	require.Len(t, res.Items, 4, "months before the first transaction are dropped")
+	assert.Equal(t, key(-3), res.Items[0].Month)
+	assert.Equal(t, 4_000_000.0, res.Current)
+
+	// Only this month has data: still two points, so the chart can draw a line.
+	repo = &fakeReportRepo{monthly: []repository.MonthlyTotal{{Month: key(0), Income: 2_000_000}}}
+	res, err = NewReportServiceWithRepository(repo).GetNetWorthTrend(context.Background(), uuid.New(), 12)
+	require.NoError(t, err)
+	require.Len(t, res.Items, 2)
+	assert.Equal(t, 0.0, res.Items[0].NetWorth)
+	assert.Equal(t, 2_000_000.0, res.Items[1].NetWorth)
+}
+
+func TestReportService_GetNetWorthTrend_ClampsMonths(t *testing.T) {
+	repo := &fakeReportRepo{totals: repository.TransactionTotals{Income: 1}}
+	for _, months := range []int{0, -4, 37} {
+		res, err := NewReportServiceWithRepository(repo).GetNetWorthTrend(context.Background(), uuid.New(), months)
+		require.NoError(t, err)
+		assert.Len(t, res.Items, 12, "months=%d", months)
+	}
 }

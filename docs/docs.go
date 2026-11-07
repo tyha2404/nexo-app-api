@@ -1816,6 +1816,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/reports/net-worth": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Net worth at the end of each of the last ` + "`" + `months` + "`" + ` months (default 12, max 36), ending with the current month in the app timezone. Net worth = cumulative income − expense + realized investment PnL, the dashboard's \"Tổng tài sản\". Leading months before the first transaction are omitted (at least two points are kept).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get month-end net worth over time",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of months (default: 12, max 36)",
+                        "name": "months",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.NetWorthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/tags": {
             "get": {
                 "security": [
@@ -3574,6 +3619,58 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.NetWorthPoint": {
+            "type": "object",
+            "properties": {
+                "change": {
+                    "description": "Change = Income − Expense + RealizedPnL for the month.",
+                    "type": "number"
+                },
+                "expense": {
+                    "type": "number"
+                },
+                "income": {
+                    "type": "number"
+                },
+                "label": {
+                    "type": "string",
+                    "example": "T11/26"
+                },
+                "month": {
+                    "type": "string",
+                    "example": "2026-11"
+                },
+                "netWorth": {
+                    "type": "number"
+                },
+                "realizedPnL": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.NetWorthReport": {
+            "type": "object",
+            "properties": {
+                "current": {
+                    "description": "Current is the last item's NetWorth.",
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.NetWorthPoint"
+                    }
+                },
+                "opening": {
+                    "description": "Opening is net worth just before the first item's month.",
+                    "type": "number"
+                },
+                "periodChange": {
+                    "description": "PeriodChange is Current − Opening.",
+                    "type": "number"
+                }
+            }
+        },
         "dto.PayStatementRequest": {
             "type": "object",
             "required": [
@@ -4216,6 +4313,20 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/dto.MonthlyTrendReport"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.NetWorthResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/dto.NetWorthReport"
                 },
                 "status": {
                     "type": "integer"

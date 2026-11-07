@@ -18,6 +18,9 @@ type ReportService interface {
 	GetSummary(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.SummaryReport, error)
 	GetCategoryBreakdown(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.CategoryBreakdownReport, error)
 	GetMonthlyTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error)
+	// GetNetWorthTrend returns month-end net worth for the last `months`
+	// calendar months (1–36, default 12) in the app timezone.
+	GetNetWorthTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.NetWorthReport, error)
 	// GetDailyReport returns per-day income/expense for a month ("YYYY-MM";
 	// empty means the current month in the app timezone). An invalid month
 	// is constant.ErrInvalidInput.
@@ -152,6 +155,74 @@ func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, m
 	return &dto.MonthlyTrendReport{
 		AverageExpense: totalExpenseSum / float64(months),
 		Items:          items,
+	}, nil
+}
+
+func (s *reportService) GetNetWorthTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.NetWorthReport, error) {
+	if s.reportRepo == nil {
+		return nil, errReportRepositoryUnavailable
+	}
+	if months <= 0 || months > 36 {
+		months = 12
+	}
+
+	currentMonthStart, nextMonthStart := util.MonthRange(util.Now())
+	startMonth := currentMonthStart.AddDate(0, -(months - 1), 0)
+	endDate := nextMonthStart.AddDate(0, 0, -1)
+
+	// Everything before the window, as one opening balance.
+	before, err := s.reportRepo.GetTransactionTotals(ctx, userID, "", startMonth.AddDate(0, 0, -1).Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	opening := before.Income - before.Expense + before.RealizedPnL
+
+	monthly, err := s.reportRepo.GetMonthlyIncomeExpense(ctx, userID, startMonth.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	byMonth := make(map[string]repository.MonthlyTotal, len(monthly))
+	for _, m := range monthly {
+		byMonth[m.Month] = m
+	}
+
+	items := make([]dto.NetWorthPoint, 0, months)
+	running := opening
+	for i := 0; i < months; i++ {
+		cur := startMonth.AddDate(0, i, 0)
+		key := cur.Format("2006-01")
+		m := byMonth[key]
+		change := m.Income - m.Expense + m.RealizedPnL
+		running += change
+		items = append(items, dto.NetWorthPoint{
+			Month:       key,
+			Label:       fmt.Sprintf("T%02d/%s", int(cur.Month()), cur.Format("06")),
+			Income:      m.Income,
+			Expense:     m.Expense,
+			RealizedPnL: m.RealizedPnL,
+			Change:      change,
+			NetWorth:    running,
+		})
+	}
+
+	// A new user's chart starts at their first transaction, not with months of zeros.
+	if opening == 0 {
+		first := 0
+		for first < len(items)-2 && items[first].Income == 0 && items[first].Expense == 0 && items[first].RealizedPnL == 0 {
+			first++
+		}
+		items = items[first:]
+	}
+
+	current := opening
+	if len(items) > 0 {
+		current = items[len(items)-1].NetWorth
+	}
+	return &dto.NetWorthReport{
+		Items:        items,
+		Opening:      opening,
+		Current:      current,
+		PeriodChange: current - opening,
 	}, nil
 }
 

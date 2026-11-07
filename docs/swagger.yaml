@@ -438,6 +438,42 @@ definitions:
           $ref: '#/definitions/dto.MonthlyTrendItem'
         type: array
     type: object
+  dto.NetWorthPoint:
+    properties:
+      change:
+        description: Change = Income − Expense + RealizedPnL for the month.
+        type: number
+      expense:
+        type: number
+      income:
+        type: number
+      label:
+        example: T11/26
+        type: string
+      month:
+        example: 2026-11
+        type: string
+      netWorth:
+        type: number
+      realizedPnL:
+        type: number
+    type: object
+  dto.NetWorthReport:
+    properties:
+      current:
+        description: Current is the last item's NetWorth.
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/dto.NetWorthPoint'
+        type: array
+      opening:
+        description: Opening is net worth just before the first item's month.
+        type: number
+      periodChange:
+        description: PeriodChange is Current − Opening.
+        type: number
+    type: object
   dto.PayStatementRequest:
     properties:
       amount:
@@ -897,6 +933,15 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/dto.MonthlyTrendReport'
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.NetWorthResponse:
+    properties:
+      data:
+        $ref: '#/definitions/dto.NetWorthReport'
       status:
         type: integer
       success:
@@ -2276,6 +2321,38 @@ paths:
       security:
       - BearerAuth: []
       summary: Get monthly financial trend
+      tags:
+      - Reports
+  /reports/net-worth:
+    get:
+      description: Net worth at the end of each of the last `months` months (default
+        12, max 36), ending with the current month in the app timezone. Net worth
+        = cumulative income − expense + realized investment PnL, the dashboard's "Tổng
+        tài sản". Leading months before the first transaction are omitted (at least
+        two points are kept).
+      parameters:
+      - description: 'Number of months (default: 12, max 36)'
+        in: query
+        name: months
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.NetWorthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get month-end net worth over time
       tags:
       - Reports
   /tags:

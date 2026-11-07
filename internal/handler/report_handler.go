@@ -127,6 +127,43 @@ func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// GetNetWorthTrend handles GET /reports/net-worth
+// @Summary Get month-end net worth over time
+// @Description Net worth at the end of each of the last `months` months (default 12, max 36), ending with the current month in the app timezone. Net worth = cumulative income − expense + realized investment PnL, the dashboard's "Tổng tài sản". Leading months before the first transaction are omitted (at least two points are kept).
+// @Tags Reports
+// @Produce json
+// @Param months query int false "Number of months (default: 12, max 36)"
+// @Security BearerAuth
+// @Success 200 {object} NetWorthResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /reports/net-worth [get]
+func (h *ReportHandler) GetNetWorthTrend(w http.ResponseWriter, r *http.Request) {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_net_worth")
+		return
+	}
+
+	months := 12
+	if parsed, err := strconv.Atoi(r.URL.Query().Get("months")); err == nil && parsed > 0 {
+		months = parsed
+	}
+
+	res, err := h.svc.GetNetWorthTrend(r.Context(), user.ID, months)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get net worth trend", "get_net_worth")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response.BaseResponse[dto.NetWorthReport]{
+		Status:  http.StatusOK,
+		Success: true,
+		Data:    *res,
+	})
+}
+
 // GetDailyReport handles GET /reports/daily
 // @Summary Get daily income/expense for a month
 // @Description Per-day income, expense and transaction count for every day of the month (days without transactions are zero), for the spending calendar.
@@ -195,6 +232,13 @@ type MonthlyTrendResponse struct {
 	Status  int                    `json:"status"`
 	Success bool                   `json:"success"`
 	Data    dto.MonthlyTrendReport `json:"data"`
+}
+
+// NetWorthResponse describes the net worth report envelope for Swagger.
+type NetWorthResponse struct {
+	Status  int                `json:"status"`
+	Success bool               `json:"success"`
+	Data    dto.NetWorthReport `json:"data"`
 }
 
 // DailyReportResponse describes the daily report envelope for Swagger.

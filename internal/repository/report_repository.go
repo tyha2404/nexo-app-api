@@ -48,11 +48,13 @@ type CategoryTotal struct {
 	Total        float64
 }
 
-// MonthlyTotal is income/expense for one calendar month ("YYYY-MM").
+// MonthlyTotal is income/expense (and realized investment PnL, by the
+// transaction's own date) for one calendar month ("YYYY-MM").
 type MonthlyTotal struct {
-	Month   string
-	Income  float64
-	Expense float64
+	Month       string
+	Income      float64
+	Expense     float64
+	RealizedPnL float64
 }
 
 // DailyTotal is income/expense/investment and the transaction count for one
@@ -166,14 +168,16 @@ func (r *reportRepository) GetExpenseByCategory(ctx context.Context, userID uuid
 
 func (r *reportRepository) GetMonthlyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]MonthlyTotal, error) {
 	var rows []struct {
-		Month   string
-		Income  float64
-		Expense float64
+		Month       string
+		Income      float64
+		Expense     float64
+		RealizedPnL float64 `gorm:"column:realized_pnl"`
 	}
 	// transaction_date is a DATE, so month grouping is timezone-independent.
 	err := transactionsInRange(r.db.WithContext(ctx), userID, startDate, endDate).
 		Select("to_char(transactions.transaction_date, 'YYYY-MM') AS month, " +
-			sqlSumIncome + " AS income, " + sqlSumExpense + " AS expense").
+			sqlSumIncome + " AS income, " + sqlSumExpense + " AS expense, " +
+			sqlSumRealizedPnL + " AS realized_pnl").
 		Group("to_char(transactions.transaction_date, 'YYYY-MM')").
 		Order("month").
 		Scan(&rows).Error
@@ -182,7 +186,7 @@ func (r *reportRepository) GetMonthlyIncomeExpense(ctx context.Context, userID u
 	}
 	out := make([]MonthlyTotal, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, MonthlyTotal{Month: row.Month, Income: row.Income, Expense: row.Expense})
+		out = append(out, MonthlyTotal{Month: row.Month, Income: row.Income, Expense: row.Expense, RealizedPnL: row.RealizedPnL})
 	}
 	return out, nil
 }

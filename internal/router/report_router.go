@@ -20,6 +20,7 @@ func (r *ReportRouter) RegisterRoutes(router chi.Router) {
 		router.Get("/summary", r.handler.GetSummary)
 		router.Get("/category-breakdown", r.handler.GetCategoryBreakdown)
 		router.Get("/monthly-trend", r.handler.GetMonthlyTrend)
+		router.Get("/net-worth", r.handler.GetNetWorthTrend)
 		router.Get("/daily", r.handler.GetDailyReport)
 	})
 }
