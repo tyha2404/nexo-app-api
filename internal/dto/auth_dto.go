@@ -13,8 +13,30 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	User  UserResponse `json:"user"`
-	Token string       `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	User UserResponse `json:"user"`
+	TokenResponse
+}
+
+// TokenResponse is a session's token pair. Token is the short-lived access
+// token (Authorization: Bearer); RefreshToken renews it via POST
+// /auth/refresh and is replaced on every refresh.
+type TokenResponse struct {
+	Token        string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	RefreshToken string `json:"refreshToken" example:"q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E"`
+	// ExpiresIn is the access token lifetime in seconds.
+	ExpiresIn int64 `json:"expiresIn" example:"900"`
+}
+
+// RefreshTokenRequest is the body of POST /auth/refresh and /auth/logout.
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken" example:"q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E" validate:"required,max=128"`
+}
+
+// ChangePasswordResponse carries a fresh session: changing the password
+// signs out every other session, including the caller's old refresh token.
+type ChangePasswordResponse struct {
+	Message string `json:"message" example:"Password changed"`
+	TokenResponse
 }
 
 type RegisterRequest struct {

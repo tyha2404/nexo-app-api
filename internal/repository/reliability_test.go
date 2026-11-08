@@ -54,6 +54,7 @@ func testDatabase(t *testing.T) *gorm.DB {
 		`CREATE TABLE budgets (id uuid PRIMARY KEY,user_id uuid,category_id uuid,amount numeric(15,2),period_type text,period_start date,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
 		`CREATE UNIQUE INDEX idx_budgets_user_category_period ON budgets (user_id, category_id, period_type, period_start) WHERE deleted_at IS NULL`,
 		`CREATE TABLE alerts (id uuid PRIMARY KEY,user_id uuid,budget_id uuid,alert_type text,triggered_at timestamp DEFAULT now(),message text,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
+		`CREATE TABLE refresh_tokens (id uuid PRIMARY KEY,user_id uuid NOT NULL,family_id uuid NOT NULL,token_hash varchar(64) NOT NULL UNIQUE,expires_at timestamptz NOT NULL,revoked_at timestamptz,replaced_by uuid,user_agent text,created_at timestamptz NOT NULL DEFAULT now())`,
 	}
 	for _, q := range ddl {
 		require.NoError(t, db.Exec(q).Error)

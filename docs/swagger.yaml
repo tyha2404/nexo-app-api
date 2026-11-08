@@ -82,6 +82,22 @@ definitions:
     - currentPassword
     - newPassword
     type: object
+  dto.ChangePasswordResponse:
+    properties:
+      expiresIn:
+        description: ExpiresIn is the access token lifetime in seconds.
+        example: 900
+        type: integer
+      message:
+        example: Password changed
+        type: string
+      refreshToken:
+        example: q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E
+        type: string
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
   dto.ChatActionResult:
     properties:
       actionCard:
@@ -405,6 +421,13 @@ definitions:
     type: object
   dto.LoginResponse:
     properties:
+      expiresIn:
+        description: ExpiresIn is the access token lifetime in seconds.
+        example: 900
+        type: integer
+      refreshToken:
+        example: q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E
+        type: string
       token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
@@ -489,6 +512,15 @@ definitions:
         type: string
     required:
     - amount
+    type: object
+  dto.RefreshTokenRequest:
+    properties:
+      refreshToken:
+        example: q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E
+        maxLength: 128
+        type: string
+    required:
+    - refreshToken
     type: object
   dto.RegisterRequest:
     properties:
@@ -598,6 +630,19 @@ definitions:
       totalIncome:
         example: 0
         type: number
+    type: object
+  dto.TokenResponse:
+    properties:
+      expiresIn:
+        description: ExpiresIn is the access token lifetime in seconds.
+        example: 900
+        type: integer
+      refreshToken:
+        example: q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E
+        type: string
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
     type: object
   dto.TransactionResponse:
     properties:
@@ -1162,7 +1207,9 @@ paths:
       consumes:
       - application/json
       description: Change the authenticated user's password after verifying the current
-        one. Accounts that sign in through Supabase Auth must change it there.
+        one. Every session (refresh token) of the user is revoked and a new token
+        pair is returned for the caller. Accounts that sign in through Supabase Auth
+        must change it there.
       parameters:
       - description: Current and new password
         in: body
@@ -1176,9 +1223,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/dto.ChangePasswordResponse'
         "400":
           description: Invalid request payload, wrong current password or unchanged
             password
@@ -1233,6 +1278,75 @@ paths:
           schema:
             type: string
       summary: Login a user
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Revoke the session the refresh token belongs to. Unknown or already
+        revoked tokens also succeed. The access token stays valid until it expires.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            type: string
+        "500":
+          description: Failed to logout
+          schema:
+            type: string
+      summary: Logout
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchange a refresh token for a new access token and a new refresh
+        token. The old refresh token stops working; presenting it again revokes the
+        whole session.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TokenResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            type: string
+        "401":
+          description: Invalid, expired or revoked refresh token
+          schema:
+            type: string
+        "500":
+          description: Failed to refresh session
+          schema:
+            type: string
+      summary: Refresh the access token
       tags:
       - auth
   /auth/register:

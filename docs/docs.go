@@ -22,7 +22,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Change the authenticated user's password after verifying the current one. Accounts that sign in through Supabase Auth must change it there.",
+                "description": "Change the authenticated user's password after verifying the current one. Every session (refresh token) of the user is revoked and a new token pair is returned for the caller. Accounts that sign in through Supabase Auth must change it there.",
                 "consumes": [
                     "application/json"
                 ],
@@ -48,10 +48,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/dto.ChangePasswordResponse"
                         }
                     },
                     "400": {
@@ -126,6 +123,107 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Failed to process login",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Revoke the session the refresh token belongs to. Unknown or already revoked tokens also succeed. The access token stays valid until it expires.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to logout",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Exchange a refresh token for a new access token and a new refresh token. The old refresh token stops working; presenting it again revokes the whole session.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Refresh the access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.TokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, expired or revoked refresh token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to refresh session",
                         "schema": {
                             "type": "string"
                         }
@@ -3127,6 +3225,28 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ChangePasswordResponse": {
+            "type": "object",
+            "properties": {
+                "expiresIn": {
+                    "description": "ExpiresIn is the access token lifetime in seconds.",
+                    "type": "integer",
+                    "example": 900
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Password changed"
+                },
+                "refreshToken": {
+                    "type": "string",
+                    "example": "q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
         "dto.ChatActionResult": {
             "type": "object",
             "properties": {
@@ -3571,6 +3691,15 @@ const docTemplate = `{
         "dto.LoginResponse": {
             "type": "object",
             "properties": {
+                "expiresIn": {
+                    "description": "ExpiresIn is the access token lifetime in seconds.",
+                    "type": "integer",
+                    "example": 900
+                },
+                "refreshToken": {
+                    "type": "string",
+                    "example": "q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E"
+                },
                 "token": {
                     "type": "string",
                     "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -3691,6 +3820,19 @@ const docTemplate = `{
                 },
                 "sourceWalletId": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.RefreshTokenRequest": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "example": "q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E"
                 }
             }
         },
@@ -3845,6 +3987,24 @@ const docTemplate = `{
                 "totalIncome": {
                     "type": "number",
                     "example": 0
+                }
+            }
+        },
+        "dto.TokenResponse": {
+            "type": "object",
+            "properties": {
+                "expiresIn": {
+                    "description": "ExpiresIn is the access token lifetime in seconds.",
+                    "type": "integer",
+                    "example": 900
+                },
+                "refreshToken": {
+                    "type": "string",
+                    "example": "q0bIu5YBhM3n0uC8Yk3V3o7mVq9b2x1kQ9wJp6cTz4E"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 }
             }
         },

@@ -16,6 +16,7 @@ type Container struct {
 
 	// Repositories
 	UserRepo                repository.UserRepo
+	RefreshTokenRepo        repository.RefreshTokenRepo
 	CategoryRepo            repository.CategoryRepo
 	CostRepo                repository.CostRepo
 	TransactionRepo         repository.TransactionRepository
@@ -69,6 +70,7 @@ type Container struct {
 func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	// 1. Initialize Repositories
 	userRepo := repository.NewUserRepo(db)
+	refreshTokenRepo := repository.NewRefreshTokenRepo(db)
 	categoryRepo := repository.NewCategoryRepo(db)
 	costRepo := repository.NewCostRepo(db)
 	transactionRepo := repository.NewTransactionRepository(db)
@@ -88,7 +90,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	}
 
 	// 2. Initialize Services
-	authService := service.NewAuthService(userRepo)
+	authService := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JwtRefreshTTL)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 	costService := service.NewCostService(costRepo, categoryRepo)
@@ -139,6 +141,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		DB:                         db,
 		Logger:                     logger,
 		UserRepo:                   userRepo,
+		RefreshTokenRepo:           refreshTokenRepo,
 		CategoryRepo:               categoryRepo,
 		CostRepo:                   costRepo,
 		TransactionRepo:            transactionRepo,

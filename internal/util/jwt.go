@@ -17,6 +17,7 @@ import (
 
 var (
 	jwtKey       []byte
+	accessTTL    = config.DefaultJwtAccessTTL
 	jwksCache    *jwk.Cache
 	jwksURL      string
 	jwksInitOnce sync.Once
@@ -28,6 +29,10 @@ func InitJWT(cfg *config.Config) {
 		panic("JWT_SECRET must be set to a secure value")
 	}
 	jwtKey = []byte(cfg.JwtSecret)
+	accessTTL = config.DefaultJwtAccessTTL
+	if cfg.JwtAccessTTL > 0 {
+		accessTTL = cfg.JwtAccessTTL
+	}
 
 	if cfg.SupabaseJWKSURL != "" {
 		jwksURL = cfg.SupabaseJWKSURL
@@ -52,13 +57,20 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateToken generates a new JWT token for the given user
+// AccessTokenTTL is the lifetime of tokens made by GenerateToken.
+func AccessTokenTTL() time.Duration {
+	return accessTTL
+}
+
+// GenerateToken generates a new short-lived access token for the given user.
+// Clients renew it with a refresh token (POST /auth/refresh).
 func GenerateToken(user *model.User) (string, error) {
 	if len(jwtKey) == 0 {
 		return "", fmt.Errorf("JWT not initialized")
 	}
 
-	expirationTime := time.Now().Add(24 * time.Hour)
+	now := time.Now()
+	expirationTime := now.Add(accessTTL)
 
 	claims := &Claims{
 		ID:       user.ID,
@@ -67,6 +79,7 @@ func GenerateToken(user *model.User) (string, error) {
 		Role:     user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
 

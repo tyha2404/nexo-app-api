@@ -100,7 +100,7 @@ func (m *mockUserRepo) FindByUsername(ctx context.Context, username string) (*mo
 
 func TestAuthService_Register(t *testing.T) {
 	repo := newMockUserRepo()
-	svc := NewAuthService(repo)
+	svc := NewAuthService(repo, newMockRefreshTokenRepo(), 0)
 
 	userToReg := &model.User{
 		Username: "newuser",
@@ -129,7 +129,7 @@ func TestAuthService_Register(t *testing.T) {
 
 func TestAuthService_Login(t *testing.T) {
 	repo := newMockUserRepo()
-	svc := NewAuthService(repo)
+	svc := NewAuthService(repo, newMockRefreshTokenRepo(), 0)
 
 	user := &model.User{
 		Username: "loginuser",
@@ -178,7 +178,7 @@ func TestAuthService_Login(t *testing.T) {
 
 func TestAuthService_ChangePassword(t *testing.T) {
 	repo := newMockUserRepo()
-	svc := NewAuthService(repo)
+	svc := NewAuthService(repo, newMockRefreshTokenRepo(), 0)
 	ctx := context.Background()
 
 	user := &model.User{Username: "pwuser", Email: "pw@example.com", Password: "oldpassword"}

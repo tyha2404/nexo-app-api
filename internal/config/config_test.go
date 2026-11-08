@@ -34,3 +34,31 @@ func TestLoadConfig_TimezoneAndCORSDefaults(t *testing.T) {
 		t.Fatal("expected error for invalid APP_TIMEZONE")
 	}
 }
+
+func TestLoadConfig_TokenTTLs(t *testing.T) {
+	t.Setenv("JWT_SECRET", "a_test_secret_that_is_at_least_32_characters")
+	t.Setenv("JWT_ACCESS_TTL", "")
+	t.Setenv("JWT_REFRESH_TTL", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.JwtAccessTTL != DefaultJwtAccessTTL || cfg.JwtRefreshTTL != DefaultJwtRefreshTTL {
+		t.Fatalf("unexpected default TTLs %s / %s", cfg.JwtAccessTTL, cfg.JwtRefreshTTL)
+	}
+
+	t.Setenv("JWT_ACCESS_TTL", "5m")
+	t.Setenv("JWT_REFRESH_TTL", "168h")
+	if cfg, err = LoadConfig(); err != nil || cfg.JwtAccessTTL.Minutes() != 5 || cfg.JwtRefreshTTL.Hours() != 168 {
+		t.Fatalf("expected 5m / 168h, got %v (%v)", cfg, err)
+	}
+
+	for _, tc := range [][2]string{{"soon", "720h"}, {"-1m", "720h"}, {"2h", "1h"}} {
+		t.Setenv("JWT_ACCESS_TTL", tc[0])
+		t.Setenv("JWT_REFRESH_TTL", tc[1])
+		if _, err := LoadConfig(); err == nil {
+			t.Errorf("expected error for access %q / refresh %q", tc[0], tc[1])
+		}
+	}
+}

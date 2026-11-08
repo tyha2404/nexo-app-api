@@ -63,20 +63,102 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT token
-	token, err := util.GenerateToken(user)
+	tokens, err := h.newSession(r, user)
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to generate session token", "login_token_generation")
 		return
 	}
 
-	// Prepare and send loginResponse
-	loginResponse := dto.LoginResponse{
-		User:  dto.NewUserResponse(user),
-		Token: token,
+	h.errorHandler.HandleSuccess(w, http.StatusOK, dto.LoginResponse{
+		User:          dto.NewUserResponse(user),
+		TokenResponse: tokens,
+	})
+}
+
+// Refresh exchanges a refresh token for a new token pair
+// @Summary Refresh the access token
+// @Description Exchange a refresh token for a new access token and a new refresh token. The old refresh token stops working; presenting it again revokes the whole session.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} dto.TokenResponse
+// @Failure 400 {string} string "Invalid request payload"
+// @Failure 401 {string} string "Invalid, expired or revoked refresh token"
+// @Failure 500 {string} string "Failed to refresh session"
+// @Router /auth/refresh [post]
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req dto.RefreshTokenRequest
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "refresh")
+		return
 	}
 
-	h.errorHandler.HandleSuccess(w, http.StatusOK, loginResponse)
+	user, refreshToken, err := h.svc.RefreshSession(r.Context(), req.RefreshToken, r.UserAgent())
+	if errors.Is(err, constant.ErrInvalidRefreshToken) {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Invalid or expired refresh token", "refresh")
+		return
+	}
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to refresh session", "refresh")
+		return
+	}
+
+	token, err := util.GenerateToken(user)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to generate session token", "refresh_token_generation")
+		return
+	}
+
+	h.errorHandler.HandleSuccess(w, http.StatusOK, dto.TokenResponse{
+		Token:        token,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int64(util.AccessTokenTTL().Seconds()),
+	})
+}
+
+// Logout revokes the session of a refresh token
+// @Summary Logout
+// @Description Revoke the session the refresh token belongs to. Unknown or already revoked tokens also succeed. The access token stays valid until it expires.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} map[string]string
+// @Failure 400 {string} string "Invalid request payload"
+// @Failure 500 {string} string "Failed to logout"
+// @Router /auth/logout [post]
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req dto.RefreshTokenRequest
+	if err := h.validator.ValidateRequest(r, &req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "logout")
+		return
+	}
+
+	if err := h.svc.EndSession(r.Context(), req.RefreshToken); err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to logout", "logout")
+		return
+	}
+
+	h.errorHandler.HandleSuccess(w, http.StatusOK, map[string]string{"message": "Logged out"})
+}
+
+// newSession issues an access token and the first refresh token of a new
+// session for user.
+func (h *AuthHandler) newSession(r *http.Request, user *model.User) (dto.TokenResponse, error) {
+	token, err := util.GenerateToken(user)
+	if err != nil {
+		return dto.TokenResponse{}, err
+	}
+	refreshToken, err := h.svc.StartSession(r.Context(), user.ID, r.UserAgent())
+	if err != nil {
+		return dto.TokenResponse{}, err
+	}
+	return dto.TokenResponse{
+		Token:        token,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int64(util.AccessTokenTTL().Seconds()),
+	}, nil
 }
 
 // Register handles the registration of a new user record
@@ -140,13 +222,13 @@ func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 
 // ChangePassword changes the current user's password
 // @Summary Change password
-// @Description Change the authenticated user's password after verifying the current one. Accounts that sign in through Supabase Auth must change it there.
+// @Description Change the authenticated user's password after verifying the current one. Every session (refresh token) of the user is revoked and a new token pair is returned for the caller. Accounts that sign in through Supabase Auth must change it there.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.ChangePasswordRequest true "Current and new password"
-// @Success 200 {object} map[string]string
+// @Success 200 {object} dto.ChangePasswordResponse
 // @Failure 400 {string} string "Invalid request payload, wrong current password or unchanged password"
 // @Failure 401 {string} string "Unauthorized"
 // @Failure 409 {string} string "Password is managed by Supabase Auth"
@@ -170,7 +252,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	err = h.svc.ChangePassword(r.Context(), user.ID, req.CurrentPassword, req.NewPassword)
 	switch {
 	case err == nil:
-		h.errorHandler.HandleSuccess(w, http.StatusOK, map[string]string{"message": "Password changed"})
+		h.changePasswordSuccess(w, r, user)
 	case errors.Is(err, constant.ErrInvalidCredentials):
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Current password is incorrect", "change_password")
 	case errors.Is(err, constant.ErrSamePassword):
@@ -180,4 +262,20 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	default:
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to change password", "change_password")
 	}
+}
+
+// changePasswordSuccess starts a new session for the caller, whose old
+// refresh token was revoked along with every other session. The context user
+// only has the access token's claims, which is all GenerateToken needs.
+func (h *AuthHandler) changePasswordSuccess(w http.ResponseWriter, r *http.Request, user *model.User) {
+	tokens, err := h.newSession(r, user)
+	if err != nil {
+		// The password did change; the client signs in again with it.
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Password changed but failed to start a new session", "change_password_session")
+		return
+	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, dto.ChangePasswordResponse{
+		Message:       "Password changed",
+		TokenResponse: tokens,
+	})
 }

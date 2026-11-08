@@ -44,6 +44,7 @@ func (m *Migrator) AutoMigrate() error {
 		&model.ChatSession{},
 		&model.ChatMessage{},
 		&model.FinancialKnowledge{},
+		&model.RefreshToken{},
 	)
 }
 

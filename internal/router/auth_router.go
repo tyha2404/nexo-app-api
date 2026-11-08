@@ -15,10 +15,16 @@ import (
 // client IP may make per minute (shared between the endpoints).
 const AuthLimitPerMinute = 10
 
+// RefreshLimitPerMinute is how many refresh/logout calls one client IP may
+// make per minute. Higher than AuthLimitPerMinute: every open tab and device
+// behind the same IP refreshes on its own.
+const RefreshLimitPerMinute = 30
+
 type AuthRouter struct {
-	handler     *handler.AuthHandler
-	logger      *zap.Logger
-	authLimiter *middleware.RateLimiter
+	handler        *handler.AuthHandler
+	logger         *zap.Logger
+	authLimiter    *middleware.RateLimiter
+	refreshLimiter *middleware.RateLimiter
 	// DisableRegister makes POST /auth/register answer 403. Local sign-up
 	// does not verify the email, so it could squat a Supabase user's address.
 	DisableRegister bool
@@ -31,6 +37,8 @@ func NewAuthRouter(handler *handler.AuthHandler, logger *zap.Logger) *AuthRouter
 		logger:  logger,
 		authLimiter: middleware.NewRateLimiter(AuthLimitPerMinute, time.Minute, middleware.ClientIPKey,
 			"Quá nhiều lần thử, vui lòng thử lại sau ít phút"),
+		refreshLimiter: middleware.NewRateLimiter(RefreshLimitPerMinute, time.Minute, middleware.ClientIPKey,
+			"Quá nhiều yêu cầu làm mới phiên, vui lòng thử lại sau ít phút"),
 	}
 }
 
@@ -44,6 +52,10 @@ func (r *AuthRouter) RegisterRoutes(router chi.Router) {
 		}
 		authRoute.With(r.authLimiter.Middleware).Post("/register", register)
 		authRoute.With(r.authLimiter.Middleware).Post("/login", r.handler.Login)
+		// Public: the access token may already be expired. The refresh token
+		// in the body is the credential.
+		authRoute.With(r.refreshLimiter.Middleware).Post("/refresh", r.handler.Refresh)
+		authRoute.With(r.refreshLimiter.Middleware).Post("/logout", r.handler.Logout)
 
 		// Protected routes - require authentication
 		authRoute.Group(func(protectedRoute chi.Router) {

@@ -2,10 +2,17 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/config"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -15,12 +22,32 @@ import (
 type AuthService interface {
 	Login(ctx context.Context, identifier string, password string) (*model.User, error)
 	Register(ctx context.Context, user *model.User) (*model.User, error)
+	// ChangePassword also revokes every refresh token of the user, signing
+	// out all sessions; the caller starts a new one for the current client.
 	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
+
+	// StartSession issues the first refresh token of a new login session.
+	StartSession(ctx context.Context, userID uuid.UUID, userAgent string) (string, error)
+	// RefreshSession rotates a refresh token: it returns the token's user and
+	// its replacement. Any invalid, expired, revoked or reused token gives
+	// constant.ErrInvalidRefreshToken (reuse also revokes the session).
+	RefreshSession(ctx context.Context, refreshToken, userAgent string) (*model.User, string, error)
+	// EndSession revokes the session of a refresh token (logout). Unknown
+	// tokens are not an error.
+	EndSession(ctx context.Context, refreshToken string) error
 }
 
 type authService struct {
-	repo repository.UserRepo
+	repo        repository.UserRepo
+	refreshRepo repository.RefreshTokenRepo
+	refreshTTL  time.Duration
 }
+
+// refreshTokenBytes is the entropy of a refresh token (base64url: 43 chars).
+const refreshTokenBytes = 32
+
+// maxUserAgentLen caps the user agent stored with a refresh token.
+const maxUserAgentLen = 255
 
 // dummyPasswordHash is compared against when there is no hash to check, to
 // keep login timing uniform.
@@ -29,9 +56,16 @@ var dummyPasswordHash = sync.OnceValue(func() []byte {
 	return hash
 })
 
-func NewAuthService(repo repository.UserRepo) AuthService {
+// NewAuthService builds the auth service. refreshTTL <= 0 uses
+// config.DefaultJwtRefreshTTL.
+func NewAuthService(repo repository.UserRepo, refreshRepo repository.RefreshTokenRepo, refreshTTL time.Duration) AuthService {
+	if refreshTTL <= 0 {
+		refreshTTL = config.DefaultJwtRefreshTTL
+	}
 	return &authService{
-		repo: repo,
+		repo:        repo,
+		refreshRepo: refreshRepo,
+		refreshTTL:  refreshTTL,
 	}
 }
 
@@ -149,5 +183,111 @@ func (s *authService) ChangePassword(ctx context.Context, userID uuid.UUID, curr
 		return err
 	}
 
-	return s.repo.UpdateFields(ctx, userID, map[string]interface{}{"password": user.Password})
+	if err := s.repo.UpdateFields(ctx, userID, map[string]interface{}{"password": user.Password}); err != nil {
+		return err
+	}
+
+	// A changed password must end sessions opened with the old one (e.g. on
+	// a lost phone). Access tokens already issued expire on their own.
+	return s.refreshRepo.RevokeAllForUser(ctx, userID, time.Now())
+}
+
+func (s *authService) StartSession(ctx context.Context, userID uuid.UUID, userAgent string) (string, error) {
+	now := time.Now()
+	// Housekeeping: drop this user's expired tokens while we are here.
+	if err := s.refreshRepo.DeleteExpiredForUser(ctx, userID, now); err != nil {
+		return "", err
+	}
+
+	raw, hash, err := newRefreshToken()
+	if err != nil {
+		return "", err
+	}
+	familyID, err := uuid.NewV7()
+	if err != nil {
+		return "", err
+	}
+	token := &model.RefreshToken{
+		UserID:    userID,
+		FamilyID:  familyID,
+		TokenHash: hash,
+		ExpiresAt: now.Add(s.refreshTTL),
+		UserAgent: userAgentPtr(userAgent),
+	}
+	if err := s.refreshRepo.Create(ctx, token); err != nil {
+		return "", err
+	}
+	return raw, nil
+}
+
+func (s *authService) RefreshSession(ctx context.Context, refreshToken, userAgent string) (*model.User, string, error) {
+	if refreshToken == "" {
+		return nil, "", constant.ErrInvalidRefreshToken
+	}
+
+	raw, hash, err := newRefreshToken()
+	if err != nil {
+		return nil, "", err
+	}
+	now := time.Now()
+	next := &model.RefreshToken{
+		TokenHash: hash,
+		ExpiresAt: now.Add(s.refreshTTL),
+		UserAgent: userAgentPtr(userAgent),
+	}
+
+	old, err := s.refreshRepo.Rotate(ctx, hashRefreshToken(refreshToken), next, now)
+	if errors.Is(err, repository.ErrRefreshTokenReused) {
+		return nil, "", constant.ErrInvalidRefreshToken
+	}
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Re-read the user so the new access token carries the current role,
+	// username and email, and a deleted user can't keep refreshing.
+	user, err := s.repo.GetByID(ctx, old.UserID)
+	if errors.Is(err, constant.ErrNotFound) {
+		return nil, "", constant.ErrInvalidRefreshToken
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	user.Password = ""
+	return user, raw, nil
+}
+
+func (s *authService) EndSession(ctx context.Context, refreshToken string) error {
+	if refreshToken == "" {
+		return nil
+	}
+	return s.refreshRepo.RevokeFamilyByHash(ctx, hashRefreshToken(refreshToken), time.Now())
+}
+
+// newRefreshToken returns a random token and the hash stored for it.
+func newRefreshToken() (raw, hash string, err error) {
+	b := make([]byte, refreshTokenBytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	raw = base64.RawURLEncoding.EncodeToString(b)
+	return raw, hashRefreshToken(raw), nil
+}
+
+// hashRefreshToken is the lookup key of a token. A plain SHA-256 is enough:
+// the token is 256 random bits, so it can't be brute-forced from the hash.
+func hashRefreshToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func userAgentPtr(ua string) *string {
+	ua = strings.TrimSpace(ua)
+	if ua == "" {
+		return nil
+	}
+	if len(ua) > maxUserAgentLen {
+		ua = strings.ToValidUTF8(ua[:maxUserAgentLen], "")
+	}
+	return &ua
 }

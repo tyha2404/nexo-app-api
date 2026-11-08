@@ -19,4 +19,7 @@ var (
 	// ErrPasswordManagedExternally: the account signs in through Supabase Auth
 	// (the local password column is empty), so its password is changed there.
 	ErrPasswordManagedExternally = errors.New("password is managed by Supabase Auth")
+	// ErrInvalidRefreshToken: the refresh token is unknown, expired, revoked
+	// or reused. Clients must sign in again.
+	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
 )
