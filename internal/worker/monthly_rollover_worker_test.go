@@ -1,12 +1,16 @@
 package worker_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 	"github.com/tyha2404/nexo-app-api/internal/worker"
+	"go.uber.org/zap"
 )
 
 func TestIsEndOfMonthTransition(t *testing.T) {
@@ -83,4 +87,43 @@ func TestIsEndOfMonthTransition_UsesAppTimezone(t *testing.T) {
 
 	ok, _, _ = worker.IsEndOfMonthTransition(time.Date(2026, time.August, 31, 23, 50, 0, 0, time.UTC))
 	assert.False(t, ok, "23:50 UTC is already 06:50 on Sept 1 in Vietnam")
+}
+
+type fakeRollover struct {
+	calls chan [2]int
+	err   error
+}
+
+func (f *fakeRollover) ProcessRolloverForMonth(_ context.Context, month, year int) error {
+	f.calls <- [2]int{month, year}
+	return f.err
+}
+
+func (f *fakeRollover) ProcessRolloverForUser(context.Context, uuid.UUID, int, int) error {
+	return nil
+}
+
+func TestMonthlyRolloverWorker_StartSyncsCurrentMonthThenStops(t *testing.T) {
+	for _, svcErr := range []error{nil, errors.New("db down")} {
+		svc := &fakeRollover{calls: make(chan [2]int, 1), err: svcErr}
+		w := worker.NewMonthlyRolloverWorker(svc, zap.NewNop())
+
+		w.Start(context.Background())
+
+		select {
+		case got := <-svc.calls:
+			now := util.Now()
+			assert.Equal(t, [2]int{int(now.Month()), now.Year()}, got)
+		case <-time.After(2 * time.Second):
+			t.Fatal("startup sync did not run")
+		}
+
+		done := make(chan struct{})
+		go func() { w.Stop(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("Stop did not return")
+		}
+	}
 }

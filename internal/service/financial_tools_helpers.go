@@ -181,7 +181,8 @@ func matchCategoryByName(categories []model.Category, name string) *model.Catego
 	return nil
 }
 
-// matchDebtByTitle prefers an exact title, then a containment match either way.
+// matchDebtByTitle prefers an exact title, then a containment match either way
+// (skipping untitled debts).
 func matchDebtByTitle(debts []dto.DebtResponse, title string) *dto.DebtResponse {
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -194,7 +195,11 @@ func matchDebtByTitle(debts []dto.DebtResponse, title string) *dto.DebtResponse 
 	}
 	lower := strings.ToLower(title)
 	for i := range debts {
-		t := strings.ToLower(debts[i].Title)
+		t := strings.ToLower(strings.TrimSpace(debts[i].Title))
+		// An untitled debt is contained in every query; never match it loosely.
+		if t == "" {
+			continue
+		}
 		if strings.Contains(t, lower) || strings.Contains(lower, t) {
 			return &debts[i]
 		}

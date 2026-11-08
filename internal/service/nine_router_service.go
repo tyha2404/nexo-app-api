@@ -10,6 +10,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -283,7 +284,8 @@ func (s *nineRouterService) ListModels(ctx context.Context) ([]string, error) {
 	s.cacheExpiry = time.Now().Add(60 * time.Second)
 	s.mu.Unlock()
 
-	return result, nil
+	// A copy, like a cache hit: callers must not be able to change the cache.
+	return slices.Clone(result), nil
 }
 
 // isAllowedModel reports whether a client-requested model is one the server

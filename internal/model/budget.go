@@ -7,6 +7,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// Budget periods. The DB check constraint, the DTO validator and every
+// period_type query use these exact lowercase values.
+const (
+	BudgetPeriodMonthly = "monthly"
+	BudgetPeriodYearly  = "yearly"
+)
+
 type Budget struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID      uuid.UUID `gorm:"type:uuid;not null;index;index:idx_budgets_user_category_period,unique,where:deleted_at IS NULL" json:"userId"`

@@ -25,7 +25,7 @@ type BudgetHandler struct {
 func NewBudgetHandler(svc service.BudgetService, log *zap.Logger) *BudgetHandler {
 	return &BudgetHandler{
 		svc:          svc,
-		validator:    validator.New(),
+		validator:    newStructValidator(),
 		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}

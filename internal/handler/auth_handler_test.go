@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -287,5 +288,129 @@ func TestAuthHandler_Logout(t *testing.T) {
 	h.Logout(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 without a refresh token, got %d", rr.Code)
+	}
+}
+
+func TestAuthHandler_Register(t *testing.T) {
+	valid := `{"username":"new_user","email":"new@example.com","password":"password123"}`
+	tests := []struct {
+		name       string
+		body       string
+		svcErr     error
+		wantStatus int
+		wantMsg    string
+	}{
+		{"success", valid, nil, http.StatusCreated, ""},
+		{"bad json", `{"username":`, nil, http.StatusBadRequest, "Validation failed"},
+		{"missing email", `{"username":"new_user","password":"password123"}`, nil, http.StatusBadRequest, "Validation failed"},
+		{"short password", `{"username":"new_user","email":"new@example.com","password":"short"}`, nil, http.StatusBadRequest, "Validation failed"},
+		{"username with spaces", `{"username":"new user","email":"new@example.com","password":"password123"}`, nil, http.StatusBadRequest, "Validation failed"},
+		{"email exists", valid, constant.ErrEmailAlreadyExists, http.StatusConflict, "Email already exists"},
+		{"username taken", valid, fmt.Errorf("register: %w", constant.ErrUsernameTaken), http.StatusConflict, "Username already taken"},
+		{"internal error", valid, errors.New("db down"), http.StatusInternalServerError, "Failed to create user"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got *model.User
+			mockSvc := &mockAuthService{
+				registerFn: func(ctx context.Context, user *model.User) (*model.User, error) {
+					got = user
+					if tt.svcErr != nil {
+						return nil, tt.svcErr
+					}
+					created := *user
+					created.ID = uuid.New()
+					created.Password = "$2a$hashed"
+					created.Role = "user"
+					return &created, nil
+				},
+			}
+			h := NewAuthHandler(mockSvc, zap.NewNop())
+			rr := httptest.NewRecorder()
+			h.Register(rr, httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(tt.body)))
+
+			if rr.Code != tt.wantStatus {
+				t.Fatalf("expected %d, got %d (%s)", tt.wantStatus, rr.Code, rr.Body.String())
+			}
+			body := decodeJSON(t, rr)
+			if tt.wantStatus != http.StatusCreated {
+				if body["success"] != false || body["message"] != tt.wantMsg {
+					t.Fatalf("unexpected error envelope: %v", body)
+				}
+				if tt.wantStatus == http.StatusBadRequest && got != nil {
+					t.Fatal("service must not be called for an invalid payload")
+				}
+				if _, leaked := body["error"]; leaked && tt.wantStatus >= 500 {
+					t.Fatalf("5xx must not expose error detail: %v", body["error"])
+				}
+				return
+			}
+			if got == nil || got.Username != "new_user" || got.Email != "new@example.com" || got.Password != "password123" {
+				t.Fatalf("unexpected user passed to service: %+v", got)
+			}
+			if got.Role != "" {
+				t.Fatalf("register must not set a role from the request, got %q", got.Role)
+			}
+			if strings.Contains(rr.Body.String(), "hashed") || strings.Contains(rr.Body.String(), "password123") {
+				t.Fatalf("password must not be returned: %s", rr.Body.String())
+			}
+			data, _ := body["data"].(map[string]interface{})
+			if body["success"] != true || data["username"] != "new_user" {
+				t.Fatalf("unexpected success envelope: %v", body)
+			}
+		})
+	}
+}
+
+func TestAuthHandler_RegisterIgnoresRoleInBody(t *testing.T) {
+	var got *model.User
+	mockSvc := &mockAuthService{
+		registerFn: func(ctx context.Context, user *model.User) (*model.User, error) {
+			got = user
+			return user, nil
+		},
+	}
+	h := NewAuthHandler(mockSvc, zap.NewNop())
+	rr := httptest.NewRecorder()
+	body := `{"username":"sneaky","email":"s@example.com","password":"password123","role":"admin"}`
+	h.Register(rr, httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(body)))
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (%s)", rr.Code, rr.Body.String())
+	}
+	if got == nil || got.Role != "" {
+		t.Fatalf("role from the request body must be ignored, got %+v", got)
+	}
+}
+
+func TestAuthHandler_WhoAmI(t *testing.T) {
+	h := NewAuthHandler(&mockAuthService{}, zap.NewNop())
+	userID := uuid.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
+	req = req.WithContext(context.WithValue(req.Context(), constant.UserContextKey, model.User{ID: userID, Username: "me", Role: "user", Password: "secret-hash"}))
+	rr := httptest.NewRecorder()
+	h.WhoAmI(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := decodeJSON(t, rr)
+	data, _ := body["data"].(map[string]interface{})
+	if body["success"] != true || data["id"] != userID.String() || data["username"] != "me" {
+		t.Fatalf("unexpected body: %v", body)
+	}
+	if strings.Contains(rr.Body.String(), "secret-hash") {
+		t.Fatal("password must not be serialized")
+	}
+
+	for name, r := range map[string]*http.Request{
+		"no user":  httptest.NewRequest(http.MethodGet, "/auth/whoami", nil),
+		"nil uuid": withUser(httptest.NewRequest(http.MethodGet, "/auth/whoami", nil), uuid.Nil),
+	} {
+		rr := httptest.NewRecorder()
+		h.WhoAmI(rr, r)
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("%s: expected 401, got %d", name, rr.Code)
+		}
 	}
 }

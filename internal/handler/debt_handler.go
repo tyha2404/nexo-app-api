@@ -26,7 +26,7 @@ type DebtHandler struct {
 func NewDebtHandler(svc service.DebtService, log *zap.Logger) *DebtHandler {
 	return &DebtHandler{
 		svc:          svc,
-		validator:    validator.New(),
+		validator:    newStructValidator(),
 		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
@@ -34,7 +34,7 @@ func NewDebtHandler(svc service.DebtService, log *zap.Logger) *DebtHandler {
 
 func (h *DebtHandler) CreateDebt(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "create_debt")
 		return
 	}
@@ -72,7 +72,7 @@ func (h *DebtHandler) CreateDebt(w http.ResponseWriter, r *http.Request) {
 
 func (h *DebtHandler) GetDebts(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_debts")
 		return
 	}
@@ -96,7 +96,7 @@ func (h *DebtHandler) GetDebts(w http.ResponseWriter, r *http.Request) {
 
 func (h *DebtHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_debt_summary")
 		return
 	}
@@ -131,7 +131,7 @@ func (h *DebtHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 // @Router /debts/{id}/repayments [post]
 func (h *DebtHandler) AddRepayment(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "add_repayment")
 		return
 	}
@@ -196,7 +196,7 @@ func (h *DebtHandler) AddRepayment(w http.ResponseWriter, r *http.Request) {
 // @Router /debts/{id} [delete]
 func (h *DebtHandler) DeleteDebt(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_debt")
 		return
 	}

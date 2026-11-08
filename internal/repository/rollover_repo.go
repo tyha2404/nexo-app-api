@@ -72,7 +72,7 @@ func (r *rolloverRepository) GetLatestTargetBefore(ctx context.Context, userID u
 func (r *rolloverRepository) GetMonthlyBudgetsForPeriod(ctx context.Context, userID uuid.UUID, periodStart time.Time) ([]model.Budget, error) {
 	var budgets []model.Budget
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND period_type = ? AND period_start = ?", userID, "monthly", periodStart).
+		Where("user_id = ? AND period_type = ? AND period_start = ?", userID, model.BudgetPeriodMonthly, periodStart).
 		Find(&budgets).Error
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (r *rolloverRepository) GetLatestMonthlyBudgetsBefore(ctx context.Context, 
 	err := r.db.WithContext(ctx).
 		Model(&model.Budget{}).
 		Select("DISTINCT ON (category_id) *").
-		Where("user_id = ? AND period_type = ? AND period_start < ?", userID, "monthly", periodStart).
+		Where("user_id = ? AND period_type = ? AND period_start < ?", userID, model.BudgetPeriodMonthly, periodStart).
 		Order("category_id, period_start DESC, created_at DESC").
 		Find(&budgets).Error
 	if err != nil {

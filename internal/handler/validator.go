@@ -16,15 +16,23 @@ type Validator struct {
 	validate *validator.Validate
 }
 
-// NewValidator creates a new validator instance
-func NewValidator() *Validator {
-	v := validator.New()
-	v.RegisterValidation("username", func(fl validator.FieldLevel) bool {
+// newStructValidator is the one validator configuration every handler uses.
+// WithRequiredStructEnabled makes `required` reject zero-valued struct fields
+// (CustomTime, time.Time): without it a missing transactionDate passed
+// validation and was stored as 0001-01-01.
+func newStructValidator() *validator.Validate {
+	v := validator.New(validator.WithRequiredStructEnabled())
+	_ = v.RegisterValidation("username", func(fl validator.FieldLevel) bool {
 		matched, _ := regexp.MatchString("^[a-zA-Z0-9_-]+$", fl.Field().String())
 		return matched
 	})
+	return v
+}
+
+// NewValidator creates a new validator instance
+func NewValidator() *Validator {
 	return &Validator{
-		validate: v,
+		validate: newStructValidator(),
 	}
 }
 

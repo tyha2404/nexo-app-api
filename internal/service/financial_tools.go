@@ -1221,7 +1221,7 @@ func (s *chatService) toolSetBudget(ctx context.Context, userID uuid.UUID, args 
 	req := dto.CreateBudgetRequest{
 		CategoryID:  targetCategory.ID,
 		Amount:      amount,
-		PeriodType:  "MONTHLY",
+		PeriodType:  model.BudgetPeriodMonthly,
 		PeriodStart: periodStart,
 	}
 

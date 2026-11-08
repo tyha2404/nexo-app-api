@@ -132,7 +132,7 @@ func (s *rolloverService) ProcessRolloverForUser(ctx context.Context, userID uui
 				UserID:      userID,
 				CategoryID:  b.CategoryID,
 				Amount:      b.Amount,
-				PeriodType:  "monthly",
+				PeriodType:  model.BudgetPeriodMonthly,
 				PeriodStart: targetPeriodStart,
 			})
 		}

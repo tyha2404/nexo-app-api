@@ -32,6 +32,10 @@ func NewBudgetService(budgetRepo repository.BudgetRepository, categoryRepo repos
 }
 
 func (s *budgetService) CreateBudget(ctx context.Context, userID uuid.UUID, req dto.CreateBudgetRequest) (*dto.BudgetResponse, error) {
+	// Callers other than the HTTP handler (AI tools) skip DTO validation.
+	if !isBudgetPeriod(req.PeriodType) {
+		return nil, fmt.Errorf("%w: period type must be %q or %q", constant.ErrInvalidInput, model.BudgetPeriodMonthly, model.BudgetPeriodYearly)
+	}
 	category, err := s.categoryRepo.GetByIDForUser(ctx, userID, req.CategoryID)
 	if err != nil {
 		return nil, categoryLookupError(err)
@@ -92,6 +96,9 @@ func (s *budgetService) UpdateBudget(ctx context.Context, userID, id uuid.UUID, 
 		budget.Amount = *req.Amount
 	}
 	if req.PeriodType != nil {
+		if !isBudgetPeriod(*req.PeriodType) {
+			return nil, fmt.Errorf("%w: period type must be %q or %q", constant.ErrInvalidInput, model.BudgetPeriodMonthly, model.BudgetPeriodYearly)
+		}
 		budget.PeriodType = *req.PeriodType
 	}
 
@@ -110,4 +117,8 @@ func (s *budgetService) DeleteBudget(ctx context.Context, userID, id uuid.UUID) 
 		return fmt.Errorf("budget %w", constant.ErrNotFound)
 	}
 	return s.budgetRepo.Delete(ctx, id)
+}
+
+func isBudgetPeriod(p string) bool {
+	return p == model.BudgetPeriodMonthly || p == model.BudgetPeriodYearly
 }

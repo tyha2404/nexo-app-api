@@ -100,10 +100,19 @@ func (r *creditCardStatementRepository) Update(ctx context.Context, s *model.Cre
 	return r.db.WithContext(ctx).Save(s).Error
 }
 
+// Delete soft-deletes the user's statement. constant.ErrNotFound when no live
+// statement with that id belongs to the user.
 func (r *creditCardStatementRepository) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
-	return r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", id, userID).
-		Delete(&model.CreditCardStatement{}).Error
+		Delete(&model.CreditCardStatement{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constant.ErrNotFound
+	}
+	return nil
 }
 
 // PayStatement records a payment atomically in one DB transaction:

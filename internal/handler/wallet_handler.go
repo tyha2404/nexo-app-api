@@ -26,7 +26,7 @@ type WalletHandler struct {
 func NewWalletHandler(svc service.WalletService, log *zap.Logger) *WalletHandler {
 	return &WalletHandler{
 		svc:          svc,
-		validator:    validator.New(),
+		validator:    newStructValidator(),
 		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
@@ -44,7 +44,7 @@ func NewWalletHandler(svc service.WalletService, log *zap.Logger) *WalletHandler
 // @Router /wallets [get]
 func (h *WalletHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_wallets")
 		return
 	}
@@ -78,7 +78,7 @@ func (h *WalletHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 // @Router /wallets [post]
 func (h *WalletHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "create_wallet")
 		return
 	}
@@ -129,7 +129,7 @@ func (h *WalletHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 // @Router /wallets/{id} [get]
 func (h *WalletHandler) GetWalletByID(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_wallet_by_id")
 		return
 	}
@@ -176,7 +176,7 @@ func (h *WalletHandler) GetWalletByID(w http.ResponseWriter, r *http.Request) {
 // @Router /wallets/{id} [put]
 func (h *WalletHandler) UpdateWallet(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "update_wallet")
 		return
 	}
@@ -237,7 +237,7 @@ func (h *WalletHandler) UpdateWallet(w http.ResponseWriter, r *http.Request) {
 // @Router /wallets/{id} [delete]
 func (h *WalletHandler) DeleteWallet(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_wallet")
 		return
 	}
@@ -282,7 +282,7 @@ func (h *WalletHandler) DeleteWallet(w http.ResponseWriter, r *http.Request) {
 // @Router /wallets/transfer [post]
 func (h *WalletHandler) TransferMoney(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "transfer_money")
 		return
 	}
@@ -341,7 +341,7 @@ func (h *WalletHandler) TransferMoney(w http.ResponseWriter, r *http.Request) {
 // @Router /wallets/auto-allocate [post]
 func (h *WalletHandler) AutoAllocateIncome(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "auto_allocate_income")
 		return
 	}

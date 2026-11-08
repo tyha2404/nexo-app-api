@@ -23,7 +23,7 @@ type PresetHandler struct {
 func NewPresetHandler(svc service.PresetService, log *zap.Logger) *PresetHandler {
 	return &PresetHandler{
 		svc:          svc,
-		validator:    validator.New(),
+		validator:    newStructValidator(),
 		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}

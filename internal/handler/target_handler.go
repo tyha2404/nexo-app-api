@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
@@ -25,7 +26,7 @@ type TargetHandler struct {
 func NewTargetHandler(svc service.TargetService, log *zap.Logger) *TargetHandler {
 	return &TargetHandler{
 		svc:          svc,
-		validator:    validator.New(),
+		validator:    newStructValidator(),
 		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
@@ -44,7 +45,7 @@ func (h *TargetHandler) UpsertTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "upsert_target")
 		return
 	}
@@ -65,7 +66,7 @@ func (h *TargetHandler) UpsertTarget(w http.ResponseWriter, r *http.Request) {
 
 func (h *TargetHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_target_summary")
 		return
 	}

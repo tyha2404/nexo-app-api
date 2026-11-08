@@ -27,7 +27,7 @@ type CreditCardStatementHandler struct {
 func NewCreditCardStatementHandler(svc service.CreditCardStatementService, log *zap.Logger) *CreditCardStatementHandler {
 	return &CreditCardStatementHandler{
 		svc:          svc,
-		validator:    validator.New(),
+		validator:    newStructValidator(),
 		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
@@ -48,7 +48,7 @@ func NewCreditCardStatementHandler(svc service.CreditCardStatementService, log *
 // @Router /credit-card-statements [get]
 func (h *CreditCardStatementHandler) ListStatements(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "list_statements")
 		return
 	}
@@ -105,7 +105,7 @@ func (h *CreditCardStatementHandler) ListStatements(w http.ResponseWriter, r *ht
 // @Router /credit-card-statements [post]
 func (h *CreditCardStatementHandler) CreateStatement(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "create_statement")
 		return
 	}
@@ -163,7 +163,7 @@ func (h *CreditCardStatementHandler) CreateStatement(w http.ResponseWriter, r *h
 // @Router /credit-card-statements/{id} [get]
 func (h *CreditCardStatementHandler) GetStatementByID(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_statement_by_id")
 		return
 	}
@@ -210,7 +210,7 @@ func (h *CreditCardStatementHandler) GetStatementByID(w http.ResponseWriter, r *
 // @Router /credit-card-statements/{id} [put]
 func (h *CreditCardStatementHandler) UpdateStatement(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "update_statement")
 		return
 	}
@@ -269,7 +269,7 @@ func (h *CreditCardStatementHandler) UpdateStatement(w http.ResponseWriter, r *h
 // @Router /credit-card-statements/{id}/pay [post]
 func (h *CreditCardStatementHandler) PayStatement(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "pay_statement")
 		return
 	}
@@ -332,11 +332,12 @@ func (h *CreditCardStatementHandler) PayStatement(w http.ResponseWriter, r *http
 // @Success 200 {string} string "OK"
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "Statement not found"
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements/{id} [delete]
 func (h *CreditCardStatementHandler) DeleteStatement(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok {
+	if !ok || user.ID == uuid.Nil {
 		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_statement")
 		return
 	}
@@ -349,6 +350,10 @@ func (h *CreditCardStatementHandler) DeleteStatement(w http.ResponseWriter, r *h
 	}
 
 	if err := h.svc.DeleteStatement(r.Context(), user.ID, id); err != nil {
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Statement not found", "delete_statement")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to delete statement", "delete_statement")
 		return
 	}

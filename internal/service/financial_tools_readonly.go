@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -278,21 +279,21 @@ func (s *chatService) toolSearchTransactions(ctx context.Context, userID uuid.UU
 		if err != nil {
 			return nil, err
 		}
-		var matched *model.Wallet
 		for i := range wallets {
 			walletNamesByID[wallets[i].ID] = wallets[i].Name
-			if strings.EqualFold(wallets[i].Name, walletName) || strings.Contains(strings.ToLower(wallets[i].Name), strings.ToLower(walletName)) {
-				matched = &wallets[i]
-			}
 		}
-		if matched == nil {
-			names := make([]string, 0, len(wallets))
-			for _, w := range wallets {
-				names = append(names, w.Name)
+		// Exact name first, then a unique partial match; an ambiguous name is
+		// reported instead of silently using one of the matches.
+		matched, matchErr := matchWalletByName(wallets, walletName)
+		if matchErr != nil {
+			hints := walletNames(wallets)
+			var wmErr *walletMatchError
+			if errors.As(matchErr, &wmErr) {
+				hints = wmErr.candidates
 			}
 			resMap := map[string]interface{}{
-				"error":   fmt.Sprintf("Không tìm thấy ví '%s'", walletName),
-				"hints":   names,
+				"error":   matchErr.Error(),
+				"hints":   hints,
 				"message": "Hãy thử lại với tên ví chính xác hơn.",
 			}
 			resBytes, _ := json.Marshal(resMap)
@@ -592,14 +593,7 @@ func (s *chatService) toolGetDebtDetail(ctx context.Context, userID uuid.UUID, a
 		return nil, err
 	}
 
-	var matched *dto.DebtResponse
-	for i := range debts {
-		d := &debts[i]
-		if strings.Contains(strings.ToLower(d.Title), strings.ToLower(debtTitle)) || strings.Contains(strings.ToLower(debtTitle), strings.ToLower(d.Title)) {
-			matched = d
-			break
-		}
-	}
+	matched := matchDebtByTitle(debts, debtTitle)
 
 	if matched == nil {
 		titles := make([]string, 0, len(debts))

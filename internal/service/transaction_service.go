@@ -403,10 +403,10 @@ func categoryLookupError(err error) error {
 // (util.AppLocation), never the server's or the parsed value's location.
 func budgetSpendWindow(budget *model.Budget, transactionDate time.Time) (time.Time, time.Time) {
 	switch budget.PeriodType {
-	case "monthly":
+	case model.BudgetPeriodMonthly:
 		start, next := util.MonthRange(transactionDate)
 		return start, next.Add(-time.Nanosecond)
-	case "yearly":
+	case model.BudgetPeriodYearly:
 		y := transactionDate.In(util.AppLocation()).Year()
 		start := time.Date(y, 1, 1, 0, 0, 0, 0, util.AppLocation())
 		return start, start.AddDate(1, 0, 0).Add(-time.Nanosecond)

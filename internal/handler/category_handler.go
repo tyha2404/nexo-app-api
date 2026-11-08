@@ -23,7 +23,7 @@ type CategoryHandler struct {
 }
 
 func NewCategoryHandler(svc service.CategoryService, log *zap.Logger) *CategoryHandler {
-	return &CategoryHandler{svc: svc, log: log, errorHandler: NewErrorHandler(log), validator: validator.New()}
+	return &CategoryHandler{svc: svc, log: log, errorHandler: NewErrorHandler(log), validator: newStructValidator()}
 }
 
 // Create handles the creation of a new category record

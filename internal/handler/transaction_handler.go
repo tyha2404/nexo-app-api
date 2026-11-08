@@ -25,7 +25,7 @@ type TransactionHandler struct {
 func NewTransactionHandler(transactionService service.TransactionService, log *zap.Logger) *TransactionHandler {
 	return &TransactionHandler{
 		transactionService: transactionService,
-		validator:          validator.New(),
+		validator:          newStructValidator(),
 		log:                log,
 		errorHandler:       NewErrorHandler(log),
 	}
