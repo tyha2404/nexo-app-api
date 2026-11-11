@@ -65,6 +65,26 @@ func MonthRangeOf(year int, month time.Month) (start, end time.Time) {
 	return start, start.AddDate(0, 1, 0)
 }
 
+// CalendarDate returns UTC midnight of t's calendar day in the app timezone.
+// Use it for date-only values (debt start/due dates) stored in TIMESTAMP or
+// DATE columns: pgx sends time.Time to Postgres as UTC text, so local midnight
+// (e.g. 2026-11-11T00:00+07:00) would otherwise be stored as 2026-11-10 17:00
+// and read back as the previous day. UTC midnight keeps the picked day, and
+// reading an old shifted value through it also recovers the intended day.
+func CalendarDate(t time.Time) time.Time {
+	t = t.In(AppLocation())
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// CalendarDatePtr is CalendarDate for optional dates (nil stays nil).
+func CalendarDatePtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	d := CalendarDate(*t)
+	return &d
+}
+
 // IsPastDate reports whether the calendar date of d (read in d's own location,
 // i.e. the date the user picked, as stored in a DATE/TIMESTAMP column) is
 // before today in the app timezone. A due date of today is NOT past.

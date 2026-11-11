@@ -1685,6 +1685,74 @@
             }
         },
         "/debts/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Full replacement of the editable fields (the type cannot change; a null dueDate/walletId clears it). totalAmount may not drop below the amount already repaid. The wallet effect of the debt's creation is moved/resized in the same DB transaction; repayments are untouched.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debts"
+                ],
+                "summary": "Update a debt",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Debt ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Debt",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateDebtRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RepaymentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input or amount below what was repaid",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Debt or wallet not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -3617,7 +3685,9 @@
                     "type": "string"
                 },
                 "dueDate": {
-                    "type": "string"
+                    "description": "YYYY-MM-DD",
+                    "type": "string",
+                    "example": "2026-12-31"
                 },
                 "id": {
                     "type": "string"
@@ -3638,7 +3708,9 @@
                     }
                 },
                 "startDate": {
-                    "type": "string"
+                    "description": "YYYY-MM-DD",
+                    "type": "string",
+                    "example": "2026-11-11"
                 },
                 "status": {
                     "$ref": "#/definitions/model.DebtStatus"
@@ -4140,6 +4212,9 @@
             }
         },
         "dto.UpdateCostRequest": {
+            "type": "object"
+        },
+        "dto.UpdateDebtRequest": {
             "type": "object"
         },
         "dto.UpdateStatementRequest": {

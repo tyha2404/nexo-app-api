@@ -21,6 +21,7 @@ func (r *DebtRouter) RegisterRoutes(router chi.Router) {
 		router.Get("/", r.handler.GetDebts)
 		router.Post("/", r.handler.CreateDebt)
 		router.Post("/{id}/repayments", r.handler.AddRepayment)
+		router.Put("/{id}", r.handler.UpdateDebt)
 		router.Delete("/{id}", r.handler.DeleteDebt)
 	})
 }

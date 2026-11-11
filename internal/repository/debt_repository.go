@@ -27,6 +27,7 @@ type DebtRepository interface {
 	FindByUserID(ctx context.Context, userID uuid.UUID, debtType model.DebtType, status model.DebtStatus) ([]model.Debt, error)
 	AddRepayment(ctx context.Context, debt *model.Debt, repayment *model.Repayment) error
 	AddRepaymentWithWallet(ctx context.Context, debt *model.Debt, repayment *model.Repayment, walletID *uuid.UUID, balanceDelta float64) error
+	UpdateWithWallet(ctx context.Context, id uuid.UUID, userID uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error)
 	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 	GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.DebtSummaryResponse, error)
 }
@@ -146,6 +147,61 @@ func (r *debtRepository) AddRepaymentWithWallet(ctx context.Context, debt *model
 		}
 		return nil
 	})
+}
+
+// UpdateWithWallet locks the debt, lets mutate change its editable fields and
+// saves them, moving the wallet effect of the debt's creation from the old
+// wallet/amount to the new one in the same DB transaction. Repayments and
+// their wallet effects are untouched. A wallet deleted meanwhile is skipped on
+// the reversal side; the new wallet must exist.
+func (r *debtRepository) UpdateWithWallet(ctx context.Context, id uuid.UUID, userID uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error) {
+	var updated model.Debt
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var debt model.Debt
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", id, userID).
+			First(&debt).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrDebtNotFound
+		}
+		if err != nil {
+			return err
+		}
+		old := debt
+		if err := mutate(&debt); err != nil {
+			return err
+		}
+
+		oldDelta := model.DebtCreationWalletDelta(old.Type, old.TotalAmount)
+		newDelta := model.DebtCreationWalletDelta(debt.Type, debt.TotalAmount)
+		if sameWallet(old.WalletID, debt.WalletID) {
+			if err := adjustWalletBalance(tx, debt.WalletID, userID, newDelta-oldDelta, false); err != nil {
+				return err
+			}
+		} else {
+			if err := adjustWalletBalance(tx, old.WalletID, userID, -oldDelta, false); err != nil {
+				return err
+			}
+			if err := adjustWalletBalance(tx, debt.WalletID, userID, newDelta, true); err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Model(&debt).
+			Select("title", "total_amount", "start_date", "due_date", "notes", "wallet_id", "status", "updated_at").
+			Updates(&debt).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("debt_id = ?", debt.ID).Order("paid_at ASC").Find(&debt.Repayments).Error; err != nil {
+			return err
+		}
+		updated = debt
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
 
 // Delete soft-deletes the debt and its repayments and reverses every wallet

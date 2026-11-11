@@ -51,6 +51,22 @@ func (m *MockDebtRepo) AddRepaymentWithWallet(ctx context.Context, debt *model.D
 	return args.Error(0)
 }
 
+func (m *MockDebtRepo) UpdateWithWallet(ctx context.Context, id uuid.UUID, userID uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error) {
+	args := m.Called(ctx, id, userID)
+	stored, _ := args.Get(0).(*model.Debt)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	if stored == nil {
+		return nil, repository.ErrDebtNotFound
+	}
+	d := *stored
+	if err := mutate(&d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
 func (m *MockDebtRepo) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
 	args := m.Called(ctx, id, userID)
 	return args.Error(0)

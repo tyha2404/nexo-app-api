@@ -11,10 +11,23 @@ type CreateDebtRequest struct {
 	Type        model.DebtType `json:"type" validate:"required,oneof=PAYABLE RECEIVABLE"`
 	Title       string         `json:"title" validate:"required"`
 	TotalAmount float64        `json:"totalAmount" validate:"required,gt=0"`
-	StartDate   *time.Time     `json:"startDate"`
-	DueDate     *time.Time     `json:"dueDate"`
+	StartDate   *CustomTime    `json:"startDate" example:"2026-11-11"`
+	DueDate     *CustomTime    `json:"dueDate" example:"2026-12-31"`
 	Notes       string         `json:"notes"`
 	WalletID    *uuid.UUID     `json:"walletId,omitempty"`
+}
+
+// UpdateDebtRequest replaces a debt's editable fields (full replacement: a
+// null dueDate / walletId clears it). The type cannot change. totalAmount must
+// not be below the amount already repaid; the wallet effect of the debt's
+// creation is moved/resized to match the new wallet and amount.
+type UpdateDebtRequest struct {
+	Title       string      `json:"title" validate:"required"`
+	TotalAmount float64     `json:"totalAmount" validate:"required,gt=0"`
+	StartDate   *CustomTime `json:"startDate" example:"2026-11-11"`
+	DueDate     *CustomTime `json:"dueDate" example:"2026-12-31"`
+	Notes       string      `json:"notes"`
+	WalletID    *uuid.UUID  `json:"walletId,omitempty"`
 }
 
 type AddRepaymentRequest struct {
@@ -39,8 +52,8 @@ type DebtResponse struct {
 	TotalAmount float64           `json:"totalAmount"`
 	PaidAmount  float64           `json:"paidAmount"`
 	Remaining   float64           `json:"remaining"`
-	StartDate   *time.Time        `json:"startDate"`
-	DueDate     *time.Time        `json:"dueDate"`
+	StartDate   *string           `json:"startDate" example:"2026-11-11"` // YYYY-MM-DD
+	DueDate     *string           `json:"dueDate" example:"2026-12-31"`   // YYYY-MM-DD
 	Status      model.DebtStatus  `json:"status"`
 	Notes       string            `json:"notes"`
 	WalletID    *uuid.UUID        `json:"walletId,omitempty"`

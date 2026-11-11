@@ -1091,10 +1091,10 @@ func (s *chatService) toolCreateDebt(ctx context.Context, userID uuid.UUID, args
 		debtType = model.DebtTypeReceivable
 	}
 
-	var dueDate *time.Time
+	var dueDate *dto.CustomTime
 	if dueDateStr != "" {
 		if t, err := time.Parse("2006-01-02", dueDateStr); err == nil {
-			dueDate = &t
+			dueDate = &dto.CustomTime{Time: t}
 		}
 	}
 

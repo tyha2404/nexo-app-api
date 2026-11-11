@@ -181,6 +181,71 @@ func (h *DebtHandler) AddRepayment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdateDebt edits a debt's title, amount, dates, notes and wallet.
+// @Summary Update a debt
+// @Description Full replacement of the editable fields (the type cannot change; a null dueDate/walletId clears it). totalAmount may not drop below the amount already repaid. The wallet effect of the debt's creation is moved/resized in the same DB transaction; repayments are untouched.
+// @Tags Debts
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Debt ID"
+// @Param request body dto.UpdateDebtRequest true "Debt"
+// @Success 200 {object} RepaymentResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid input or amount below what was repaid"
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "Debt or wallet not found"
+// @Failure 500 {object} response.ErrorResponse
+// @Router /debts/{id} [put]
+func (h *DebtHandler) UpdateDebt(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
+	if !ok || user.ID == uuid.Nil {
+		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "update_debt")
+		return
+	}
+
+	debtID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid debt ID", "update_debt")
+		return
+	}
+
+	var req dto.UpdateDebtRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.errorHandler.HandleDecodeError(w, err, "update_debt")
+		return
+	}
+	if err := h.validator.Struct(req); err != nil {
+		h.errorHandler.HandleValidationError(w, err, "update_debt")
+		return
+	}
+
+	res, err := h.svc.UpdateDebt(r.Context(), user.ID, debtID, req)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidDebtUpdate) {
+			h.errorHandler.HandleError(w, err, http.StatusBadRequest, err.Error(), "update_debt")
+			return
+		}
+		if errors.Is(err, service.ErrDebtNotFound) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Debt not found", "update_debt")
+			return
+		}
+		if IsNotFoundError(err) {
+			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Wallet not found", "update_debt")
+			return
+		}
+		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to update debt", "update_debt")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response.BaseResponse[*dto.DebtResponse]{
+		Status:  http.StatusOK,
+		Success: true,
+		Message: "Debt updated successfully",
+		Data:    res,
+	})
+}
+
 // DeleteDebt soft-deletes a debt and its repayments and reverses their wallet effects.
 // @Summary Delete a debt
 // @Description Soft-deletes the debt and its repayments and, in one DB transaction, reverses the wallet balance effects of the debt creation and of every repayment.

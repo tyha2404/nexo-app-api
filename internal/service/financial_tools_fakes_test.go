@@ -121,7 +121,7 @@ func (d *tfDebtSvc) CreateDebt(_ context.Context, userID uuid.UUID, req dto.Crea
 		return nil, d.createErr
 	}
 	d.created = append(d.created, req)
-	return &dto.DebtResponse{ID: uuid.New(), UserID: userID, Type: req.Type, Title: req.Title, TotalAmount: req.TotalAmount, Remaining: req.TotalAmount, DueDate: req.DueDate}, nil
+	return &dto.DebtResponse{ID: uuid.New(), UserID: userID, Type: req.Type, Title: req.Title, TotalAmount: req.TotalAmount, Remaining: req.TotalAmount, DueDate: fakeDay(req.DueDate)}, nil
 }
 
 func (d *tfDebtSvc) AddRepayment(_ context.Context, userID, debtID uuid.UUID, req dto.AddRepaymentRequest) (*dto.DebtResponse, error) {
@@ -362,4 +362,12 @@ func mustJSON(t *testing.T, v interface{}) string {
 	raw, err := json.Marshal(v)
 	require.NoError(t, err)
 	return string(raw)
+}
+
+func fakeDay(d *dto.CustomTime) *string {
+	if d == nil {
+		return nil
+	}
+	s := d.Format("2006-01-02")
+	return &s
 }

@@ -295,7 +295,7 @@ func TestDebtService_CreateDebtPastDueIsOverdueAndWithoutWalletHasNoDelta(t *tes
 	}), (*uuid.UUID)(nil), 0.0).Return(nil)
 
 	res, err := service.NewDebtService(repo).CreateDebt(context.Background(), userID, dto.CreateDebtRequest{
-		Type: model.DebtTypePayable, Title: "Vay", TotalAmount: 1_000_000, DueDate: &past,
+		Type: model.DebtTypePayable, Title: "Vay", TotalAmount: 1_000_000, DueDate: &dto.CustomTime{Time: past},
 	})
 	require.NoError(t, err)
 	require.Equal(t, model.DebtStatusOverdue, res.Status)
