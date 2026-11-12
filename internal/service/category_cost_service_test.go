@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -15,7 +16,8 @@ import (
 // ownedCategoryRepo emulates the user-scoped SQL (WHERE id = ? AND user_id = ?).
 type ownedCategoryRepo struct {
 	repository.CategoryRepo
-	rows map[uuid.UUID]*model.Category
+	rows        map[uuid.UUID]*model.Category
+	lastUpdates map[string]interface{}
 }
 
 func (r *ownedCategoryRepo) find(userID, id uuid.UUID) (*model.Category, error) {
@@ -33,6 +35,7 @@ func (r *ownedCategoryRepo) UpdateFieldsForUser(ctx context.Context, userID, id 
 	if err != nil {
 		return err
 	}
+	r.lastUpdates = updates
 	if v, ok := updates["name"].(string); ok {
 		c.Name = v
 	}
@@ -56,7 +59,8 @@ func TestCategoryService_ScopedToOwner(t *testing.T) {
 	if _, err := svc.Get(ctx, other, cat.ID); !errors.Is(err, constant.ErrNotFound) {
 		t.Fatalf("other user's Get: expected ErrNotFound, got %v", err)
 	}
-	if err := svc.UpdateFields(ctx, other, cat.ID, map[string]interface{}{"name": "hacked"}); !errors.Is(err, constant.ErrNotFound) {
+	hacked := "hacked"
+	if _, err := svc.Update(ctx, other, cat.ID, dto.UpdateCategoryRequest{Name: &hacked}); !errors.Is(err, constant.ErrNotFound) {
 		t.Fatalf("other user's Update: expected ErrNotFound, got %v", err)
 	}
 	if err := svc.Delete(ctx, other, cat.ID); !errors.Is(err, constant.ErrNotFound) {
@@ -140,7 +144,7 @@ func TestCostService_CategoryMustBelongToUser(t *testing.T) {
 	svc := NewCostService(repo, cats)
 	ctx := context.Background()
 
-	if _, err := svc.Create(ctx, &model.Cost{UserID: owner, CategoryID: theirs.ID}); !errors.Is(err, constant.ErrNotFound) {
+	if _, err := svc.Create(ctx, owner, dto.CreateCostRequest{CategoryID: theirs.ID}); !errors.Is(err, constant.ErrNotFound) {
 		t.Fatalf("create with foreign category: expected ErrNotFound, got %v", err)
 	}
 	if _, err := svc.Update(ctx, owner, cost.ID, dto.UpdateCostRequest{CategoryID: &theirs.ID}); !errors.Is(err, constant.ErrNotFound) {
@@ -151,5 +155,40 @@ func TestCostService_CategoryMustBelongToUser(t *testing.T) {
 	}
 	if _, err := svc.Update(ctx, owner, cost.ID, dto.UpdateCostRequest{CategoryID: &mine.ID}); err != nil {
 		t.Fatalf("own category update failed: %v", err)
+	}
+}
+
+// The service (not the handler) maps the request DTOs onto the model / the
+// updated columns.
+func TestCategoryService_MapsRequests(t *testing.T) {
+	owner := uuid.New()
+	ctx := context.Background()
+	rec := &recordingCategoryRepo{}
+	exclude, desc := true, "đi chợ"
+	created, err := NewCategoryService(rec).Create(ctx, owner, dto.CreateCategoryRequest{Name: "Ăn uống", Type: "EXPENSE", Description: &desc, ExcludeFromAverageDaily: &exclude})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.UserID != owner || created.Name != "Ăn uống" || created.Type != model.CategoryTypeExpense || !created.ExcludeFromAverageDaily || created.Description == nil || *created.Description != desc {
+		t.Fatalf("unexpected category: %+v", created)
+	}
+
+	cat := &model.Category{ID: uuid.New(), UserID: owner, Name: "Cũ"}
+	repo := &ownedCategoryRepo{rows: map[uuid.UUID]*model.Category{cat.ID: cat}}
+	svc := NewCategoryService(repo)
+	if _, err := svc.Update(ctx, owner, cat.ID, dto.UpdateCategoryRequest{}); !errors.Is(err, constant.ErrInvalidInput) {
+		t.Fatalf("empty update: expected ErrInvalidInput, got %v", err)
+	}
+	name, typ, off := "Mới", "INCOME", false
+	updated, err := svc.Update(ctx, owner, cat.ID, dto.UpdateCategoryRequest{Name: &name, Type: &typ, Description: &desc, ExcludeFromAverageDaily: &off})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]interface{}{"name": "Mới", "type": "INCOME", "description": desc, "exclude_from_average_daily": false}
+	if !reflect.DeepEqual(want, repo.lastUpdates) {
+		t.Fatalf("updates = %v, want %v", repo.lastUpdates, want)
+	}
+	if updated.Name != "Mới" {
+		t.Fatalf("the updated category is returned, got %+v", updated)
 	}
 }

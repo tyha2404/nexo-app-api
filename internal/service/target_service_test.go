@@ -2,6 +2,9 @@ package service_test
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
+	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"testing"
 	"time"
 
@@ -114,4 +117,32 @@ func TestTargetService_GetSummary_OverBudget(t *testing.T) {
 	assert.True(t, res.Investment.IsTargetReached)
 	assert.Equal(t, 1000000.0, res.Investment.SurplusAmount)
 	assert.Equal(t, 0.0, res.Investment.RemainingAmount)
+}
+
+// The period defaults moved from the HTTP handler into the service: a
+// missing month or year is the current one (independently), an invalid
+// month is the current month of the current year.
+func TestTargetService_GetSummary_PeriodDefaults(t *testing.T) {
+	now := util.Now()
+	cases := []struct {
+		month, year         int
+		wantMonth, wantYear int
+	}{
+		{2, 2025, 2, 2025},
+		{0, 0, int(now.Month()), now.Year()},
+		{3, 0, 3, now.Year()},
+		{0, 2024, int(now.Month()), 2024},
+		{13, 2024, int(now.Month()), now.Year()},
+	}
+	for _, tc := range cases {
+		mockRepo := new(MockTargetRepo)
+		userID := uuid.New()
+		mockRepo.On("GetTarget", mock.Anything, userID, mock.Anything, tc.wantMonth, tc.wantYear).Return(nil, repository.ErrTargetNotFound)
+		mockRepo.On("GetMonthlyTotalByCategoryType", mock.Anything, userID, mock.Anything, mock.Anything, mock.Anything).Return(0.0, nil)
+		res, err := service.NewTargetService(mockRepo).GetSummary(context.Background(), userID, tc.month, tc.year)
+		require.NoError(t, err)
+		assert.Equal(t, tc.wantMonth, res.Month, "%+v", tc)
+		assert.Equal(t, tc.wantYear, res.Year, "%+v", tc)
+		assert.Zero(t, res.Expense.TargetAmount, "no target set is 0")
+	}
 }

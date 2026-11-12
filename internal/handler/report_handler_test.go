@@ -160,11 +160,13 @@ func TestReportHandler_MonthsParsing(t *testing.T) {
 		query string
 		want  int
 	}{
-		{"", 12},
+		// The handler passes the raw value (0 when missing/invalid); the
+		// service's monthWindow applies the default of 12.
+		{"", 0},
 		{"?months=6", 6},
-		{"?months=0", 12},
-		{"?months=-3", 12},
-		{"?months=abc", 12},
+		{"?months=0", 0},
+		{"?months=-3", -3},
+		{"?months=abc", 0},
 		{"?months=36", 36},
 	}
 	for _, tt := range tests {

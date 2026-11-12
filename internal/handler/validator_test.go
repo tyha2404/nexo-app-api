@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,62 +110,32 @@ func TestValidator_ValidateRequest(t *testing.T) {
 	require.EqualError(t, err, "validation failed: Email must be a valid email address")
 }
 
-func TestValidator_ValidatePartial(t *testing.T) {
+func TestValidator_SizeMessagesFollowFieldKind(t *testing.T) {
 	type payload struct {
-		Name     *string  `json:"name" validate:"omitempty,min=3"`
-		Role     string   `json:"role" validate:"oneof=user admin"`
-		Amount   *float64 `json:"amount" validate:"omitempty,gt=0"`
-		Untagged string   `json:"untagged"`
+		Name   *string  `validate:"omitempty,min=3"`
+		Tags   []string `validate:"omitempty,max=1"`
+		Amount *float64 `validate:"omitempty,min=1"`
+		Count  int      `validate:"omitempty,max=5"`
+		Code   int      `validate:"omitempty,len=4"`
+	}
+	name, amount := "ab", 0.5
+	tests := []struct {
+		name    string
+		payload payload
+		wantMsg string
+	}{
+		{"string pointer counts characters", payload{Name: &name}, "Name must be at least 3 characters"},
+		{"slice counts items", payload{Tags: []string{"a", "b"}}, "Tags must be at most 1 items"},
+		{"float pointer is a value", payload{Amount: &amount}, "Amount must be at least 1"},
+		{"int is a value", payload{Count: 9}, "Count must be at most 5"},
+		{"len on int is a value", payload{Code: 7}, "Code must be exactly 4"},
 	}
 	v := NewValidator()
-
-	t.Run("zero fields are skipped, even when their rule would fail", func(t *testing.T) {
-		var p payload
-		// Role is empty → skipped although oneof would reject "".
-		require.NoError(t, v.ValidatePartial(validatorTestReq(`{"untagged":"x"}`), &p))
-		assert.Equal(t, "x", p.Untagged)
-	})
-
-	t.Run("present valid fields pass", func(t *testing.T) {
-		var p payload
-		require.NoError(t, v.ValidatePartial(validatorTestReq(`{"name":"abcd","role":"admin","amount":5}`), &p))
-		require.NotNil(t, p.Name)
-		assert.Equal(t, "abcd", *p.Name)
-	})
-
-	t.Run("present invalid fields fail", func(t *testing.T) {
-		var p payload
-		err := v.ValidatePartial(validatorTestReq(`{"name":"ab","role":"root","amount":-1}`), &p)
-		require.Error(t, err)
-		msg := err.Error()
-		assert.True(t, strings.HasPrefix(msg, "validation failed: "), msg)
-		assert.Contains(t, msg, "must be at least 3 characters")
-		assert.Contains(t, msg, "must be one of: user admin")
-		assert.Contains(t, msg, "must be greater than 0")
-	})
-
-	t.Run("decode error", func(t *testing.T) {
-		var p payload
-		assert.Error(t, v.ValidatePartial(validatorTestReq(`{`), &p))
-	})
-
-	t.Run("non-struct destination is accepted", func(t *testing.T) {
-		var m map[string]interface{}
-		require.NoError(t, v.ValidatePartial(validatorTestReq(`{"a":1}`), &m))
-		assert.Equal(t, float64(1), m["a"])
-	})
-}
-
-func TestValidator_RegisterCustomValidation(t *testing.T) {
-	type payload struct {
-		Code string `validate:"vn_code"`
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.EqualError(t, v.ValidateStruct(tt.payload), "validation failed: "+tt.wantMsg)
+		})
 	}
-	v := NewValidator()
-	require.NoError(t, v.RegisterCustomValidation("vn_code", func(fl validator.FieldLevel) bool {
-		return strings.HasPrefix(fl.Field().String(), "VN")
-	}))
-	assert.NoError(t, v.ValidateStruct(payload{"VN01"}))
-	assert.EqualError(t, v.ValidateStruct(payload{"US01"}), "validation failed: Code is invalid")
 }
 
 func validatorTestReq(body string) *http.Request {

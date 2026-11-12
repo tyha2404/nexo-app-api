@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 	"github.com/tyha2404/nexo-app-api/internal/worker"
@@ -97,10 +96,6 @@ type fakeRollover struct {
 func (f *fakeRollover) ProcessRolloverForMonth(_ context.Context, month, year int) error {
 	f.calls <- [2]int{month, year}
 	return f.err
-}
-
-func (f *fakeRollover) ProcessRolloverForUser(context.Context, uuid.UUID, int, int) error {
-	return nil
 }
 
 func TestMonthlyRolloverWorker_StartSyncsCurrentMonthThenStops(t *testing.T) {

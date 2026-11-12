@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -27,35 +26,17 @@ type ReportService interface {
 	GetDailyReport(ctx context.Context, userID uuid.UUID, month string) (*dto.DailyReport, error)
 }
 
-// errReportRepositoryUnavailable is returned when the service was built
-// without a SQL-capable report repository.
-var errReportRepositoryUnavailable = errors.New("report repository is not configured")
-
 type reportService struct {
 	reportRepo repository.ReportRepository
 }
 
-// NewReportService keeps the constructor used by router/container.go. All
-// totals are aggregated in SQL through a ReportRepository derived from the
-// DB-backed targetRepo (repository.NewTargetRepository implements it).
-func NewReportService(transactionRepo repository.TransactionRepository, targetRepo repository.TargetRepository) ReportService {
-	reportRepo, ok := repository.AsReportRepository(targetRepo)
-	if !ok {
-		reportRepo, _ = repository.AsReportRepository(transactionRepo)
-	}
-	return &reportService{reportRepo: reportRepo}
-}
-
-// NewReportServiceWithRepository builds the service from an explicit
-// ReportRepository (preferred for new wiring and tests).
+// NewReportServiceWithRepository builds the service on a ReportRepository;
+// all totals are aggregated in SQL.
 func NewReportServiceWithRepository(reportRepo repository.ReportRepository) ReportService {
 	return &reportService{reportRepo: reportRepo}
 }
 
 func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.SummaryReport, error) {
-	if s.reportRepo == nil {
-		return nil, errReportRepositoryUnavailable
-	}
 	totals, err := s.reportRepo.GetTransactionTotals(ctx, userID, startDate, endDate)
 	if err != nil {
 		return nil, err
@@ -69,9 +50,6 @@ func (s *reportService) GetSummary(ctx context.Context, userID uuid.UUID, startD
 }
 
 func (s *reportService) GetCategoryBreakdown(ctx context.Context, userID uuid.UUID, startDate, endDate string) (*dto.CategoryBreakdownReport, error) {
-	if s.reportRepo == nil {
-		return nil, errReportRepositoryUnavailable
-	}
 	rows, err := s.reportRepo.GetExpenseByCategory(ctx, userID, startDate, endDate)
 	if err != nil {
 		return nil, err
@@ -102,21 +80,36 @@ func (s *reportService) GetCategoryBreakdown(ctx context.Context, userID uuid.UU
 	}, nil
 }
 
-func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error) {
-	if s.reportRepo == nil {
-		return nil, errReportRepositoryUnavailable
-	}
-	if months <= 0 || months > 36 {
-		months = 12
-	}
+// Trend windows: 1 to maxTrendMonths calendar months, defaultTrendMonths
+// when the request is out of range.
+const (
+	defaultTrendMonths = 12
+	maxTrendMonths     = 36
+	monthKeyLayout     = "2006-01"
+)
 
-	// Months are calendar months in the app timezone (Vietnam), so the
-	// current month is right even when the server runs in UTC.
+// monthWindow clamps months and returns the window of the last `months`
+// calendar months in the app timezone (so the current month is right even
+// when the server runs in UTC): the first day of the current month, the
+// first day of the window and its last day (end of the current month).
+func monthWindow(months int) (n int, currentMonthStart, startMonth, endDate time.Time) {
+	if months <= 0 || months > maxTrendMonths {
+		months = defaultTrendMonths
+	}
 	currentMonthStart, nextMonthStart := util.MonthRange(util.Now())
-	startMonth := currentMonthStart.AddDate(0, -(months - 1), 0)
-	endDate := nextMonthStart.AddDate(0, 0, -1)
+	startMonth = currentMonthStart.AddDate(0, -(months - 1), 0)
+	return months, currentMonthStart, startMonth, nextMonthStart.AddDate(0, 0, -1)
+}
 
-	monthly, err := s.reportRepo.GetMonthlyIncomeExpense(ctx, userID, startMonth.Format("2006-01-02"), endDate.Format("2006-01-02"))
+// monthLabel is the chart label of a month, e.g. "T03/26".
+func monthLabel(month time.Time) string {
+	return fmt.Sprintf("T%02d/%s", int(month.Month()), month.Format("06"))
+}
+
+func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error) {
+	months, currentMonthStart, startMonth, endDate := monthWindow(months)
+
+	monthly, err := s.reportRepo.GetMonthlyIncomeExpense(ctx, userID, util.DateString(startMonth), util.DateString(endDate))
 	if err != nil {
 		return nil, err
 	}
@@ -139,16 +132,18 @@ func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, m
 	var totalExpenseSum float64
 	for i := 0; i < months; i++ {
 		cur := startMonth.AddDate(0, i, 0)
-		mKey := cur.Format("2006-01")
+		mKey := cur.Format(monthKeyLayout)
 		totals := byMonth[mKey]
 		totalExpenseSum += totals.Expense
 
 		items = append(items, dto.MonthlyTrendItem{
 			Month:   mKey,
-			Label:   fmt.Sprintf("T%02d/%s", int(cur.Month()), cur.Format("06")),
+			Label:   monthLabel(cur),
 			Expense: totals.Expense,
 			Income:  totals.Income,
 			Target:  targetByMonth[mKey],
+
+			Investment: totals.ActiveInvestment,
 		})
 	}
 
@@ -159,25 +154,16 @@ func (s *reportService) GetMonthlyTrend(ctx context.Context, userID uuid.UUID, m
 }
 
 func (s *reportService) GetNetWorthTrend(ctx context.Context, userID uuid.UUID, months int) (*dto.NetWorthReport, error) {
-	if s.reportRepo == nil {
-		return nil, errReportRepositoryUnavailable
-	}
-	if months <= 0 || months > 36 {
-		months = 12
-	}
-
-	currentMonthStart, nextMonthStart := util.MonthRange(util.Now())
-	startMonth := currentMonthStart.AddDate(0, -(months - 1), 0)
-	endDate := nextMonthStart.AddDate(0, 0, -1)
+	months, _, startMonth, endDate := monthWindow(months)
 
 	// Everything before the window, as one opening balance.
-	before, err := s.reportRepo.GetTransactionTotals(ctx, userID, "", startMonth.AddDate(0, 0, -1).Format("2006-01-02"))
+	before, err := s.reportRepo.GetTransactionTotals(ctx, userID, "", util.DateString(startMonth.AddDate(0, 0, -1)))
 	if err != nil {
 		return nil, err
 	}
 	opening := before.Income - before.Expense + before.RealizedPnL
 
-	monthly, err := s.reportRepo.GetMonthlyIncomeExpense(ctx, userID, startMonth.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	monthly, err := s.reportRepo.GetMonthlyIncomeExpense(ctx, userID, util.DateString(startMonth), util.DateString(endDate))
 	if err != nil {
 		return nil, err
 	}
@@ -190,13 +176,13 @@ func (s *reportService) GetNetWorthTrend(ctx context.Context, userID uuid.UUID, 
 	running := opening
 	for i := 0; i < months; i++ {
 		cur := startMonth.AddDate(0, i, 0)
-		key := cur.Format("2006-01")
+		key := cur.Format(monthKeyLayout)
 		m := byMonth[key]
 		change := m.Income - m.Expense + m.RealizedPnL
 		running += change
 		items = append(items, dto.NetWorthPoint{
 			Month:       key,
-			Label:       fmt.Sprintf("T%02d/%s", int(cur.Month()), cur.Format("06")),
+			Label:       monthLabel(cur),
 			Income:      m.Income,
 			Expense:     m.Expense,
 			RealizedPnL: m.RealizedPnL,
@@ -227,14 +213,11 @@ func (s *reportService) GetNetWorthTrend(ctx context.Context, userID uuid.UUID, 
 }
 
 func (s *reportService) GetDailyReport(ctx context.Context, userID uuid.UUID, month string) (*dto.DailyReport, error) {
-	if s.reportRepo == nil {
-		return nil, errReportRepositoryUnavailable
-	}
 	var start, next time.Time
 	if month == "" {
 		start, next = util.MonthRange(util.Now())
 	} else {
-		parsed, err := time.Parse("2006-01", month)
+		parsed, err := time.Parse(monthKeyLayout, month)
 		if err != nil {
 			return nil, fmt.Errorf("month must be YYYY-MM: %w", constant.ErrInvalidInput)
 		}
@@ -242,7 +225,7 @@ func (s *reportService) GetDailyReport(ctx context.Context, userID uuid.UUID, mo
 	}
 	end := next.AddDate(0, 0, -1)
 
-	rows, err := s.reportRepo.GetDailyIncomeExpense(ctx, userID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	rows, err := s.reportRepo.GetDailyIncomeExpense(ctx, userID, start.Format(time.DateOnly), end.Format(time.DateOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +236,7 @@ func (s *reportService) GetDailyReport(ctx context.Context, userID uuid.UUID, mo
 
 	report := &dto.DailyReport{Month: start.Format("2006-01"), Items: make([]dto.DailyReportItem, 0, end.Day())}
 	for d := start; d.Before(next); d = d.AddDate(0, 0, 1) {
-		date := d.Format("2006-01-02")
+		date := d.Format(time.DateOnly)
 		row := byDate[date]
 		report.Items = append(report.Items, dto.DailyReportItem{Date: date, Income: row.Income, Expense: row.Expense, Investment: row.Investment, Count: row.Count})
 		report.TotalIncome += row.Income

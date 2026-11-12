@@ -27,6 +27,9 @@ type MonthlyTrendItem struct {
 	Expense float64 `json:"expense"` // Total expense for the month
 	Income  float64 `json:"income"`  // Total income for the month
 	Target  float64 `json:"target"`  // Budget / target for the month
+	// Investment is the month's active (HOLDING) investment, the same
+	// definition as /reports/summary totalInvestment.
+	Investment float64 `json:"investment"`
 }
 
 type MonthlyTrendReport struct {

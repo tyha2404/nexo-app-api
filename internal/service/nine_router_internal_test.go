@@ -184,7 +184,7 @@ func TestStreamChatCompletions_ParsesSSE(t *testing.T) {
 	s := newTestNineRouter(srv.URL+"/v1", "glm-4")
 
 	var got []string
-	err := s.StreamChatCompletions(context.Background(), []NineRouterMessage{{Role: "user", Content: "hi"}}, func(d string) error {
+	err := s.StreamChatCompletionsWithModel(context.Background(), "", []NineRouterMessage{{Role: "user", Content: "hi"}}, func(d string) error {
 		got = append(got, d)
 		return nil
 	})
@@ -224,7 +224,7 @@ func TestStreamAndChat_ErrorStatusIsFormatted(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, "9Router Rate Limit (429): quá tải", err.Error())
 
-	_, err = s.ChatCompletion(context.Background(), nil, nil)
+	_, err = s.ChatCompletionWithModel(context.Background(), "", nil, nil)
 	require.Error(t, err)
 	assert.Equal(t, "9Router Rate Limit (429): quá tải", err.Error())
 }
@@ -271,7 +271,7 @@ func TestEmbedText(t *testing.T) {
 				w.WriteHeader(tc.status)
 				_, _ = io.WriteString(w, tc.body)
 			})
-			s := NewRequestyService(&config.Config{NineRouterURL: srv.URL + "/v1", NineRouterAPIKey: "k"}, zap.NewNop())
+			s := NewNineRouterService(&config.Config{NineRouterURL: srv.URL + "/v1", NineRouterAPIKey: "k"}, zap.NewNop())
 
 			vec, err := s.EmbedText(context.Background(), "tiết kiệm")
 			assert.Equal(t, "tiết kiệm", got.Input)

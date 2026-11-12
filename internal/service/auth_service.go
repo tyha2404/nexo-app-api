@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ import (
 
 type AuthService interface {
 	Login(ctx context.Context, identifier string, password string) (*model.User, error)
-	Register(ctx context.Context, user *model.User) (*model.User, error)
+	Register(ctx context.Context, req dto.RegisterRequest) (*model.User, error)
 	// ChangePassword also revokes every refresh token of the user, signing
 	// out all sessions; the caller starts a new one for the current client.
 	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
@@ -75,14 +76,14 @@ func (s *authService) Login(ctx context.Context, identifier string, password str
 	var err error
 
 	user, err = s.repo.FindByEmail(ctx, identifier)
-	if err != nil && err != constant.ErrNotFound {
+	if err != nil && !errors.Is(err, constant.ErrNotFound) {
 		return nil, err
 	}
 
 	if user == nil {
 		user, err = s.repo.FindByUsername(ctx, identifier)
 		if err != nil {
-			if err == constant.ErrNotFound {
+			if errors.Is(err, constant.ErrNotFound) {
 				// Spend the same bcrypt time as a wrong password, so the
 				// response time doesn't reveal whether the account exists.
 				_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(password))
@@ -104,15 +105,16 @@ func (s *authService) Login(ctx context.Context, identifier string, password str
 	// 3. Clear the password hash from the returned user for security
 	user.Password = ""
 
-	// Note: JWT token generation would typically happen here in the handler
-	// and not in the service layer, following separation of concerns
-
 	// 4. Return user data
 	return user, nil
 }
 
-func (s *authService) Register(ctx context.Context, user *model.User) (*model.User, error) {
-	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
+func (s *authService) Register(ctx context.Context, req dto.RegisterRequest) (*model.User, error) {
+	user := &model.User{
+		Username: req.Username,
+		Email:    strings.ToLower(strings.TrimSpace(req.Email)),
+		Password: req.Password,
+	}
 
 	// Validate user data
 	if err := user.Validate(); err != nil {
@@ -121,7 +123,7 @@ func (s *authService) Register(ctx context.Context, user *model.User) (*model.Us
 
 	// Check if user with email already exists
 	existingUser, err := s.repo.FindByEmail(ctx, user.Email)
-	if err != nil && err != constant.ErrNotFound {
+	if err != nil && !errors.Is(err, constant.ErrNotFound) {
 		return nil, err
 	}
 	if existingUser != nil {
@@ -130,7 +132,7 @@ func (s *authService) Register(ctx context.Context, user *model.User) (*model.Us
 
 	// Check if username is taken
 	existingUser, err = s.repo.FindByUsername(ctx, user.Username)
-	if err != nil && err != constant.ErrNotFound {
+	if err != nil && !errors.Is(err, constant.ErrNotFound) {
 		return nil, err
 	}
 	if existingUser != nil {

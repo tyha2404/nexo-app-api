@@ -82,7 +82,61 @@ func (e *ErrorHandler) HandleSuccessWithMessage(w http.ResponseWriter, status in
 	}
 }
 
-// HandlePaginatedSuccess sends paginated JSON responses
+// paginatedEnvelope is response.PaginationResponse without the type
+// parameter, so HandlePaginated can take any item slice. Keep the field order
+// and tags identical to response.PaginationResponse: clients (and the
+// envelope shape tests) depend on the exact JSON.
+type paginatedEnvelope struct {
+	Status  int         `json:"status"`
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Items   interface{} `json:"items"`
+	Total   int         `json:"total"`
+	Page    int         `json:"page"`
+	Limit   int         `json:"limit"`
+	Summary interface{} `json:"summary,omitempty"`
+}
+
+// HandlePaginated sends the standard paginated envelope
+// {status, success, message, items, total, page, limit[, summary]}.
+// Pass a nil summary to leave the field out. A typed nil (e.g. a nil
+// *dto.TransactionSummaryDTO) is a non-nil interface and is sent as
+// "summary": null, as before.
+func (e *ErrorHandler) HandlePaginated(w http.ResponseWriter, status int, items interface{}, total, page, limit int, summary interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	if err := json.NewEncoder(w).Encode(paginatedEnvelope{
+		Status:  status,
+		Success: true,
+		Items:   items,
+		Total:   total,
+		Page:    page,
+		Limit:   limit,
+		Summary: summary,
+	}); err != nil {
+		e.logger.Error("failed to encode paginated response", zap.Error(err))
+	}
+}
+
+// decodeAndValidate decodes the JSON request body into dst and validates it.
+// A decode error is answered with 400 "Invalid request payload" and a
+// validation error with 400 "Validation failed" (friendly field messages in
+// `error`). It reports whether the handler may continue.
+func (e *ErrorHandler) decodeAndValidate(w http.ResponseWriter, r *http.Request, dst interface{}, operation string) bool {
+	if err := DecodeJSONBody(r, dst); err != nil {
+		e.HandleDecodeError(w, err, operation)
+		return false
+	}
+	if err := requestValidator.ValidateStruct(dst); err != nil {
+		e.HandleValidationError(w, err, operation)
+		return false
+	}
+	return true
+}
+
+// HandlePaginatedSuccess sends the legacy paginated map (sorted keys, no
+// message field) still used by the /costs list.
 func (e *ErrorHandler) HandlePaginatedSuccess(w http.ResponseWriter, status int, items interface{}, total int, page int, limit int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

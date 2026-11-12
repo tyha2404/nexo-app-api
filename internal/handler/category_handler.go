@@ -1,29 +1,23 @@
 package handler
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type CategoryHandler struct {
 	svc          service.CategoryService
-	log          *zap.Logger
 	errorHandler *ErrorHandler
-	validator    *validator.Validate
 }
 
 func NewCategoryHandler(svc service.CategoryService, log *zap.Logger) *CategoryHandler {
-	return &CategoryHandler{svc: svc, log: log, errorHandler: NewErrorHandler(log), validator: newStructValidator()}
+	return &CategoryHandler{svc: svc, errorHandler: NewErrorHandler(log)}
 }
 
 // Create handles the creation of a new category record
@@ -34,54 +28,35 @@ func NewCategoryHandler(svc service.CategoryService, log *zap.Logger) *CategoryH
 // @Produce json
 // @Security BearerAuth
 // @Param category body dto.CreateCategoryRequest true "Category object"
-// @Success 201 {object} model.Category
+// @Success 201 {object} CategoryEnvelope
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
 // @Failure 401 {object} response.ErrorResponse
+// @Failure 409 {object} response.ErrorResponse "A category with this name already exists"
 // @Failure 500 {object} response.ErrorResponse "Failed to create category"
 // @Router /categories [post]
 func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateCategoryRequest
-	// Get user from context
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "create_category")
-		return
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "create_category")
-		return
-	}
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "create_category")
-		return
-	}
-
-	category := &model.Category{
-		Name:        req.Name,
-		Type:        model.CategoryType(req.Type),
-		Description: req.Description,
-		UserID:      user.ID,
-	}
-	if req.ExcludeFromAverageDaily != nil {
-		category.ExcludeFromAverageDaily = *req.ExcludeFromAverageDaily
-	}
-
-	category, err := h.svc.Create(r.Context(), category)
+	user, err := GetUserFromContext(r)
 	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "create_category")
+		return
+	}
+
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "create_category") {
+		return
+	}
+
+	category, err := h.svc.Create(r.Context(), user.ID, req)
+	if err != nil {
+		if errors.Is(err, constant.ErrAlreadyExists) {
+			h.errorHandler.HandleError(w, err, http.StatusConflict, "Danh mục với tên này đã tồn tại", "create_category")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to create category", "create_category")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Category]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    *category,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, *category)
 }
 
 // Get handles retrieving a single category by ID
@@ -91,7 +66,7 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Category ID"
-// @Success 200 {object} model.Category
+// @Success 200 {object} CategoryEnvelope
 // @Failure 400 {object} response.ErrorResponse "Invalid category ID"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 404 {object} response.ErrorResponse "Category not found (or not owned by the caller)"
@@ -104,8 +79,7 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid category ID", "get_category")
 		return
@@ -121,14 +95,7 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Category]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *category,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *category)
 }
 
 // List handles retrieving a paginated list of categories
@@ -141,15 +108,14 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param page query int false "Page number"
 // @Param limit query int false "Page limit (default 10, max 100)"
 // @Param type query string false "Category Type (INCOME, EXPENSE)"
-// @Success 200 {array} model.Category
+// @Success 200 {object} CategoryPage
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse "Failed to list categories"
 // @Router /categories [get]
 func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Get user from context
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "list_categories")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "list_categories")
 		return
 	}
 
@@ -159,7 +125,6 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	var categories []model.Category
 	var total int64
 	var page, limit int
-	var err error
 
 	// Paginate only when the client asks for it; without page/limit the full
 	// list is returned (nexo-web relies on this for category pickers).
@@ -179,17 +144,7 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.PaginationResponse[model.Category]{
-		Status:  http.StatusOK,
-		Success: true,
-		Items:   categories,
-		Total:   int(total),
-		Page:    page,
-		Limit:   limit,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandlePaginated(w, http.StatusOK, categories, int(total), page, limit, nil)
 }
 
 // Update handles updating an existing category
@@ -201,10 +156,11 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Param id path string true "Category ID"
 // @Param category body dto.UpdateCategoryRequest true "Fields to update"
-// @Success 200 {object} model.Category
+// @Success 200 {object} CategoryEnvelope
 // @Failure 400 {object} response.ErrorResponse "Invalid category ID or payload"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 404 {object} response.ErrorResponse "Category not found (or not owned by the caller)"
+// @Failure 409 {object} response.ErrorResponse "A category with this name already exists"
 // @Failure 500 {object} response.ErrorResponse "Failed to update category"
 // @Router /categories/{id} [put]
 func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -214,72 +170,36 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid category ID", "update_category")
 		return
 	}
 
 	var req dto.UpdateCategoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "update_category")
-		return
-	}
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "update_category")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "update_category") {
 		return
 	}
 
-	// Build updates map from non-nil fields
-	updates := make(map[string]interface{})
-	if req.Name != nil {
-		updates["name"] = *req.Name
-	}
-	if req.Type != nil {
-		updates["type"] = *req.Type
-	}
-	if req.Description != nil {
-		updates["description"] = *req.Description
-	}
-	if req.ExcludeFromAverageDaily != nil {
-		updates["exclude_from_average_daily"] = *req.ExcludeFromAverageDaily
-	}
-
-	if len(updates) == 0 {
-		h.errorHandler.HandleError(w, constant.ErrInvalidInput, http.StatusBadRequest, "No fields to update", "update_category")
-		return
-	}
-
-	// Update specific fields
-	if err := h.svc.UpdateFields(r.Context(), user.ID, id, updates); err != nil {
+	updatedCategory, err := h.svc.Update(r.Context(), user.ID, id, req)
+	if err != nil {
+		if errors.Is(err, constant.ErrInvalidInput) {
+			h.errorHandler.HandleError(w, constant.ErrInvalidInput, http.StatusBadRequest, "No fields to update", "update_category")
+			return
+		}
 		if IsNotFoundError(err) {
 			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Category not found", "update_category")
+			return
+		}
+		if errors.Is(err, constant.ErrAlreadyExists) {
+			h.errorHandler.HandleError(w, err, http.StatusConflict, "Danh mục với tên này đã tồn tại", "update_category")
 			return
 		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to update category", "update_category")
 		return
 	}
 
-	// Get the updated category to return in response
-	updatedCategory, err := h.svc.Get(r.Context(), user.ID, id)
-	if err != nil {
-		if IsNotFoundError(err) {
-			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Category not found", "update_category")
-			return
-		}
-		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get updated category", "update_category")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response.BaseResponse[model.Category]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *updatedCategory,
-	}); err != nil {
-		h.log.Error("failed to encode response", zap.Error(err))
-	}
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *updatedCategory)
 }
 
 // Delete handles deleting a category by ID
@@ -288,7 +208,8 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Tags categories
 // @Security BearerAuth
 // @Param id path string true "Category ID"
-// @Success 204 {string} string "No Content"
+// @Produce json
+// @Success 200 {object} MessageResponse
 // @Failure 400 {object} response.ErrorResponse "Invalid category ID"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 404 {object} response.ErrorResponse "Category not found (or not owned by the caller)"
@@ -301,8 +222,7 @@ func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid category ID", "delete_category")
 		return
@@ -317,5 +237,5 @@ func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Category deleted successfully")
 }

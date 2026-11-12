@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type StatementStatus string
@@ -14,6 +15,21 @@ const (
 	StatementStatusPaid          StatementStatus = "PAID"
 	StatementStatusOverdue       StatementStatus = "OVERDUE"
 )
+
+// StatementStatusFor is the stored status that follows a statement's amounts:
+// PAID once a positive balance is fully paid, PARTIALLY_PAID after any
+// payment, UNPAID otherwise. OVERDUE is derived at read time from the due date
+// (see dto.ToStatementResponse).
+func StatementStatusFor(statementBalance, paidAmount float64) StatementStatus {
+	switch {
+	case paidAmount >= statementBalance && statementBalance > 0:
+		return StatementStatusPaid
+	case paidAmount > 0:
+		return StatementStatusPartiallyPaid
+	default:
+		return StatementStatusUnpaid
+	}
+}
 
 type CreditCardStatement struct {
 	ID               uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
@@ -35,4 +51,12 @@ type CreditCardStatement struct {
 
 	Wallet *Wallet `gorm:"foreignKey:WalletID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"wallet,omitempty"`
 	User   *User   `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"user,omitempty"`
+}
+
+// BeforeCreate GORM Hook to generate UUID v7
+func (s *CreditCardStatement) BeforeCreate(tx *gorm.DB) (err error) {
+	if s.ID == uuid.Nil {
+		s.ID, err = uuid.NewV7()
+	}
+	return err
 }

@@ -25,9 +25,9 @@ func (s *stubUserService) Create(ctx context.Context, req dto.CreateUserRequest)
 func (s *stubUserService) Get(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	return &model.User{ID: id}, nil
 }
-func (s *stubUserService) List(ctx context.Context, limit, offset int) ([]model.User, error) {
+func (s *stubUserService) List(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
 	s.listCalled = true
-	return []model.User{}, nil
+	return []model.User{}, 0, nil
 }
 func (s *stubUserService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateUserRequest) (*model.User, error) {
 	return &model.User{ID: id}, nil
@@ -48,7 +48,7 @@ func TestUserRoutes_RequireAdmin(t *testing.T) {
 
 	svc := &stubUserService{}
 	r := chi.NewRouter()
-	NewUserRouter(handler.NewUserHandler(svc, zap.NewNop()), zap.NewNop()).RegisterRoutes(r)
+	NewUserRouter(handler.NewUserHandler(svc, zap.NewNop())).RegisterRoutes(r)
 
 	id := uuid.New().String()
 	routes := []struct{ method, path string }{
@@ -89,7 +89,7 @@ func TestUserRoutes_RequireAdmin(t *testing.T) {
 }
 
 func TestAuthRoutes_LoginIsRateLimited(t *testing.T) {
-	ar := NewAuthRouter(handler.NewAuthHandler(nil, zap.NewNop()), zap.NewNop())
+	ar := NewAuthRouter(handler.NewAuthHandler(nil, zap.NewNop()))
 	r := chi.NewRouter()
 	ar.RegisterRoutes(r)
 
@@ -107,7 +107,7 @@ func TestAuthRoutes_LoginIsRateLimited(t *testing.T) {
 }
 
 func TestAuthRoutes_RegisterCanBeDisabled(t *testing.T) {
-	ar := NewAuthRouter(handler.NewAuthHandler(nil, zap.NewNop()), zap.NewNop())
+	ar := NewAuthRouter(handler.NewAuthHandler(nil, zap.NewNop()))
 	ar.DisableRegister = true
 	r := chi.NewRouter()
 	ar.RegisterRoutes(r)

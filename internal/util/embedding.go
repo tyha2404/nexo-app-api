@@ -10,11 +10,15 @@ import (
 
 var nonAlphanumericRegex = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 
+// LocalEmbeddingDim is the size of the vectors made by GenerateLocalEmbedding
+// for the RAG fallback (when 9Router embeddings are unavailable).
+const LocalEmbeddingDim = 256
+
 // GenerateLocalEmbedding produces a deterministic, normalized []float32 embedding vector
 // using subword, n-gram, and word feature hashing with L2-normalization.
 func GenerateLocalEmbedding(text string, dim int) []float32 {
 	if dim <= 0 {
-		dim = 256
+		dim = LocalEmbeddingDim
 	}
 
 	vec := make([]float32, dim)
@@ -91,4 +95,28 @@ func hashAndAccumulate(vec []float32, feature string, weight float32, dim int) {
 
 	index := int(hashVal % uint32(dim))
 	vec[index] += weight
+}
+
+// CosineSimilarity returns the cosine similarity of two vectors, or 0 when
+// their lengths differ, they are empty or one of them is all zeros.
+func CosineSimilarity(a, b []float32) float32 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+
+	var dotProduct float32
+	var normA float32
+	var normB float32
+
+	for i := range a {
+		dotProduct += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+
+	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
 }

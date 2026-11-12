@@ -1,34 +1,25 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type CreditCardStatementHandler struct {
 	svc          service.CreditCardStatementService
-	validator    *validator.Validate
-	log          *zap.Logger
 	errorHandler *ErrorHandler
 }
 
 func NewCreditCardStatementHandler(svc service.CreditCardStatementService, log *zap.Logger) *CreditCardStatementHandler {
 	return &CreditCardStatementHandler{
 		svc:          svc,
-		validator:    newStructValidator(),
-		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
 }
@@ -42,22 +33,26 @@ func NewCreditCardStatementHandler(svc service.CreditCardStatementService, log *
 // @Param walletId query string false "Wallet ID"
 // @Param year query int false "Year"
 // @Param month query int false "Month"
-// @Success 200 {object} dto.StatementListResponse
+// @Success 200 {object} StatementListEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid wallet ID"
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements [get]
 func (h *CreditCardStatementHandler) ListStatements(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "list_statements")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "list_statements")
 		return
 	}
 
 	var walletIDPtr *uuid.UUID
 	if walletIDStr := r.URL.Query().Get("walletId"); walletIDStr != "" {
-		if u, err := uuid.Parse(walletIDStr); err == nil {
-			walletIDPtr = &u
+		u, err := uuid.Parse(walletIDStr)
+		if err != nil {
+			h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid wallet ID", "list_statements")
+			return
 		}
+		walletIDPtr = &u
 	}
 
 	var yearPtr *int
@@ -80,12 +75,7 @@ func (h *CreditCardStatementHandler) ListStatements(w http.ResponseWriter, r *ht
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.StatementListResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, res)
 }
 
 // CreateStatement godoc
@@ -96,7 +86,7 @@ func (h *CreditCardStatementHandler) ListStatements(w http.ResponseWriter, r *ht
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.CreateStatementRequest true "Statement payload"
-// @Success 201 {object} dto.StatementResponse
+// @Success 201 {object} StatementEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Wallet not found"
@@ -104,20 +94,14 @@ func (h *CreditCardStatementHandler) ListStatements(w http.ResponseWriter, r *ht
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements [post]
 func (h *CreditCardStatementHandler) CreateStatement(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "create_statement")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "create_statement")
 		return
 	}
 
 	var req dto.CreateStatementRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "create_statement")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "create_statement")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "create_statement") {
 		return
 	}
 
@@ -139,13 +123,7 @@ func (h *CreditCardStatementHandler) CreateStatement(w http.ResponseWriter, r *h
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.StatementResponse]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, res)
 }
 
 // GetStatementByID godoc
@@ -155,21 +133,20 @@ func (h *CreditCardStatementHandler) CreateStatement(w http.ResponseWriter, r *h
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Statement ID"
-// @Success 200 {object} dto.StatementResponse
+// @Success 200 {object} StatementEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements/{id} [get]
 func (h *CreditCardStatementHandler) GetStatementByID(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_statement_by_id")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_statement_by_id")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid statement ID", "get_statement_by_id")
 		return
@@ -185,12 +162,7 @@ func (h *CreditCardStatementHandler) GetStatementByID(w http.ResponseWriter, r *
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.StatementResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, res)
 }
 
 // UpdateStatement godoc
@@ -202,34 +174,28 @@ func (h *CreditCardStatementHandler) GetStatementByID(w http.ResponseWriter, r *
 // @Security BearerAuth
 // @Param id path string true "Statement ID"
 // @Param request body dto.UpdateStatementRequest true "Update payload"
-// @Success 200 {object} dto.StatementResponse
-// @Failure 400 {object} response.ErrorResponse
+// @Success 200 {object} StatementEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid ID, payload or date (YYYY-MM-DD)"
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
+// @Failure 409 {object} response.ErrorResponse "A statement for this period already exists"
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements/{id} [put]
 func (h *CreditCardStatementHandler) UpdateStatement(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "update_statement")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "update_statement")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid statement ID", "update_statement")
 		return
 	}
 
 	var req dto.UpdateStatementRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "update_statement")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "update_statement")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "update_statement") {
 		return
 	}
 
@@ -239,16 +205,19 @@ func (h *CreditCardStatementHandler) UpdateStatement(w http.ResponseWriter, r *h
 			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Statement not found", "update_statement")
 			return
 		}
+		if errors.Is(err, service.ErrInvalidDate) {
+			h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid statement date", "update_statement")
+			return
+		}
+		if errors.Is(err, constant.ErrAlreadyExists) {
+			h.errorHandler.HandleError(w, err, http.StatusConflict, "Kỳ sao kê này đã tồn tại", "update_statement")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to update statement", "update_statement")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.StatementResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, res)
 }
 
 // PayStatement godoc
@@ -260,7 +229,7 @@ func (h *CreditCardStatementHandler) UpdateStatement(w http.ResponseWriter, r *h
 // @Security BearerAuth
 // @Param id path string true "Statement ID"
 // @Param request body dto.PayStatementRequest true "Payment payload"
-// @Success 200 {object} dto.StatementResponse
+// @Success 200 {object} StatementEnvelope
 // @Failure 400 {object} response.ErrorResponse "Invalid amount or overpayment"
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Statement or wallet not found"
@@ -268,27 +237,20 @@ func (h *CreditCardStatementHandler) UpdateStatement(w http.ResponseWriter, r *h
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements/{id}/pay [post]
 func (h *CreditCardStatementHandler) PayStatement(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "pay_statement")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "pay_statement")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid statement ID", "pay_statement")
 		return
 	}
 
 	var req dto.PayStatementRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "pay_statement")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "pay_statement")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "pay_statement") {
 		return
 	}
 
@@ -314,12 +276,7 @@ func (h *CreditCardStatementHandler) PayStatement(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.StatementResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, res)
 }
 
 // DeleteStatement godoc
@@ -329,21 +286,20 @@ func (h *CreditCardStatementHandler) PayStatement(w http.ResponseWriter, r *http
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Statement ID"
-// @Success 200 {string} string "OK"
+// @Success 200 {object} MessageResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Statement not found"
 // @Failure 500 {object} response.ErrorResponse
 // @Router /credit-card-statements/{id} [delete]
 func (h *CreditCardStatementHandler) DeleteStatement(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_statement")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "delete_statement")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid statement ID", "delete_statement")
 		return
@@ -358,10 +314,5 @@ func (h *CreditCardStatementHandler) DeleteStatement(w http.ResponseWriter, r *h
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[map[string]string]{
-		Status:  http.StatusOK,
-		Success: true,
-		Message: "Xóa kỳ sao kê thành công",
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Xóa kỳ sao kê thành công")
 }

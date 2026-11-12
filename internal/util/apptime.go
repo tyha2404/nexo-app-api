@@ -4,10 +4,13 @@ import (
 	"sync/atomic"
 	"time"
 	_ "time/tzdata" // embed the tz database so the default zone always loads
+
+	"github.com/tyha2404/nexo-app-api/internal/config"
 )
 
 // DefaultTimezone is the timezone of the app's users (Vietnam, UTC+7, no DST).
-const DefaultTimezone = "Asia/Ho_Chi_Minh"
+// It is config.DefaultAppTimezone, the APP_TIMEZONE default.
+const DefaultTimezone = config.DefaultAppTimezone
 
 var appLocation atomic.Pointer[time.Location]
 
@@ -94,11 +97,17 @@ func IsPastDate(d time.Time) bool {
 
 // DateString formats the calendar date of t in t's own location (YYYY-MM-DD).
 func DateString(t time.Time) string {
-	return t.Format("2006-01-02")
+	return t.Format(time.DateOnly)
+}
+
+// ParseDate parses a YYYY-MM-DD date (time.DateOnly). Like time.Parse it
+// returns UTC midnight of that day.
+func ParseDate(s string) (time.Time, error) {
+	return time.Parse(time.DateOnly, s)
 }
 
 // Today returns today's date (YYYY-MM-DD) in the app timezone. Pass it to SQL
 // as CAST(? AS date) to compare DATE/TIMESTAMP columns without timezone shifts.
 func Today() string {
-	return Now().Format("2006-01-02")
+	return Now().Format(time.DateOnly)
 }

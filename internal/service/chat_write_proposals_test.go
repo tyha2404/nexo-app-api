@@ -63,7 +63,7 @@ type proposalChatRepo struct {
 	messages map[uuid.UUID]*model.ChatMessage
 }
 
-func (r *proposalChatRepo) GetMessageByID(_ context.Context, id uuid.UUID) (*model.ChatMessage, error) {
+func (r *proposalChatRepo) GetMessageByID(_ context.Context, _, id uuid.UUID) (*model.ChatMessage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, ok := r.messages[id]
@@ -74,7 +74,7 @@ func (r *proposalChatRepo) GetMessageByID(_ context.Context, id uuid.UUID) (*mod
 	return &cp, nil
 }
 
-func (r *proposalChatRepo) UpdateMessageToolResults(_ context.Context, id uuid.UUID, toolResults *string) error {
+func (r *proposalChatRepo) UpdateMessageToolResults(_ context.Context, _, id uuid.UUID, toolResults *string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, ok := r.messages[id]
@@ -137,7 +137,7 @@ func (f *proposalFixture) propose(t *testing.T, args map[string]interface{}) (*F
 
 func (f *proposalFixture) storedStatus(t *testing.T) (string, map[string]interface{}) {
 	t.Helper()
-	msg, err := f.chat.GetMessageByID(context.Background(), f.message)
+	msg, err := f.chat.GetMessageByID(context.Background(), uuid.Nil, f.message)
 	require.NoError(t, err)
 	require.NotNil(t, msg.ToolResults)
 	var cards []map[string]interface{}
@@ -297,24 +297,29 @@ func TestFailedExecutionKeepsProposalPending(t *testing.T) {
 }
 
 func TestPreviewOtherWriteTools(t *testing.T) {
-	p, errRes := previewCreateDebt(map[string]interface{}{"title": "Vay Nam", "totalAmount": 2000000.0, "type": "RECEIVABLE", "dueDate": "2026-11-01"})
-	require.Nil(t, errRes)
-	assert.Equal(t, "RECEIVABLE", p.args["type"])
-	assert.Equal(t, "2026-11-01", p.args["dueDate"])
-
-	_, errRes = previewCreateDebt(map[string]interface{}{"title": "", "totalAmount": 1.0})
-	assert.NotNil(t, errRes)
-
-	p, errRes = previewSetTarget(map[string]interface{}{"targetType": "savings", "targetAmount": 5000000.0, "month": 11.0, "year": 2026.0})
-	require.Nil(t, errRes)
-	assert.Equal(t, "INVESTMENT", p.args["targetType"])
-
 	f := newProposalFixture(t)
-	p, errRes, err := f.svc.previewTransfer(context.Background(), f.userID, map[string]interface{}{"amount": 100000.0, "fromWalletName": "tiền mặt", "toWalletName": "ngân hàng"})
+	ctx := context.Background()
+	p, errRes, err := f.svc.previewCreateDebt(ctx, f.userID, map[string]interface{}{"title": "Vay Nam", "totalAmount": 2000000.0, "type": "RECEIVABLE", "dueDate": "2026-11-01"})
 	require.NoError(t, err)
 	require.Nil(t, errRes)
-	assert.Equal(t, "Ví Tiền mặt", p.args["fromWalletName"])
-	assert.Equal(t, "Tài khoản Ngân hàng", p.args["toWalletName"])
+	debtArgs := p.args.(*createDebtArgs)
+	assert.Equal(t, model.DebtTypeReceivable, debtArgs.Type)
+	require.NotNil(t, debtArgs.DueDate)
+	assert.Equal(t, "2026-11-01", debtArgs.DueDate.Format("2006-01-02"))
+
+	_, errRes, _ = f.svc.previewCreateDebt(ctx, f.userID, map[string]interface{}{"title": "", "totalAmount": 1.0})
+	assert.NotNil(t, errRes)
+
+	p, errRes, _ = f.svc.previewSetTarget(ctx, f.userID, map[string]interface{}{"targetType": "savings", "targetAmount": 5000000.0, "month": 11.0, "year": 2026.0})
+	require.Nil(t, errRes)
+	assert.Equal(t, "INVESTMENT", p.args.(*setTargetArgs).TargetType)
+
+	p, errRes, err = f.svc.previewTransfer(ctx, f.userID, map[string]interface{}{"amount": 100000.0, "fromWalletName": "tiền mặt", "toWalletName": "ngân hàng"})
+	require.NoError(t, err)
+	require.Nil(t, errRes)
+	assert.Equal(t, "Ví Tiền mặt", p.data["fromWalletName"])
+	assert.Equal(t, "Tài khoản Ngân hàng", p.data["toWalletName"])
+	assert.NotEqual(t, uuid.Nil, p.args.(*transferArgs).FromWalletID)
 }
 
 func TestPendingStorePrunesLongExpiredActions(t *testing.T) {

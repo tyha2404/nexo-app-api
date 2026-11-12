@@ -1,0 +1,76 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_transaction",
+    "actionCard": {
+      "actionType": "TRANSACTION_CREATED",
+      "title": "Đã ghi nhận Chi tiêu",
+      "description": "1 ₫ - Ăn uống (Ăn uống)",
+      "data": {
+        "amount": 1,
+        "category": "Ăn uống",
+        "date": "2026-11-08",
+        "description": "Ăn uống",
+        "id": "<id-2>",
+        "isNewCategoryCreated": false,
+        "type": "EXPENSE",
+        "wallet": "Tài khoản Ngân hàng"
+      }
+    },
+    "result": {
+      "amount": 1,
+      "category": "Ăn uống",
+      "date": "2026-11-08",
+      "description": "Ăn uống",
+      "isNewCategoryCreated": false,
+      "message": "Giao dịch đã được lưu thành công vào hệ thống Nexo.",
+      "success": true,
+      "transactionId": "<id-2>",
+      "type": "EXPENSE",
+      "wallet": "Tài khoản Ngân hàng"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi chi tiêu — 1 ₫ - Ăn uống (Ăn uống)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi chi tiêu",
+      "description": "1 ₫ - Ăn uống (Ăn uống)",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "categoryName": "Ăn uống",
+        "date": "2026-11-08",
+        "description": "Ăn uống",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "isNewCategoryCreated": false,
+        "kind": "Ghi chi tiêu",
+        "status": "PENDING",
+        "toolName": "create_transaction",
+        "type": "EXPENSE",
+        "walletName": "Tài khoản Ngân hàng"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": [
+      {
+        "categoryId": "<id-3>",
+        "walletId": "<id-4>",
+        "amount": 1,
+        "type": "EXPENSE",
+        "description": "Ăn uống",
+        "transactionDate": "2026-11-08T00:00:00Z"
+      }
+    ],
+    "transfers": null
+  }
+}

@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,9 +17,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// In-memory repositories. GetByID is NOT user-scoped (like the real repos for
-// alerts/budgets/presets), so the ownership check must happen in the service.
-// GetByID returns a copy so a service mutating it does not change "the DB".
+// In-memory repositories. Like the real repos, GetByIDForUser and Delete are
+// user-scoped: another user's row is reported as not found. GetByIDForUser
+// returns a copy so a service mutating it does not change "the DB".
 // ---------------------------------------------------------------------------
 
 var errRepoDown = errors.New("db down")
@@ -40,14 +41,6 @@ func newMemAlertRepo(alerts ...model.Alert) *memAlertRepo {
 		r.order = append(r.order, a.ID)
 	}
 	return r
-}
-
-func (r *memAlertRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Alert, error) {
-	a, ok := r.rows[id]
-	if !ok {
-		return nil, constant.ErrNotFound
-	}
-	return &a, nil
 }
 
 func (r *memAlertRepo) ListByUserID(_ context.Context, userID uuid.UUID, limit, offset int) ([]model.Alert, int64, error) {
@@ -72,7 +65,10 @@ func (r *memAlertRepo) ListByUserID(_ context.Context, userID uuid.UUID, limit, 
 	return mine[offset:end], total, nil
 }
 
-func (r *memAlertRepo) Delete(_ context.Context, id uuid.UUID) error {
+func (r *memAlertRepo) Delete(_ context.Context, userID, id uuid.UUID) error {
+	if row, ok := r.rows[id]; !ok || row.UserID != userID {
+		return fmt.Errorf("alert %w", constant.ErrNotFound)
+	}
 	delete(r.rows, id)
 	r.deleted = append(r.deleted, id)
 	return nil
@@ -144,10 +140,10 @@ func newMemBudgetRepo(budgets ...model.Budget) *memBudgetRepo {
 	return r
 }
 
-func (r *memBudgetRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Budget, error) {
+func (r *memBudgetRepo) GetByIDForUser(_ context.Context, userID, id uuid.UUID) (*model.Budget, error) {
 	b, ok := r.rows[id]
-	if !ok {
-		return nil, constant.ErrNotFound
+	if !ok || b.UserID != userID {
+		return nil, fmt.Errorf("budget %w", constant.ErrNotFound)
 	}
 	return &b, nil
 }
@@ -172,7 +168,10 @@ func (r *memBudgetRepo) Update(_ context.Context, b *model.Budget) error {
 	return nil
 }
 
-func (r *memBudgetRepo) Delete(_ context.Context, id uuid.UUID) error {
+func (r *memBudgetRepo) Delete(_ context.Context, userID, id uuid.UUID) error {
+	if row, ok := r.rows[id]; !ok || row.UserID != userID {
+		return fmt.Errorf("budget %w", constant.ErrNotFound)
+	}
 	delete(r.rows, id)
 	r.deleted = append(r.deleted, id)
 	return nil
@@ -288,10 +287,10 @@ func (r *memPresetRepo) Create(_ context.Context, p *model.Preset) error {
 	return nil
 }
 
-func (r *memPresetRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Preset, error) {
+func (r *memPresetRepo) GetByIDForUser(_ context.Context, userID, id uuid.UUID) (*model.Preset, error) {
 	p, ok := r.rows[id]
-	if !ok {
-		return nil, constant.ErrNotFound
+	if !ok || p.UserID != userID {
+		return nil, fmt.Errorf("preset %w", constant.ErrNotFound)
 	}
 	return &p, nil
 }
@@ -315,7 +314,10 @@ func (r *memPresetRepo) Update(_ context.Context, p *model.Preset) error {
 	return nil
 }
 
-func (r *memPresetRepo) Delete(_ context.Context, id uuid.UUID) error {
+func (r *memPresetRepo) Delete(_ context.Context, userID, id uuid.UUID) error {
+	if row, ok := r.rows[id]; !ok || row.UserID != userID {
+		return fmt.Errorf("preset %w", constant.ErrNotFound)
+	}
 	delete(r.rows, id)
 	r.deleted = append(r.deleted, id)
 	return nil

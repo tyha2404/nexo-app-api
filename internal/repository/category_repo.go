@@ -3,6 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -32,7 +35,22 @@ func NewCategoryRepo(db *gorm.DB) CategoryRepo {
 }
 
 func (r *categoryRepo) Create(ctx context.Context, category *model.Category) error {
-	return r.db.WithContext(ctx).Create(category).Error
+	return mapCategoryUniqueViolation(r.db.WithContext(ctx).Create(category).Error)
+}
+
+// mapCategoryUniqueViolation turns a hit on idx_user_category_name (one live
+// category per user and name) into constant.ErrAlreadyExists.
+func mapCategoryUniqueViolation(err error) error {
+	if isUniqueViolation(err) {
+		return fmt.Errorf("%w: category with this name", constant.ErrAlreadyExists)
+	}
+	return err
+}
+
+// isUniqueViolation reports a PostgreSQL unique_violation (SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func (r *categoryRepo) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Category, error) {
@@ -88,7 +106,7 @@ func (r *categoryRepo) UpdateFieldsForUser(ctx context.Context, userID, id uuid.
 		Where("id = ? AND user_id = ?", id, userID).
 		Updates(updates)
 	if result.Error != nil {
-		return result.Error
+		return mapCategoryUniqueViolation(result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return constant.ErrNotFound

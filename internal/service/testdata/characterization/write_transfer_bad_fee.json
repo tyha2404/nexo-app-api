@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Lỗi tham số chuyển tiền",
+    "ResultJSON": "{\"error\":\"Phí chuyển khoản (fee) phải là số không âm\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Chuyển tiền nội bộ",
+    "ResultJSON": "{\"error\":\"Ví nguồn và ví đích phải khác nhau\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

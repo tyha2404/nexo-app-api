@@ -18,17 +18,13 @@ type MockDebtRepo struct {
 	mock.Mock
 }
 
-func (m *MockDebtRepo) Create(ctx context.Context, debt *model.Debt) error {
-	args := m.Called(ctx, debt)
-	return args.Error(0)
-}
-
 func (m *MockDebtRepo) CreateWithWallet(ctx context.Context, debt *model.Debt, walletID *uuid.UUID, balanceDelta float64) error {
 	args := m.Called(ctx, debt, walletID, balanceDelta)
 	return args.Error(0)
 }
 
-func (m *MockDebtRepo) FindByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.Debt, error) {
+func (m *MockDebtRepo) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Debt, error) {
+	// Expectations keep the (ctx, id, userID) argument order.
 	args := m.Called(ctx, id, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -41,17 +37,12 @@ func (m *MockDebtRepo) FindByUserID(ctx context.Context, userID uuid.UUID, debtT
 	return args.Get(0).([]model.Debt), args.Error(1)
 }
 
-func (m *MockDebtRepo) AddRepayment(ctx context.Context, debt *model.Debt, repayment *model.Repayment) error {
-	args := m.Called(ctx, debt, repayment)
-	return args.Error(0)
-}
-
 func (m *MockDebtRepo) AddRepaymentWithWallet(ctx context.Context, debt *model.Debt, repayment *model.Repayment, walletID *uuid.UUID, balanceDelta float64) error {
 	args := m.Called(ctx, debt, repayment, walletID, balanceDelta)
 	return args.Error(0)
 }
 
-func (m *MockDebtRepo) UpdateWithWallet(ctx context.Context, id uuid.UUID, userID uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error) {
+func (m *MockDebtRepo) UpdateWithWallet(ctx context.Context, userID, id uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error) {
 	args := m.Called(ctx, id, userID)
 	stored, _ := args.Get(0).(*model.Debt)
 	if err := args.Error(1); err != nil {
@@ -67,17 +58,18 @@ func (m *MockDebtRepo) UpdateWithWallet(ctx context.Context, id uuid.UUID, userI
 	return &d, nil
 }
 
-func (m *MockDebtRepo) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+func (m *MockDebtRepo) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	// Expectations keep the (ctx, id, userID) argument order.
 	args := m.Called(ctx, id, userID)
 	return args.Error(0)
 }
 
-func (m *MockDebtRepo) GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.DebtSummaryResponse, error) {
+func (m *MockDebtRepo) GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*repository.DebtSummary, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*dto.DebtSummaryResponse), args.Error(1)
+	return args.Get(0).(*repository.DebtSummary), args.Error(1)
 }
 
 func TestCreateDebt_WithWallet_Receivable(t *testing.T) {
@@ -150,7 +142,7 @@ func TestAddRepayment_WithWallet_Receivable(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 
-	mockRepo.On("FindByID", mock.Anything, debtID, userID).Return(existingDebt, nil)
+	mockRepo.On("GetByIDForUser", mock.Anything, debtID, userID).Return(existingDebt, nil)
 	mockRepo.On("AddRepaymentWithWallet", mock.Anything, mock.MatchedBy(func(d *model.Debt) bool { return d.ID == existingDebt.ID && d.UserID == userID }), mock.MatchedBy(func(r *model.Repayment) bool {
 		return r.Amount == 1000000 && r.WalletID == &walletID
 	}), &walletID, 1000000.0).Return(nil)
@@ -189,7 +181,7 @@ func TestAddRepayment_WithWallet_Payable(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 
-	mockRepo.On("FindByID", mock.Anything, debtID, userID).Return(existingDebt, nil)
+	mockRepo.On("GetByIDForUser", mock.Anything, debtID, userID).Return(existingDebt, nil)
 	mockRepo.On("AddRepaymentWithWallet", mock.Anything, mock.MatchedBy(func(d *model.Debt) bool { return d.ID == existingDebt.ID && d.UserID == userID }), mock.MatchedBy(func(r *model.Repayment) bool {
 		return r.Amount == 10000000 && r.WalletID == &walletID
 	}), &walletID, -10000000.0).Return(nil)
@@ -213,7 +205,7 @@ func TestAddRepayment_RejectsOverpaymentAndInvalidAmounts(t *testing.T) {
 		repo := new(MockDebtRepo)
 		userID, debtID := uuid.New(), uuid.New()
 		debt := &model.Debt{ID: debtID, UserID: userID, TotalAmount: 100, PaidAmount: 50}
-		repo.On("FindByID", mock.Anything, debtID, userID).Return(debt, nil)
+		repo.On("GetByIDForUser", mock.Anything, debtID, userID).Return(debt, nil)
 		_, err := service.NewDebtService(repo).AddRepayment(context.Background(), userID, debtID, dto.AddRepaymentRequest{Amount: amount})
 		assert.ErrorIs(t, err, service.ErrInvalidRepayment)
 		assert.Equal(t, 50.0, debt.PaidAmount)
@@ -225,7 +217,7 @@ func TestAddRepayment_RejectsCompletedDebt(t *testing.T) {
 	mockRepo := new(MockDebtRepo)
 	svc := service.NewDebtService(mockRepo)
 	userID, debtID := uuid.New(), uuid.New()
-	mockRepo.On("FindByID", mock.Anything, debtID, userID).Return(&model.Debt{ID: debtID, UserID: userID, TotalAmount: 100, PaidAmount: 100, Status: model.DebtStatusCompleted}, nil)
+	mockRepo.On("GetByIDForUser", mock.Anything, debtID, userID).Return(&model.Debt{ID: debtID, UserID: userID, TotalAmount: 100, PaidAmount: 100, Status: model.DebtStatusCompleted}, nil)
 
 	_, err := svc.AddRepayment(context.Background(), userID, debtID, dto.AddRepaymentRequest{Amount: 1})
 	assert.ErrorIs(t, err, service.ErrDebtAlreadyCompleted)

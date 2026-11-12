@@ -1,0 +1,158 @@
+{
+  "chatMessages": [
+    {
+      "role": "system",
+      "content": "Bạn là Nexo AI Advisor - Trợ lý Cố vấn \u0026 Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.\nHôm nay là: <today>.\n\nBạn ĐƯỢC TRANG BỊ các công cụ (tools) để tra cứu dữ liệu tài chính thực tế và thực hiện tác vụ cho người dùng. \nBẮT BUỘC: Khi người dùng hỏi hoặc yêu cầu bất kỳ điều gì liên quan đến dữ liệu cá nhân (số dư, giao dịch, chi tiêu, thu nhập, ngân sách, nợ, ví), bạn PHẢI GỌI TOOL tương ứng. KHÔNG ĐƯỢC tự suy đoán hay bịa ra số liệu.\n\nHướng dẫn gọi tool cụ thể:\n1. Tổng quan tài chính (thu/chi/số dư/tiết kiệm) -\u003e gọi \"get_financial_overview\".\n2. Danh mục chi tiêu, cơ cấu chi tiêu -\u003e gọi \"get_spending_by_category\".\n3. Xem giao dịch gần đây -\u003e gọi \"list_recent_transactions\"; tìm kiếm/lọc nâng cao -\u003e gọi \"search_transactions\".\n4. Ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: \"vừa ăn phở 50k\", \"thêm chi tiêu 100k\", \"nhận lương 25tr\") -\u003e gọi \"create_transaction\".\n5. Tạo mới danh mục thu/chi/đầu tư -\u003e gọi \"create_category\".\n6. Ngân sách \u0026 hạn mức chi tiêu -\u003e gọi \"get_budget_status\".\n7. Các khoản nợ / cho vay -\u003e gọi \"get_debt_summary\" hoặc \"get_debt_detail\".\n8. Số dư ví, danh sách tài khoản -\u003e gọi \"list_wallets\" hoặc \"get_wallet_detail\".\n9. Danh mục kèm mức chi tháng này -\u003e gọi \"list_categories\".\n10. Xu hướng chi tiêu qua các tháng -\u003e gọi \"get_monthly_trend\".\n11. Danh mục đầu tư, tài sản -\u003e gọi \"get_investment_summary\".\n12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có \"KIẾN THỨC NỘI BỘ LIÊN QUAN\" -\u003e dùng ngay thông tin đó và KHÔNG gọi \"search_financial_knowledge\"; CHỈ gọi tool này khi thiếu thông tin.\n\nQuy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):\n- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả \"pending_confirmation\" nghĩa là đang chờ người dùng bấm \"Xác nhận\" trên thẻ đề xuất.\n- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm \"Xác nhận\" (hoặc \"Huỷ\").\n\nQuy tắc trả lời sau khi nhận kết quả từ Tool:\n- Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.\n- Sử dụng định dạng Markdown (in đậm số tiền, bullet points, bảng).\n- Định dạng tiền tệ chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).\n- Đưa ra nhận xét hoặc lời khuyên hữu ích dựa trên số liệu thực tế vừa tra cứu."
+    },
+    {
+      "role": "user",
+      "content": "tổng quan tháng 8"
+    }
+  ],
+  "chatModel": "",
+  "chatTools": [
+    "get_financial_overview",
+    "list_recent_transactions",
+    "create_transaction",
+    "create_category",
+    "get_budget_status",
+    "get_debt_summary",
+    "list_wallets",
+    "get_spending_by_category",
+    "transfer_between_wallets",
+    "create_debt",
+    "record_debt_repayment",
+    "set_budget",
+    "compare_financial_periods",
+    "get_financial_targets",
+    "set_financial_target",
+    "search_transactions",
+    "list_categories",
+    "get_monthly_trend",
+    "get_wallet_detail",
+    "get_debt_detail",
+    "get_investment_summary",
+    "search_financial_knowledge"
+  ],
+  "err": "",
+  "events": [
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>"
+    },
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "get_financial_overview",
+      "toolTitle": "Đang xử lý get_financial_overview..."
+    },
+    {
+      "type": "action_card",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "actionCard": {
+        "actionType": "FINANCIAL_SUMMARY",
+        "title": "Tổng quan Tài chính",
+        "description": "Thu: 20.000.000 ₫ | Chi: 5.000.000 ₫ | Tiết kiệm: 15.000.000 ₫ (75.0%)",
+        "data": {
+          "end_date": "2026-08-31",
+          "net_savings": 15000000,
+          "savings_rate_percent": 75,
+          "start_date": "2026-08-01",
+          "total_expense": 5000000,
+          "total_income": 20000000,
+          "total_investment": 1000000,
+          "total_wallet_balance": 7000000
+        }
+      }
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "text_delta",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "delta": "Đã hoàn thành yêu cầu của bạn:\n\n**Tổng quan Tài chính**: Thu: 20.000.000 ₫ | Chi: 5.000.000 ₫ | Tiết kiệm: 15.000.000 ₫ (75.0%)"
+    },
+    {
+      "type": "done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "SUCCESS"
+    }
+  ],
+  "stored": [
+    {
+      "Role": "user",
+      "Content": "tổng quan tháng 8",
+      "Status": "SUCCESS"
+    },
+    {
+      "Role": "model",
+      "Content": "Đã hoàn thành yêu cầu của bạn:\n\n**Tổng quan Tài chính**: Thu: 20.000.000 ₫ | Chi: 5.000.000 ₫ | Tiết kiệm: 15.000.000 ₫ (75.0%)",
+      "Status": "SUCCESS",
+      "ToolResults": [
+        {
+          "actionType": "FINANCIAL_SUMMARY",
+          "data": {
+            "end_date": "2026-08-31",
+            "net_savings": 15000000,
+            "savings_rate_percent": 75,
+            "start_date": "2026-08-01",
+            "total_expense": 5000000,
+            "total_income": 20000000,
+            "total_investment": 1000000,
+            "total_wallet_balance": 7000000
+          },
+          "description": "Thu: 20.000.000 ₫ | Chi: 5.000.000 ₫ | Tiết kiệm: 15.000.000 ₫ (75.0%)",
+          "title": "Tổng quan Tài chính"
+        }
+      ]
+    }
+  ],
+  "streamCalls": 1,
+  "streamMessages": [
+    {
+      "role": "system",
+      "content": "Bạn là Nexo AI Advisor - Trợ lý Cố vấn \u0026 Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.\nHôm nay là: <today>.\n\nBạn ĐƯỢC TRANG BỊ các công cụ (tools) để tra cứu dữ liệu tài chính thực tế và thực hiện tác vụ cho người dùng. \nBẮT BUỘC: Khi người dùng hỏi hoặc yêu cầu bất kỳ điều gì liên quan đến dữ liệu cá nhân (số dư, giao dịch, chi tiêu, thu nhập, ngân sách, nợ, ví), bạn PHẢI GỌI TOOL tương ứng. KHÔNG ĐƯỢC tự suy đoán hay bịa ra số liệu.\n\nHướng dẫn gọi tool cụ thể:\n1. Tổng quan tài chính (thu/chi/số dư/tiết kiệm) -\u003e gọi \"get_financial_overview\".\n2. Danh mục chi tiêu, cơ cấu chi tiêu -\u003e gọi \"get_spending_by_category\".\n3. Xem giao dịch gần đây -\u003e gọi \"list_recent_transactions\"; tìm kiếm/lọc nâng cao -\u003e gọi \"search_transactions\".\n4. Ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: \"vừa ăn phở 50k\", \"thêm chi tiêu 100k\", \"nhận lương 25tr\") -\u003e gọi \"create_transaction\".\n5. Tạo mới danh mục thu/chi/đầu tư -\u003e gọi \"create_category\".\n6. Ngân sách \u0026 hạn mức chi tiêu -\u003e gọi \"get_budget_status\".\n7. Các khoản nợ / cho vay -\u003e gọi \"get_debt_summary\" hoặc \"get_debt_detail\".\n8. Số dư ví, danh sách tài khoản -\u003e gọi \"list_wallets\" hoặc \"get_wallet_detail\".\n9. Danh mục kèm mức chi tháng này -\u003e gọi \"list_categories\".\n10. Xu hướng chi tiêu qua các tháng -\u003e gọi \"get_monthly_trend\".\n11. Danh mục đầu tư, tài sản -\u003e gọi \"get_investment_summary\".\n12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có \"KIẾN THỨC NỘI BỘ LIÊN QUAN\" -\u003e dùng ngay thông tin đó và KHÔNG gọi \"search_financial_knowledge\"; CHỈ gọi tool này khi thiếu thông tin.\n\nQuy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):\n- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả \"pending_confirmation\" nghĩa là đang chờ người dùng bấm \"Xác nhận\" trên thẻ đề xuất.\n- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm \"Xác nhận\" (hoặc \"Huỷ\").\n\nQuy tắc trả lời sau khi nhận kết quả từ Tool:\n- Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.\n- Sử dụng định dạng Markdown (in đậm số tiền, bullet points, bảng).\n- Định dạng tiền tệ chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).\n- Đưa ra nhận xét hoặc lời khuyên hữu ích dựa trên số liệu thực tế vừa tra cứu."
+    },
+    {
+      "role": "user",
+      "content": "tổng quan tháng 8"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "get_financial_overview",
+            "arguments": "{\"month\":\"2026-08\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"end_date\":\"2026-08-31\",\"net_savings\":15000000,\"savings_rate_percent\":75,\"start_date\":\"2026-08-01\",\"total_expense\":5000000,\"total_income\":20000000,\"total_investment\":1000000,\"total_wallet_balance\":7000000}",
+      "tool_call_id": "c1"
+    }
+  ],
+  "streamModel": "",
+  "txnCreated": null
+}

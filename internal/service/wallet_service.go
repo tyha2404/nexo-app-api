@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"math"
+	"time"
+
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
@@ -15,7 +17,7 @@ import (
 )
 
 var (
-	ErrWalletNotFound      = errors.New("wallet not found")
+	ErrWalletNotFound      = repository.ErrWalletNotFound
 	ErrSameWalletTransfer  = errors.New("fromWalletId and toWalletId cannot be the same")
 	ErrInsufficientBalance = constant.ErrInsufficientBalance
 	ErrInvalidTransfer     = fmt.Errorf("transfer amount must be > 0 and fee must not be negative: %w", constant.ErrInvalidInput)
@@ -63,7 +65,7 @@ func NewWalletService(repo repository.WalletRepository) WalletService {
 }
 
 func (s *walletService) CreateWallet(ctx context.Context, userID uuid.UUID, req dto.CreateWalletRequest) (*dto.WalletResponse, error) {
-	currency := "VND"
+	currency := model.BaseCurrency
 	if req.Currency != "" {
 		currency = req.Currency
 	}
@@ -102,28 +104,26 @@ func (s *walletService) CreateWallet(ctx context.Context, userID uuid.UUID, req 
 }
 
 func (s *walletService) GetWallets(ctx context.Context, userID uuid.UUID) (*dto.WalletSummaryResponse, error) {
-	return s.repo.GetSummaryByUserID(ctx, userID)
-}
-
-func (s *walletService) GetWalletByID(ctx context.Context, userID uuid.UUID, id uuid.UUID) (*dto.WalletResponse, error) {
-	wallet, err := s.repo.GetByID(ctx, id, userID)
+	wallets, err := s.repo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if wallet == nil {
-		return nil, ErrWalletNotFound
+	return dto.SummarizeWallets(wallets), nil
+}
+
+func (s *walletService) GetWalletByID(ctx context.Context, userID uuid.UUID, id uuid.UUID) (*dto.WalletResponse, error) {
+	wallet, err := s.repo.GetByIDForUser(ctx, userID, id)
+	if err != nil {
+		return nil, err
 	}
 	res := dto.ToWalletResponse(wallet)
 	return &res, nil
 }
 
 func (s *walletService) UpdateWallet(ctx context.Context, userID uuid.UUID, id uuid.UUID, req dto.UpdateWalletRequest) (*dto.WalletResponse, error) {
-	wallet, err := s.repo.GetByID(ctx, id, userID)
+	wallet, err := s.repo.GetByIDForUser(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-	if wallet == nil {
-		return nil, ErrWalletNotFound
 	}
 
 	if req.Name != nil {
@@ -181,14 +181,10 @@ func (s *walletService) UpdateWallet(ctx context.Context, userID uuid.UUID, id u
 }
 
 func (s *walletService) DeleteWallet(ctx context.Context, userID uuid.UUID, id uuid.UUID) error {
-	wallet, err := s.repo.GetByID(ctx, id, userID)
-	if err != nil {
+	if _, err := s.repo.GetByIDForUser(ctx, userID, id); err != nil {
 		return err
 	}
-	if wallet == nil {
-		return ErrWalletNotFound
-	}
-	return s.repo.Delete(ctx, id, userID)
+	return s.repo.Delete(ctx, userID, id)
 }
 
 func (s *walletService) TransferMoney(ctx context.Context, userID uuid.UUID, req dto.TransferMoneyRequest) (*dto.WalletTransferResponse, error) {
@@ -227,11 +223,30 @@ func (s *walletService) TransferMoney(ctx context.Context, userID uuid.UUID, req
 		Amount:       transfer.Amount,
 		Fee:          transfer.Fee,
 		Note:         transfer.Note,
-		TransferDate: transfer.TransferDate.Format("2006-01-02"),
-		CreatedAt:    transfer.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		TransferDate: transfer.TransferDate.Format(time.DateOnly),
+		CreatedAt:    transfer.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
 func (s *walletService) AutoAllocateIncome(ctx context.Context, userID uuid.UUID, req dto.AutoAllocateRequest) (*dto.AutoAllocateResponse, error) {
-	return s.repo.AutoAllocateIncome(ctx, userID, &req)
+	alloc, err := s.repo.AutoAllocateIncome(ctx, userID, req.SourceWalletID, req.IncomeAmount)
+	if err != nil {
+		return nil, err
+	}
+	res := &dto.AutoAllocateResponse{
+		IncomeAmount:   req.IncomeAmount,
+		Allocations:    make([]dto.AllocatedWalletDetail, 0, len(alloc.Allocations)),
+		TotalAllocated: alloc.TotalAllocated,
+	}
+	if req.SourceWalletID != uuid.Nil {
+		source := req.SourceWalletID
+		res.SourceWalletID = &source
+	}
+	for _, a := range alloc.Allocations {
+		res.Allocations = append(res.Allocations, dto.AllocatedWalletDetail{
+			WalletID: a.WalletID, WalletName: a.WalletName, AllocationPercent: a.AllocationPercent,
+			AllocatedAmount: a.AllocatedAmount, NewBalance: a.NewBalance,
+		})
+	}
+	return res, nil
 }

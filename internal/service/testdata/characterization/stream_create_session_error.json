@@ -1,0 +1,17 @@
+{
+  "chatMessages": null,
+  "chatModel": "",
+  "chatTools": [],
+  "err": "db down",
+  "events": [
+    {
+      "type": "error",
+      "errorMessage": "Không thể khởi tạo phiên trò chuyện"
+    }
+  ],
+  "stored": null,
+  "streamCalls": 0,
+  "streamMessages": null,
+  "streamModel": "",
+  "txnCreated": null
+}

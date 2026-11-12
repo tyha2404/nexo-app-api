@@ -12,7 +12,7 @@ type CustomTime struct {
 
 const (
 	ctLayoutRFC3339 = time.RFC3339
-	ctLayoutDate    = "2006-01-02"
+	ctLayoutDate    = time.DateOnly
 )
 
 func (ct *CustomTime) UnmarshalJSON(b []byte) error {

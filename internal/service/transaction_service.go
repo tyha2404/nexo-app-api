@@ -59,15 +59,13 @@ func (s *transactionService) ensureWalletOwned(ctx context.Context, userID uuid.
 	if walletID == nil || *walletID == uuid.Nil {
 		return nil
 	}
-	wallet, err := s.walletRepo.GetByID(ctx, *walletID, userID)
-	if err != nil {
-		return err
-	}
-	if wallet == nil {
-		return fmt.Errorf("wallet %w", constant.ErrNotFound)
-	}
-	return nil
+	_, err := s.walletRepo.GetByIDForUser(ctx, userID, *walletID)
+	return err
 }
+
+// errTransactionCategoryTypeMismatch: a transaction must have the type of its
+// category (a 400 through constant.ErrInvalidInput).
+var errTransactionCategoryTypeMismatch = fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
 
 func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.UUID, req dto.CreateTransactionRequest) (*dto.TransactionResponse, error) {
 	// Verify category exists and belongs to user
@@ -77,7 +75,7 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 	}
 
 	if string(category.Type) != string(req.Type) {
-		return nil, fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
+		return nil, errTransactionCategoryTypeMismatch
 	}
 
 	if err := s.ensureWalletOwned(ctx, userID, req.WalletID); err != nil {
@@ -124,13 +122,9 @@ func (s *transactionService) CreateTransaction(ctx context.Context, userID uuid.
 }
 
 func (s *transactionService) GetTransaction(ctx context.Context, userID, id uuid.UUID) (*dto.TransactionResponse, error) {
-	transaction, err := s.transactionRepo.GetByID(ctx, id)
+	transaction, err := s.transactionRepo.GetByIDForUser(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-
-	if transaction.UserID != userID {
-		return nil, fmt.Errorf("transaction %w", constant.ErrNotFound)
 	}
 
 	return s.toResponse(transaction), nil
@@ -143,7 +137,7 @@ func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.U
 		return nil, 0, nil, err
 	}
 
-	sumAmount, sumAmountForAverage, count, holdingAmount, holdingCount, realizedPnL, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
+	sum, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -154,25 +148,21 @@ func (s *transactionService) ListTransactions(ctx context.Context, userID uuid.U
 	}
 
 	summary := &dto.TransactionSummaryDTO{
-		SumAmount:           sumAmount,
-		SumAmountForAverage: sumAmountForAverage,
-		Total:               count,
-		HoldingAmount:       holdingAmount,
-		HoldingCount:        holdingCount,
-		RealizedPnL:         realizedPnL,
+		SumAmount:           sum.SumAmount,
+		SumAmountForAverage: sum.SumAmountForAverage,
+		Total:               sum.Total,
+		HoldingAmount:       sum.HoldingAmount,
+		HoldingCount:        sum.HoldingCount,
+		RealizedPnL:         sum.RealizedPnL,
 	}
 
 	return responses, total, summary, nil
 }
 
 func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id uuid.UUID, req dto.UpdateTransactionRequest) (*dto.TransactionResponse, error) {
-	transaction, err := s.transactionRepo.GetByID(ctx, id)
+	transaction, err := s.transactionRepo.GetByIDForUser(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-
-	if transaction.UserID != userID {
-		return nil, fmt.Errorf("transaction %w", constant.ErrNotFound)
 	}
 
 	if req.CategoryID != nil {
@@ -186,7 +176,7 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 			expectedType = model.TransactionType(*req.Type)
 		}
 		if string(category.Type) != string(expectedType) {
-			return nil, fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
+			return nil, errTransactionCategoryTypeMismatch
 		}
 
 		transaction.CategoryID = *req.CategoryID
@@ -195,7 +185,7 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 		category, err := s.categoryRepo.GetByIDForUser(ctx, userID, transaction.CategoryID)
 		if err == nil {
 			if string(category.Type) != *req.Type {
-				return nil, fmt.Errorf("transaction type does not match category type: %w", constant.ErrInvalidInput)
+				return nil, errTransactionCategoryTypeMismatch
 			}
 		}
 	}
@@ -247,16 +237,7 @@ func (s *transactionService) UpdateTransaction(ctx context.Context, userID, id u
 }
 
 func (s *transactionService) DeleteTransaction(ctx context.Context, userID, id uuid.UUID) error {
-	transaction, err := s.transactionRepo.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	if transaction.UserID != userID {
-		return fmt.Errorf("transaction %w", constant.ErrNotFound)
-	}
-
-	return s.transactionRepo.Delete(ctx, id)
+	return s.transactionRepo.Delete(ctx, userID, id)
 }
 
 func (s *transactionService) RestoreTransaction(ctx context.Context, userID, id uuid.UUID) (*dto.TransactionResponse, error) {
@@ -278,7 +259,7 @@ func (s *transactionService) ListTags(ctx context.Context, userID uuid.UUID) ([]
 			Count:        row.Count,
 			TotalExpense: row.TotalExpense,
 			TotalIncome:  row.TotalIncome,
-			LastUsed:     row.LastUsed.Format("2006-01-02"),
+			LastUsed:     row.LastUsed.Format(time.DateOnly),
 		})
 	}
 	return out, nil
@@ -333,7 +314,7 @@ func (s *transactionService) toResponse(t *model.Transaction) *dto.TransactionRe
 		Description:     t.Description,
 		ReceiptURL:      t.ReceiptURL,
 		Tags:            append([]string{}, t.Tags...),
-		TransactionDate: t.TransactionDate.Format("2006-01-02"),
+		TransactionDate: t.TransactionDate.Format(time.DateOnly),
 		CreatedAt:       t.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       t.UpdatedAt.Format(time.RFC3339),
 		DeletedAt:       deletedAt,
@@ -355,23 +336,24 @@ func (s *transactionService) checkBudgetLimit(ctx context.Context, userID, categ
 	filters := map[string]interface{}{
 		"type":       string(model.TransactionTypeExpense),
 		"categoryId": categoryID.String(),
-		"startDate":  start.Format("2006-01-02"),
-		"endDate":    end.Format("2006-01-02"),
+		"startDate":  start.Format(time.DateOnly),
+		"endDate":    end.Format(time.DateOnly),
 	}
 
-	totalExpense, _, _, _, _, _, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
+	spent, err := s.transactionRepo.GetSummaryByUserID(ctx, userID, filters)
 	if err != nil {
 		return
 	}
+	totalExpense := spent.SumAmount
 
 	var alertType string
 	var message string
 	ratio := totalExpense / budget.Amount
 	if ratio >= 1.0 {
-		alertType = "over_limit"
+		alertType = model.AlertTypeOverLimit
 		message = "Bạn đã vượt hạn mức chi tiêu của danh mục này!"
 	} else if ratio >= 0.8 {
-		alertType = "approaching_limit"
+		alertType = model.AlertTypeApproachingLimit
 		message = "Chi tiêu của bạn đã đạt trên 80% ngân sách danh mục này."
 	}
 

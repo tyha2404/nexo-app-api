@@ -1,33 +1,23 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type WalletHandler struct {
 	svc          service.WalletService
-	validator    *validator.Validate
-	log          *zap.Logger
 	errorHandler *ErrorHandler
 }
 
 func NewWalletHandler(svc service.WalletService, log *zap.Logger) *WalletHandler {
 	return &WalletHandler{
 		svc:          svc,
-		validator:    newStructValidator(),
-		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
 }
@@ -38,14 +28,14 @@ func NewWalletHandler(svc service.WalletService, log *zap.Logger) *WalletHandler
 // @Tags Wallets
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} dto.WalletSummaryResponse
+// @Success 200 {object} WalletSummaryEnvelope
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets [get]
 func (h *WalletHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_wallets")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_wallets")
 		return
 	}
 
@@ -55,12 +45,7 @@ func (h *WalletHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.WalletSummaryResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, res)
 }
 
 // CreateWallet godoc
@@ -71,26 +56,20 @@ func (h *WalletHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.CreateWalletRequest true "Create wallet payload"
-// @Success 201 {object} dto.WalletResponse
+// @Success 201 {object} WalletEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets [post]
 func (h *WalletHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "create_wallet")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "create_wallet")
 		return
 	}
 
 	var req dto.CreateWalletRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "create_wallet")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "create_wallet")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "create_wallet") {
 		return
 	}
 
@@ -104,14 +83,7 @@ func (h *WalletHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.WalletResponse]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Message: "Wallet created successfully",
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusCreated, res, "Wallet created successfully")
 }
 
 // GetWalletByID godoc
@@ -121,21 +93,20 @@ func (h *WalletHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Wallet ID"
-// @Success 200 {object} dto.WalletResponse
+// @Success 200 {object} WalletEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets/{id} [get]
 func (h *WalletHandler) GetWalletByID(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_wallet_by_id")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_wallet_by_id")
 		return
 	}
 
-	walletIDStr := chi.URLParam(r, "id")
-	walletID, err := uuid.Parse(walletIDStr)
+	walletID, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid wallet ID", "get_wallet_by_id")
 		return
@@ -151,12 +122,7 @@ func (h *WalletHandler) GetWalletByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.WalletResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, res)
 }
 
 // UpdateWallet godoc
@@ -168,34 +134,27 @@ func (h *WalletHandler) GetWalletByID(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Param id path string true "Wallet ID"
 // @Param request body dto.UpdateWalletRequest true "Update wallet payload"
-// @Success 200 {object} dto.WalletResponse
+// @Success 200 {object} WalletEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets/{id} [put]
 func (h *WalletHandler) UpdateWallet(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "update_wallet")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "update_wallet")
 		return
 	}
 
-	walletIDStr := chi.URLParam(r, "id")
-	walletID, err := uuid.Parse(walletIDStr)
+	walletID, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid wallet ID", "update_wallet")
 		return
 	}
 
 	var req dto.UpdateWalletRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "update_wallet")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "update_wallet")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "update_wallet") {
 		return
 	}
 
@@ -213,13 +172,7 @@ func (h *WalletHandler) UpdateWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.WalletResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Message: "Wallet updated successfully",
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, res, "Wallet updated successfully")
 }
 
 // DeleteWallet godoc
@@ -229,21 +182,20 @@ func (h *WalletHandler) UpdateWallet(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Wallet ID"
-// @Success 200 {object} map[string]string
+// @Success 200 {object} MessageResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets/{id} [delete]
 func (h *WalletHandler) DeleteWallet(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_wallet")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "delete_wallet")
 		return
 	}
 
-	walletIDStr := chi.URLParam(r, "id")
-	walletID, err := uuid.Parse(walletIDStr)
+	walletID, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid wallet ID", "delete_wallet")
 		return
@@ -258,12 +210,7 @@ func (h *WalletHandler) DeleteWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[map[string]string]{
-		Status:  http.StatusOK,
-		Success: true,
-		Message: "Wallet deleted successfully",
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Wallet deleted successfully")
 }
 
 // TransferMoney godoc
@@ -274,27 +221,21 @@ func (h *WalletHandler) DeleteWallet(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.TransferMoneyRequest true "Transfer money payload"
-// @Success 200 {object} dto.WalletTransferResponse
+// @Success 200 {object} WalletTransferEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Wallet not found"
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets/transfer [post]
 func (h *WalletHandler) TransferMoney(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "transfer_money")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "transfer_money")
 		return
 	}
 
 	var req dto.TransferMoneyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "transfer_money")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "transfer_money")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "transfer_money") {
 		return
 	}
 
@@ -316,13 +257,7 @@ func (h *WalletHandler) TransferMoney(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.WalletTransferResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Message: "Money transferred successfully",
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, res, "Money transferred successfully")
 }
 
 // AutoAllocateIncome godoc
@@ -333,27 +268,21 @@ func (h *WalletHandler) TransferMoney(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.AutoAllocateRequest true "Auto allocate payload"
-// @Success 200 {object} dto.AutoAllocateResponse
+// @Success 200 {object} AutoAllocateEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Wallet not found"
 // @Failure 500 {object} response.ErrorResponse
 // @Router /wallets/auto-allocate [post]
 func (h *WalletHandler) AutoAllocateIncome(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "auto_allocate_income")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "auto_allocate_income")
 		return
 	}
 
 	var req dto.AutoAllocateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "auto_allocate_income")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "auto_allocate_income")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "auto_allocate_income") {
 		return
 	}
 
@@ -371,11 +300,5 @@ func (h *WalletHandler) AutoAllocateIncome(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[*dto.AutoAllocateResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Message: "Income auto-allocated successfully",
-		Data:    res,
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, res, "Income auto-allocated successfully")
 }

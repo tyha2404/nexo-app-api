@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
+	"github.com/tyha2404/nexo-app-api/internal/dto"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
@@ -9,13 +11,15 @@ import (
 )
 
 type CategoryService interface {
-	Create(ctx context.Context, category *model.Category) (*model.Category, error)
-	// Get, UpdateFields and Delete are scoped to userID and return
+	Create(ctx context.Context, userID uuid.UUID, req dto.CreateCategoryRequest) (*model.Category, error)
+	// Get, Update and Delete are scoped to userID and return
 	// constant.ErrNotFound when the category belongs to someone else.
 	Get(ctx context.Context, userID, id uuid.UUID) (*model.Category, error)
 	List(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, error)
 	ListWithTotal(ctx context.Context, userID uuid.UUID, categoryType string, page, limit int) ([]model.Category, int64, error)
-	UpdateFields(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error
+	// Update applies the fields present in req and returns the updated
+	// category; constant.ErrInvalidInput when req has no field.
+	Update(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCategoryRequest) (*model.Category, error)
 	Delete(ctx context.Context, userID, id uuid.UUID) error
 }
 
@@ -29,7 +33,16 @@ func NewCategoryService(repo repository.CategoryRepo) CategoryService {
 	}
 }
 
-func (s *categoryService) Create(ctx context.Context, category *model.Category) (*model.Category, error) {
+func (s *categoryService) Create(ctx context.Context, userID uuid.UUID, req dto.CreateCategoryRequest) (*model.Category, error) {
+	category := &model.Category{
+		Name:        req.Name,
+		Type:        model.CategoryType(req.Type),
+		Description: req.Description,
+		UserID:      userID,
+	}
+	if req.ExcludeFromAverageDaily != nil {
+		category.ExcludeFromAverageDaily = *req.ExcludeFromAverageDaily
+	}
 	if err := s.repo.Create(ctx, category); err != nil {
 		return nil, err
 	}
@@ -56,8 +69,27 @@ func (s *categoryService) ListWithTotal(ctx context.Context, userID uuid.UUID, c
 	return s.repo.ListWithTotal(ctx, userID, categoryType, limit, offset)
 }
 
-func (s *categoryService) UpdateFields(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error {
-	return s.repo.UpdateFieldsForUser(ctx, userID, id, updates)
+func (s *categoryService) Update(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCategoryRequest) (*model.Category, error) {
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Type != nil {
+		updates["type"] = *req.Type
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.ExcludeFromAverageDaily != nil {
+		updates["exclude_from_average_daily"] = *req.ExcludeFromAverageDaily
+	}
+	if len(updates) == 0 {
+		return nil, constant.ErrInvalidInput
+	}
+	if err := s.repo.UpdateFieldsForUser(ctx, userID, id, updates); err != nil {
+		return nil, err
+	}
+	return s.repo.GetByIDForUser(ctx, userID, id)
 }
 
 func (s *categoryService) Delete(ctx context.Context, userID, id uuid.UUID) error {

@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Ghi nhận trả nợ",
+    "ResultJSON": "{\"error\":\"Không tìm thấy khoản nợ khớp với 'Hùng'\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

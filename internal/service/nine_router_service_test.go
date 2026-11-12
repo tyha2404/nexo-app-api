@@ -64,7 +64,7 @@ func TestNineRouterService_ChatCompletion_Success(t *testing.T) {
 	logger := zap.NewNop()
 	svc := service.NewNineRouterService(cfg, logger)
 
-	res, err := svc.ChatCompletion(context.Background(), []service.NineRouterMessage{
+	res, err := svc.ChatCompletionWithModel(context.Background(), "", []service.NineRouterMessage{
 		{Role: "user", Content: "Chào 9Router"},
 	}, nil)
 

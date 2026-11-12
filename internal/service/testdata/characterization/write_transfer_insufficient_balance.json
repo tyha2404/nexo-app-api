@@ -1,0 +1,37 @@
+{
+  "confirm": null,
+  "confirmErr": "pending action failed: insufficient balance in source wallet: số dư không đủ",
+  "confirmErrIsFailed": true,
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Chuyển tiền giữa ví — Chuyển 1 ₫ từ ví Ví Tiền mặt sang ví Tài khoản Ngân hàng\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Chuyển tiền giữa ví",
+      "description": "Chuyển 1 ₫ từ ví Ví Tiền mặt sang ví Tài khoản Ngân hàng",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "description": "",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "fee": 0,
+        "fromWalletName": "Ví Tiền mặt",
+        "kind": "Chuyển tiền giữa ví",
+        "status": "PENDING",
+        "toWalletName": "Tài khoản Ngân hàng",
+        "toolName": "transfer_between_wallets",
+        "walletName": "Ví Tiền mặt"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

@@ -89,7 +89,7 @@ func TestReportService_GetMonthlyTrend_SingleTargetQueryAndAppTimezone(t *testin
 	repo := &fakeReportRepo{
 		monthly: []repository.MonthlyTotal{
 			{Month: prevKey, Income: 20_000_000, Expense: 9_000_000},
-			{Month: curKey, Income: 25_000_000, Expense: 3_000_000},
+			{Month: curKey, Income: 25_000_000, Expense: 3_000_000, ActiveInvestment: 1_200_000},
 		},
 		targets: []model.MonthlyTarget{{Month: int(now.Month()), Year: now.Year(), TargetAmount: 10_000_000}},
 	}
@@ -103,6 +103,7 @@ func TestReportService_GetMonthlyTrend_SingleTargetQueryAndAppTimezone(t *testin
 	assert.Equal(t, curKey, last.Month)
 	assert.Equal(t, 3_000_000.0, last.Expense)
 	assert.Equal(t, 10_000_000.0, last.Target)
+	assert.Equal(t, 1_200_000.0, last.Investment, "active investment per month (used by the AI get_monthly_trend tool)")
 	assert.Equal(t, prevKey, res.Items[1].Month)
 	assert.Equal(t, 0.0, res.Items[0].Expense)
 	assert.InDelta(t, 4_000_000.0, res.AverageExpense, 0.001)
@@ -112,17 +113,6 @@ func TestReportService_GetMonthlyTrend_SingleTargetQueryAndAppTimezone(t *testin
 	monthStart, next := util.MonthRange(now)
 	assert.Equal(t, next.AddDate(0, 0, -1).Format("2006-01-02"), repo.monthlyEnd)
 	assert.Equal(t, monthStart, repo.targetTo)
-}
-
-func TestReportService_DerivesSQLRepoFromTargetRepo(t *testing.T) {
-	// The concrete DB-backed target repository doubles as a ReportRepository
-	// so container.go wiring does not need to change.
-	_, ok := repository.AsReportRepository(repository.NewTargetRepository(nil))
-	assert.True(t, ok)
-
-	svc := NewReportService(nil, nil)
-	_, err := svc.GetSummary(context.Background(), uuid.New(), "", "")
-	assert.ErrorIs(t, err, errReportRepositoryUnavailable)
 }
 
 func TestReportService_GetDailyReportFillsEveryDay(t *testing.T) {

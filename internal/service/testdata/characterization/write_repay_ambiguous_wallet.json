@@ -1,0 +1,84 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "record_debt_repayment",
+    "actionCard": {
+      "actionType": "DEBT_REPAID",
+      "title": "Đã ghi nhận thanh toán nợ",
+      "description": "Đã trả 1 ₫ cho 'Vay anh Nam' (Còn lại: 599.999 ₫) - Ví Techcombank Visa",
+      "data": {
+        "id": "<id-2>",
+        "userId": "<nil-id>",
+        "type": "PAYABLE",
+        "title": "Vay anh Nam",
+        "totalAmount": 1000000,
+        "paidAmount": 400001,
+        "remaining": 599999,
+        "startDate": null,
+        "dueDate": null,
+        "status": "PENDING",
+        "notes": "",
+        "createdAt": "0001-01-01T00:00:00Z",
+        "updatedAt": "0001-01-01T00:00:00Z"
+      }
+    },
+    "result": {
+      "createdAt": "0001-01-01T00:00:00Z",
+      "dueDate": null,
+      "id": "<id-2>",
+      "notes": "",
+      "paidAmount": 400001,
+      "remaining": 599999,
+      "startDate": null,
+      "status": "PENDING",
+      "title": "Vay anh Nam",
+      "totalAmount": 1000000,
+      "type": "PAYABLE",
+      "updatedAt": "0001-01-01T00:00:00Z",
+      "userId": "<nil-id>"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi trả nợ — 1 ₫ cho 'Vay anh Nam' (còn lại hiện tại: 600.000 ₫), trừ từ ví Techcombank Visa\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi trả nợ",
+      "description": "1 ₫ cho 'Vay anh Nam' (còn lại hiện tại: 600.000 ₫), trừ từ ví Techcombank Visa",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "debtId": "<id-2>",
+        "description": "",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Ghi trả nợ",
+        "remaining": 600000,
+        "status": "PENDING",
+        "title": "Vay anh Nam",
+        "toolName": "record_debt_repayment",
+        "walletName": "Techcombank Visa"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [
+      {
+        "debtId": "<id-2>",
+        "req": {
+          "amount": 1,
+          "paidAt": null,
+          "notes": "",
+          "walletId": "<id-3>"
+        }
+      }
+    ],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

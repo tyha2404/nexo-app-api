@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Ghi nhận trả nợ",
+    "ResultJSON": "{\"error\":\"Bạn không có khoản nợ nào trong hệ thống.\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

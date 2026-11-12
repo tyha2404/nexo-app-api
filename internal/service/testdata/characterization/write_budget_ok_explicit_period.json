@@ -1,0 +1,68 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "set_budget",
+    "actionCard": {
+      "actionType": "BUDGET_SET",
+      "title": "Đã thiết lập ngân sách",
+      "description": "Hạn mức danh mục Cafe sáng: 300.000 ₫/tháng",
+      "data": {
+        "id": "<id-2>",
+        "userId": "<id-3>",
+        "categoryId": "<id-4>",
+        "categoryName": "",
+        "amount": 300000,
+        "periodType": "monthly",
+        "periodStart": "2027-01-15",
+        "createdAt": ""
+      }
+    },
+    "result": {
+      "amount": 300000,
+      "categoryId": "<id-4>",
+      "categoryName": "",
+      "createdAt": "",
+      "id": "<id-2>",
+      "periodStart": "2027-01-15",
+      "periodType": "monthly",
+      "userId": "<id-3>"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Đặt ngân sách — Hạn mức danh mục Cafe sáng: 300.000 ₫/tháng từ 2027-01-15\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Đặt ngân sách",
+      "description": "Hạn mức danh mục Cafe sáng: 300.000 ₫/tháng từ 2027-01-15",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 300000,
+        "categoryName": "Cafe sáng",
+        "date": "2027-01-15",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Đặt ngân sách",
+        "status": "PENDING",
+        "toolName": "set_budget"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": [
+      {
+        "categoryId": "<id-4>",
+        "amount": 300000,
+        "periodType": "monthly",
+        "periodStart": "2027-01-15T00:00:00Z"
+      }
+    ],
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

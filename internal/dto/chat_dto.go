@@ -31,14 +31,14 @@ type ChatSessionResponse struct {
 }
 
 type ChatMessageResponse struct {
-	ID          uuid.UUID `json:"id"`
-	SessionID   uuid.UUID `json:"sessionId"`
-	Role        string    `json:"role"`
-	Content     string    `json:"content"`
-	Status      string    `json:"status"`
-	ToolCalls   *string   `json:"toolCalls,omitempty"`
+	ID        uuid.UUID `json:"id"`
+	SessionID uuid.UUID `json:"sessionId"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	Status    string    `json:"status"`
+	ToolCalls *string   `json:"toolCalls,omitempty"`
 	// ToolResults is a JSON array of the ActionCards shown with this message.
-	ToolResults *string `json:"toolResults,omitempty"`
+	ToolResults *string   `json:"toolResults,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 

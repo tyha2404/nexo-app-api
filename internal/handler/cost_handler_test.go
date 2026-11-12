@@ -21,15 +21,15 @@ import (
 
 type stubCostService struct {
 	service.CostService
-	createFn func(ctx context.Context, c *model.Cost) (*model.Cost, error)
+	createFn func(ctx context.Context, userID uuid.UUID, req dto.CreateCostRequest) (*model.Cost, error)
 	getFn    func(ctx context.Context, userID, id uuid.UUID) (*model.Cost, error)
 	updateFn func(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCostRequest) (*model.Cost, error)
 	deleteFn func(ctx context.Context, userID, id uuid.UUID) error
 	listFn   func(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Cost, error)
 }
 
-func (s *stubCostService) Create(ctx context.Context, c *model.Cost) (*model.Cost, error) {
-	return s.createFn(ctx, c)
+func (s *stubCostService) Create(ctx context.Context, userID uuid.UUID, req dto.CreateCostRequest) (*model.Cost, error) {
+	return s.createFn(ctx, userID, req)
 }
 func (s *stubCostService) Get(ctx context.Context, userID, id uuid.UUID) (*model.Cost, error) {
 	return s.getFn(ctx, userID, id)
@@ -68,12 +68,12 @@ func TestCostHandler_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got *model.Cost
-			svc := &stubCostService{createFn: func(ctx context.Context, c *model.Cost) (*model.Cost, error) {
-				got = c
+			svc := &stubCostService{createFn: func(ctx context.Context, uid uuid.UUID, req dto.CreateCostRequest) (*model.Cost, error) {
+				got = &model.Cost{UserID: uid, CategoryID: req.CategoryID, Amount: req.Amount, Title: req.Title, IncurredAt: req.IncurredAt.Time}
 				if tt.svcErr != nil {
 					return nil, tt.svcErr
 				}
-				return c, nil
+				return got, nil
 			}}
 			h := NewCostHandler(svc, zap.NewNop())
 			rr := httptest.NewRecorder()

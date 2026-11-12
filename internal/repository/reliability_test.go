@@ -47,7 +47,7 @@ func testDatabase(t *testing.T) *gorm.DB {
 	ddl := []string{
 		`CREATE TABLE debts (id uuid PRIMARY KEY,user_id uuid,type varchar(20),title text,total_amount numeric(14,2),paid_amount numeric(14,2),start_date timestamp,due_date timestamp,status text,notes text,wallet_id uuid,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
 		`CREATE TABLE repayments (id uuid PRIMARY KEY,debt_id uuid,amount numeric(14,2),paid_at timestamp,notes text,wallet_id uuid,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
-		`CREATE TABLE wallets (id uuid PRIMARY KEY,user_id uuid,name text,type text,balance numeric(15,2),currency text DEFAULT 'VND',allocation_percent numeric(5,2) DEFAULT 0,statement_balance numeric(15,2) DEFAULT 0,minimum_payment numeric(15,2) DEFAULT 0,previous_balance numeric(15,2) DEFAULT 0,updated_at timestamp,deleted_at timestamp)`,
+		`CREATE TABLE wallets (id uuid PRIMARY KEY,user_id uuid,name text,type text,balance numeric(15,2),currency text DEFAULT 'VND',icon text,jar_category text,allocation_percent numeric(5,2) DEFAULT 0,is_included_in_total boolean DEFAULT true,credit_limit numeric(15,2) DEFAULT 0,statement_day int DEFAULT 0,due_day int DEFAULT 0,statement_balance numeric(15,2) DEFAULT 0,minimum_payment numeric(15,2) DEFAULT 0,previous_balance numeric(15,2) DEFAULT 0,created_at timestamp DEFAULT now(),updated_at timestamp,deleted_at timestamp)`,
 		`CREATE TABLE credit_card_statements (id uuid PRIMARY KEY,user_id uuid,wallet_id uuid,statement_month int,statement_year int,statement_date date,due_date date,statement_balance numeric(15,2),minimum_payment numeric(15,2) DEFAULT 0,previous_balance numeric(15,2) DEFAULT 0,paid_amount numeric(15,2) DEFAULT 0,status text,note text,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
 		`CREATE TABLE categories (id uuid PRIMARY KEY,user_id uuid,name text,type text,description text,exclude_from_average_daily boolean DEFAULT false,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
 		`CREATE TABLE transactions (id uuid PRIMARY KEY,user_id uuid,category_id uuid,wallet_id uuid,amount numeric(15,2),type text,status text DEFAULT 'HOLDING',realized_pnl numeric(15,2) DEFAULT 0,description text,receipt_url text,tags text[] NOT NULL DEFAULT '{}',balance_applied boolean NOT NULL DEFAULT false,transaction_date date,created_at timestamp DEFAULT now(),updated_at timestamp DEFAULT now(),deleted_at timestamp)`,
@@ -135,10 +135,10 @@ func TestTransactionSearchPaginationSummaryAndTenant(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 5)
 	require.EqualValues(t, 25, total)
-	sum, _, count, _, _, _, err := repo.GetSummaryByUserID(context.Background(), user, filters)
+	sum, err := repo.GetSummaryByUserID(context.Background(), user, filters)
 	require.NoError(t, err)
-	require.Equal(t, 250.0, sum)
-	require.EqualValues(t, 25, count)
+	require.Equal(t, 250.0, sum.SumAmount)
+	require.EqualValues(t, 25, sum.Total)
 	rows, total, err = repo.ListByUserID(context.Background(), user, 10, 0, map[string]interface{}{"keyword": "%_"})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, total)

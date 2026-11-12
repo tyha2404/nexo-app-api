@@ -1,0 +1,63 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "set_financial_target",
+    "actionCard": {
+      "actionType": "TARGET_SET",
+      "title": "Đã lưu mục tiêu tài chính",
+      "description": "Hạn mức chi tiêu tối đa Tháng 11/2026: 3.000.000 ₫",
+      "data": {
+        "month": 11,
+        "targetAmount": 3000000,
+        "targetType": "EXPENSE",
+        "year": 2026
+      }
+    },
+    "result": {
+      "message": "Mục tiêu tài chính đã được thiết lập thành công.",
+      "month": 11,
+      "success": true,
+      "targetAmount": 3000000,
+      "targetType": "EXPENSE",
+      "year": 2026
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Đặt mục tiêu tài chính — Hạn mức chi tiêu tối đa Tháng 11/2026: 3.000.000 ₫\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Đặt mục tiêu tài chính",
+      "description": "Hạn mức chi tiêu tối đa Tháng 11/2026: 3.000.000 ₫",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 3000000,
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Đặt mục tiêu tài chính",
+        "month": 11,
+        "status": "PENDING",
+        "targetType": "EXPENSE",
+        "toolName": "set_financial_target",
+        "year": 2026
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": [
+      {
+        "targetType": "EXPENSE",
+        "targetAmount": 3000000,
+        "month": 11,
+        "year": 2026
+      }
+    ],
+    "transactions": null,
+    "transfers": null
+  }
+}

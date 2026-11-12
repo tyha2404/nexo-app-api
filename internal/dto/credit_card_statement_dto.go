@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/util"
@@ -77,14 +79,9 @@ func ToStatementResponse(s *model.CreditCardStatement) StatementResponse {
 	status := s.Status
 	// Evaluate status dynamically if unpaid/partially paid and overdue
 	if status == model.StatementStatusUnpaid || status == model.StatementStatusPartiallyPaid {
-		if s.PaidAmount >= s.StatementBalance && s.StatementBalance > 0 {
-			status = model.StatementStatusPaid
-		} else if util.IsPastDate(s.DueDate) && remaining > 0 { // due today is not overdue (app TZ)
+		status = model.StatementStatusFor(s.StatementBalance, s.PaidAmount)
+		if status != model.StatementStatusPaid && util.IsPastDate(s.DueDate) && remaining > 0 { // due today is not overdue (app TZ)
 			status = model.StatementStatusOverdue
-		} else if s.PaidAmount > 0 {
-			status = model.StatementStatusPartiallyPaid
-		} else {
-			status = model.StatementStatusUnpaid
 		}
 	}
 
@@ -94,8 +91,8 @@ func ToStatementResponse(s *model.CreditCardStatement) StatementResponse {
 		WalletID:         s.WalletID,
 		StatementMonth:   s.StatementMonth,
 		StatementYear:    s.StatementYear,
-		StatementDate:    s.StatementDate.Format("2006-01-02"),
-		DueDate:          s.DueDate.Format("2006-01-02"),
+		StatementDate:    s.StatementDate.Format(time.DateOnly),
+		DueDate:          s.DueDate.Format(time.DateOnly),
 		StatementBalance: s.StatementBalance,
 		MinimumPayment:   s.MinimumPayment,
 		PreviousBalance:  s.PreviousBalance,
@@ -103,8 +100,8 @@ func ToStatementResponse(s *model.CreditCardStatement) StatementResponse {
 		RemainingAmount:  remaining,
 		Status:           status,
 		Note:             s.Note,
-		CreatedAt:        s.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:        s.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:        s.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:        s.UpdatedAt.Format(time.RFC3339),
 	}
 
 	if s.Wallet != nil {

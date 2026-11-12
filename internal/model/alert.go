@@ -7,6 +7,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Alert types (alerts.alert_type check constraint).
+const (
+	AlertTypeApproachingLimit = "approaching_limit"
+	AlertTypeOverLimit        = "over_limit"
+)
+
 type Alert struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID      uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`

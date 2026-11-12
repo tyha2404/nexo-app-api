@@ -110,7 +110,7 @@ func TestAlertHandler_Delete(t *testing.T) {
 			require.Equal(t, http.StatusOK, rr.Code)
 			assert.Equal(t, userID, gotUser)
 			assert.Equal(t, alertID, gotID)
-			assert.JSONEq(t, `{"message":"Alert deleted successfully"}`, rr.Body.String())
+			assert.JSONEq(t, `{"status":200,"success":true,"message":"Alert deleted successfully","data":null}`, rr.Body.String())
 		})
 	}
 }

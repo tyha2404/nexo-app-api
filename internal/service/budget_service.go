@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -15,6 +16,9 @@ type BudgetService interface {
 	CreateBudget(ctx context.Context, userID uuid.UUID, req dto.CreateBudgetRequest) (*dto.BudgetResponse, error)
 	GetBudget(ctx context.Context, userID, id uuid.UUID) (*dto.BudgetResponse, error)
 	ListBudgets(ctx context.Context, userID uuid.UUID, page, limit int) ([]dto.BudgetResponse, int64, error)
+	// ListActiveBudgets returns the budget in force on the day of at for each
+	// category (at most one per category: the most recent period wins).
+	ListActiveBudgets(ctx context.Context, userID uuid.UUID, at time.Time) ([]dto.BudgetResponse, error)
 	UpdateBudget(ctx context.Context, userID, id uuid.UUID, req dto.UpdateBudgetRequest) (*dto.BudgetResponse, error)
 	DeleteBudget(ctx context.Context, userID, id uuid.UUID) error
 }
@@ -59,12 +63,9 @@ func (s *budgetService) CreateBudget(ctx context.Context, userID uuid.UUID, req 
 }
 
 func (s *budgetService) GetBudget(ctx context.Context, userID, id uuid.UUID) (*dto.BudgetResponse, error) {
-	budget, err := s.budgetRepo.GetByID(ctx, id)
+	budget, err := s.budgetRepo.GetByIDForUser(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-	if budget.UserID != userID {
-		return nil, fmt.Errorf("budget %w", constant.ErrNotFound)
 	}
 	return dto.ToBudgetResponse(budget), nil
 }
@@ -83,13 +84,27 @@ func (s *budgetService) ListBudgets(ctx context.Context, userID uuid.UUID, page,
 	return res, total, nil
 }
 
-func (s *budgetService) UpdateBudget(ctx context.Context, userID, id uuid.UUID, req dto.UpdateBudgetRequest) (*dto.BudgetResponse, error) {
-	budget, err := s.budgetRepo.GetByID(ctx, id)
+func (s *budgetService) ListActiveBudgets(ctx context.Context, userID uuid.UUID, at time.Time) ([]dto.BudgetResponse, error) {
+	budgets, err := s.budgetRepo.ListActiveByUserID(ctx, userID, at)
 	if err != nil {
 		return nil, err
 	}
-	if budget.UserID != userID {
-		return nil, fmt.Errorf("budget %w", constant.ErrNotFound)
+	seen := make(map[uuid.UUID]bool, len(budgets))
+	res := make([]dto.BudgetResponse, 0, len(budgets))
+	for i := range budgets {
+		if seen[budgets[i].CategoryID] {
+			continue // an older overlapping period (e.g. a yearly budget under a monthly one)
+		}
+		seen[budgets[i].CategoryID] = true
+		res = append(res, *dto.ToBudgetResponse(&budgets[i]))
+	}
+	return res, nil
+}
+
+func (s *budgetService) UpdateBudget(ctx context.Context, userID, id uuid.UUID, req dto.UpdateBudgetRequest) (*dto.BudgetResponse, error) {
+	budget, err := s.budgetRepo.GetByIDForUser(ctx, userID, id)
+	if err != nil {
+		return nil, err
 	}
 
 	if req.Amount != nil {
@@ -109,14 +124,7 @@ func (s *budgetService) UpdateBudget(ctx context.Context, userID, id uuid.UUID, 
 }
 
 func (s *budgetService) DeleteBudget(ctx context.Context, userID, id uuid.UUID) error {
-	budget, err := s.budgetRepo.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if budget.UserID != userID {
-		return fmt.Errorf("budget %w", constant.ErrNotFound)
-	}
-	return s.budgetRepo.Delete(ctx, id)
+	return s.budgetRepo.Delete(ctx, userID, id)
 }
 
 func isBudgetPeriod(p string) bool {

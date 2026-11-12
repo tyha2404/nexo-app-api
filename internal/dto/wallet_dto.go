@@ -1,6 +1,9 @@
 package dto
 
 import (
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 )
@@ -110,8 +113,8 @@ func ToWalletResponse(w *model.Wallet) WalletResponse {
 		StatementBalance:  w.StatementBalance,
 		MinimumPayment:    w.MinimumPayment,
 		PreviousBalance:   w.PreviousBalance,
-		CreatedAt:         w.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:         w.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:         w.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         w.UpdatedAt.Format(time.RFC3339),
 	}
 
 	if w.Type == model.WalletTypeCredit {
@@ -171,4 +174,31 @@ type WalletSummaryResponse struct {
 	TotalsByCurrency map[string]float64 `json:"totalsByCurrency"`
 	Wallets          []WalletResponse   `json:"wallets"`
 	TotalWallets     int                `json:"totalWallets"`
+}
+
+// SummarizeWallets builds the wallet summary. Balances in different currencies
+// are never added together (there is no FX conversion): TotalBalance only sums
+// included wallets in model.BaseCurrency (an empty currency counts as VND, the
+// column default), and TotalsByCurrency reports every currency separately.
+func SummarizeWallets(wallets []model.Wallet) *WalletSummaryResponse {
+	totals := make(map[string]float64)
+	responses := make([]WalletResponse, 0, len(wallets))
+	for i := range wallets {
+		w := &wallets[i]
+		if w.IsIncludedInTotal {
+			currency := strings.ToUpper(strings.TrimSpace(w.Currency))
+			if currency == "" {
+				currency = model.BaseCurrency
+			}
+			totals[currency] += w.Balance
+		}
+		responses = append(responses, ToWalletResponse(w))
+	}
+	return &WalletSummaryResponse{
+		TotalBalance:     totals[model.BaseCurrency],
+		BaseCurrency:     model.BaseCurrency,
+		TotalsByCurrency: totals,
+		Wallets:          responses,
+		TotalWallets:     len(wallets),
+	}
 }

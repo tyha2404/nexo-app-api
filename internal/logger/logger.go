@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/tyha2404/nexo-app-api/internal/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -19,7 +20,7 @@ func New(level string, env ...string) (*zap.Logger, error) {
 		appEnv = env[0]
 	}
 
-	if appEnv == "prod" || appEnv == "production" {
+	if config.IsProductionEnv(appEnv) {
 		cfg := zap.NewProductionConfig()
 		cfg.Level = zap.NewAtomicLevelAt(lvl)
 		cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder

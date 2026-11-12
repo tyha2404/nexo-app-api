@@ -4,25 +4,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tyha2404/nexo-app-api/internal/handler"
 	"github.com/tyha2404/nexo-app-api/internal/middleware"
-	"go.uber.org/zap"
 )
 
 type CategoryRouter struct {
 	handler *handler.CategoryHandler
-	logger  *zap.Logger
 }
 
 // NewCategoryRouter creates a new instance of CategoryRouter
-func NewCategoryRouter(handler *handler.CategoryHandler, logger *zap.Logger) *CategoryRouter {
-	return &CategoryRouter{
-		handler: handler,
-		logger:  logger,
-	}
+func NewCategoryRouter(handler *handler.CategoryHandler) *CategoryRouter {
+	return &CategoryRouter{handler: handler}
 }
 
 // RegisterRoutes registers all category-related routes to the router
 func (r *CategoryRouter) RegisterRoutes(router chi.Router) {
-	// Add middleware here if needed (e.g., authentication, logging)
 	router.Route("/categories", func(categoriesRoute chi.Router) {
 		categoriesRoute.Use(middleware.AuthMiddleware)
 		categoriesRoute.Post("/", r.handler.Create)

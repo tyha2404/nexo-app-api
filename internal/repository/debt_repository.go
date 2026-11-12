@@ -3,12 +3,10 @@ package repository
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/dto"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 	"gorm.io/gorm"
@@ -16,20 +14,18 @@ import (
 )
 
 var (
-	ErrInvalidRepayment = errors.New("số tiền trả phải lớn hơn 0 và không vượt dư nợ")
-	ErrDebtNotFound     = errors.New("debt not found")
+	ErrInvalidRepayment = constant.NewKindError(constant.ErrInvalidInput, "số tiền trả phải lớn hơn 0 và không vượt dư nợ")
+	ErrDebtNotFound     = constant.NewKindError(constant.ErrNotFound, "debt not found")
 )
 
 type DebtRepository interface {
-	Create(ctx context.Context, debt *model.Debt) error
 	CreateWithWallet(ctx context.Context, debt *model.Debt, walletID *uuid.UUID, balanceDelta float64) error
-	FindByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.Debt, error)
+	GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Debt, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID, debtType model.DebtType, status model.DebtStatus) ([]model.Debt, error)
-	AddRepayment(ctx context.Context, debt *model.Debt, repayment *model.Repayment) error
 	AddRepaymentWithWallet(ctx context.Context, debt *model.Debt, repayment *model.Repayment, walletID *uuid.UUID, balanceDelta float64) error
-	UpdateWithWallet(ctx context.Context, id uuid.UUID, userID uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error)
-	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
-	GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.DebtSummaryResponse, error)
+	UpdateWithWallet(ctx context.Context, userID, id uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) error
+	GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*DebtSummary, error)
 }
 
 type debtRepository struct {
@@ -40,37 +36,27 @@ func NewDebtRepository(db *gorm.DB) DebtRepository {
 	return &debtRepository{db: db}
 }
 
-func (r *debtRepository) Create(ctx context.Context, debt *model.Debt) error {
-	return r.db.WithContext(ctx).Create(debt).Error
-}
-
 func (r *debtRepository) CreateWithWallet(ctx context.Context, debt *model.Debt, walletID *uuid.UUID, balanceDelta float64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(debt).Error; err != nil {
 			return err
 		}
-		if walletID != nil && *walletID != uuid.Nil && balanceDelta != 0 {
-			var wallet model.Wallet
-			if err := tx.Where("id = ? AND user_id = ?", *walletID, debt.UserID).First(&wallet).Error; err != nil {
-				return fmt.Errorf("wallet not found: %w", err)
-			}
-			if err := tx.Model(&wallet).Update("balance", gorm.Expr("balance + ?", balanceDelta)).Error; err != nil {
-				return err
-			}
+		if balanceDelta == 0 {
+			return nil
 		}
-		return nil
+		return adjustWalletBalance(tx, walletID, debt.UserID, balanceDelta, true)
 	})
 }
 
-func (r *debtRepository) FindByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.Debt, error) {
+func (r *debtRepository) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Debt, error) {
 	var debt model.Debt
 	err := r.db.WithContext(ctx).
 		Preload("Repayments").
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&debt).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrDebtNotFound
 		}
 		return nil, err
 	}
@@ -103,10 +89,6 @@ func (r *debtRepository) FindByUserID(ctx context.Context, userID uuid.UUID, deb
 	return debts, err
 }
 
-func (r *debtRepository) AddRepayment(ctx context.Context, debt *model.Debt, repayment *model.Repayment) error {
-	return r.AddRepaymentWithWallet(ctx, debt, repayment, nil, 0)
-}
-
 func (r *debtRepository) AddRepaymentWithWallet(ctx context.Context, debt *model.Debt, repayment *model.Repayment, walletID *uuid.UUID, balanceDelta float64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if repayment.Amount <= 0 || math.IsNaN(repayment.Amount) || math.IsInf(repayment.Amount, 0) {
@@ -120,7 +102,7 @@ func (r *debtRepository) AddRepaymentWithWallet(ctx context.Context, debt *model
 			Updates(map[string]interface{}{
 				"paid_amount": gorm.Expr("paid_amount + ?", repayment.Amount),
 				"status":      gorm.Expr("CASE WHEN paid_amount + ? >= total_amount THEN ? WHEN due_date < CAST(? AS date) THEN ? ELSE ? END", repayment.Amount, model.DebtStatusCompleted, util.Today(), model.DebtStatusOverdue, model.DebtStatusPending),
-				"updated_at":  time.Now(),
+				"updated_at":  util.Now(),
 			})
 		if result.Error != nil {
 			return result.Error
@@ -136,16 +118,10 @@ func (r *debtRepository) AddRepaymentWithWallet(ctx context.Context, debt *model
 		debt.Status = updated.Status
 		debt.UpdatedAt = updated.UpdatedAt
 
-		if walletID != nil && *walletID != uuid.Nil && balanceDelta != 0 {
-			var wallet model.Wallet
-			if err := tx.Where("id = ? AND user_id = ?", *walletID, debt.UserID).First(&wallet).Error; err != nil {
-				return fmt.Errorf("wallet not found: %w", err)
-			}
-			if err := tx.Model(&wallet).Update("balance", gorm.Expr("balance + ?", balanceDelta)).Error; err != nil {
-				return err
-			}
+		if balanceDelta == 0 {
+			return nil
 		}
-		return nil
+		return adjustWalletBalance(tx, walletID, debt.UserID, balanceDelta, true)
 	})
 }
 
@@ -154,7 +130,7 @@ func (r *debtRepository) AddRepaymentWithWallet(ctx context.Context, debt *model
 // wallet/amount to the new one in the same DB transaction. Repayments and
 // their wallet effects are untouched. A wallet deleted meanwhile is skipped on
 // the reversal side; the new wallet must exist.
-func (r *debtRepository) UpdateWithWallet(ctx context.Context, id uuid.UUID, userID uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error) {
+func (r *debtRepository) UpdateWithWallet(ctx context.Context, userID, id uuid.UUID, mutate func(debt *model.Debt) error) (*model.Debt, error) {
 	var updated model.Debt
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var debt model.Debt
@@ -207,7 +183,7 @@ func (r *debtRepository) UpdateWithWallet(ctx context.Context, id uuid.UUID, use
 // Delete soft-deletes the debt and its repayments and reverses every wallet
 // effect they had (creation + each repayment) in one DB transaction. Wallets
 // that were deleted meanwhile are skipped.
-func (r *debtRepository) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+func (r *debtRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var debt model.Debt
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -266,8 +242,17 @@ func DebtDeletionWalletReversals(debt *model.Debt, repayments []model.Repayment)
 	return out
 }
 
-func (r *debtRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.DebtSummaryResponse, error) {
-	var summary dto.DebtSummaryResponse
+// DebtSummary is the user's outstanding debts: amounts still payable /
+// receivable and the number of overdue and pending debts.
+type DebtSummary struct {
+	TotalPayable    float64
+	TotalReceivable float64
+	OverdueCount    int64
+	PendingCount    int64
+}
+
+func (r *debtRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*DebtSummary, error) {
+	var summary DebtSummary
 
 	// Total Payable (Tôi Nợ)
 	err := r.db.WithContext(ctx).

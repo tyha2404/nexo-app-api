@@ -9,11 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -34,7 +31,7 @@ func NewChatHandler(chatService service.ChatService, log *zap.Logger) *ChatHandl
 
 // StreamMessage handles sending a message and streaming AI response via Server-Sent Events (SSE)
 // @Summary Send message and stream AI response
-// @Description Stream financial advisory and tool responses using Requesty AI (OpenAI Compatible)
+// @Description Stream financial advisory and tool responses through the 9Router gateway (OpenAI compatible)
 // @Tags chat
 // @Accept json
 // @Produce text/event-stream
@@ -48,9 +45,9 @@ func NewChatHandler(chatService service.ChatService, log *zap.Logger) *ChatHandl
 // @Failure 500 {object} response.ErrorResponse "Streaming unsupported"
 // @Router /chat/stream [post]
 func (h *ChatHandler) StreamMessage(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "stream_message")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "stream_message")
 		return
 	}
 
@@ -93,6 +90,14 @@ func (h *ChatHandler) StreamMessage(w http.ResponseWriter, r *http.Request) {
 
 	eventChan := make(chan dto.ChatStreamEvent, 20)
 	go func() {
+		// The HTTP Recoverer does not cover this goroutine: an unrecovered
+		// panic here would crash the whole server. ProcessMessageStream closes
+		// eventChan in a defer, so the loop below still ends.
+		defer func() {
+			if rec := recover(); rec != nil {
+				h.log.Error("panic recovered in chat message stream", zap.Any("panic", rec), zap.Stack("stack"))
+			}
+		}()
 		if err := h.chatService.ProcessMessageStream(r.Context(), user.ID, req, eventChan); err != nil {
 			h.log.Error("error processing chat message stream", zap.Error(err))
 		}
@@ -114,14 +119,14 @@ func (h *ChatHandler) StreamMessage(w http.ResponseWriter, r *http.Request) {
 // @Tags chat
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} dto.ChatSessionResponse
+// @Success 200 {object} ChatSessionListEnvelope
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /chat/sessions [get]
 func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "list_sessions")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "list_sessions")
 		return
 	}
 
@@ -131,13 +136,7 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response.BaseResponse[[]dto.ChatSessionResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    sessions,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, sessions)
 }
 
 // GetSessionMessages returns messages in a chat session
@@ -147,16 +146,16 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Session ID"
-// @Success 200 {object} dto.ChatSessionResponse
+// @Success 200 {object} ChatSessionEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /chat/sessions/{id} [get]
 func (h *ChatHandler) GetSessionMessages(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "get_session_messages")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "get_session_messages")
 		return
 	}
 
@@ -176,13 +175,7 @@ func (h *ChatHandler) GetSessionMessages(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.ChatSessionResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *sess,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *sess)
 }
 
 // DeleteSession deletes a single chat session
@@ -192,16 +185,16 @@ func (h *ChatHandler) GetSessionMessages(w http.ResponseWriter, r *http.Request)
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Session ID"
-// @Success 200 {object} map[string]string
+// @Success 200 {object} MessageResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /chat/sessions/{id} [delete]
 func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "delete_session")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "delete_session")
 		return
 	}
 
@@ -220,13 +213,7 @@ func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response.BaseResponse[string]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    "Phiên trò chuyện đã được xóa thành công",
-	})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Phiên trò chuyện đã được xóa thành công")
 }
 
 // ClearSessions deletes all chat sessions for user
@@ -235,14 +222,14 @@ func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 // @Tags chat
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]string
+// @Success 200 {object} StringEnvelope
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /chat/clear [post]
 func (h *ChatHandler) ClearSessions(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(constant.UserContextKey).(model.User)
-	if !ok || user.ID == uuid.Nil {
-		h.errorHandler.HandleError(w, constant.ErrUnauthorized, http.StatusUnauthorized, "Unauthorized", "clear_sessions")
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		h.errorHandler.HandleError(w, err, http.StatusUnauthorized, "Unauthorized", "clear_sessions")
 		return
 	}
 
@@ -251,13 +238,7 @@ func (h *ChatHandler) ClearSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response.BaseResponse[string]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    "Đã xóa toàn bộ lịch sử trò chuyện",
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, "Đã xóa toàn bộ lịch sử trò chuyện")
 }
 
 // ListModels returns available AI models dynamically from 9Router providers
@@ -266,7 +247,7 @@ func (h *ChatHandler) ClearSessions(w http.ResponseWriter, r *http.Request) {
 // @Tags chat
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} dto.ChatModelsResponse
+// @Success 200 {object} ChatModelsEnvelope
 // @Router /chat/models [get]
 func (h *ChatHandler) ListModels(w http.ResponseWriter, r *http.Request) {
 	models, err := h.chatService.ListAvailableModels(r.Context())
@@ -275,13 +256,7 @@ func (h *ChatHandler) ListModels(w http.ResponseWriter, r *http.Request) {
 		models = []string{"auto"}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.ChatModelsResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    dto.ChatModelsResponse{Models: models},
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, dto.ChatModelsResponse{Models: models})
 }
 
 // handleActionError maps pending-action errors to explicit HTTP statuses.
@@ -308,7 +283,7 @@ func (h *ChatHandler) handleActionError(w http.ResponseWriter, err error, operat
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Action ID"
-// @Success 200 {object} dto.ChatActionResult
+// @Success 200 {object} ChatActionResultEnvelope
 // @Failure 400 {object} response.ErrorResponse "Invalid action ID"
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Unknown action or another user's action"
@@ -343,7 +318,7 @@ func (h *ChatHandler) ConfirmAction(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Action ID"
-// @Success 200 {object} dto.ChatActionResult
+// @Success 200 {object} ChatActionResultEnvelope
 // @Failure 400 {object} response.ErrorResponse "Invalid action ID"
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Unknown action or another user's action"

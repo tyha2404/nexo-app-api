@@ -66,8 +66,14 @@ type Container struct {
 	ChatHandler                *handler.ChatHandler
 }
 
-// NewContainer initializes and wires all dependencies.
-func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
+// NewContainer initializes and wires all dependencies. cfg is the
+// configuration loaded (and validated) once in cmd/server/main.go; nil means
+// the zero Config (built-in defaults), for tests.
+func NewContainer(cfg *config.Config, db *gorm.DB, logger *zap.Logger) *Container {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+
 	// 1. Initialize Repositories
 	userRepo := repository.NewUserRepo(db)
 	refreshTokenRepo := repository.NewRefreshTokenRepo(db)
@@ -83,11 +89,6 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 	ccStatementRepo := repository.NewCreditCardStatementRepository(db)
 	chatRepo := repository.NewChatRepository(db)
 	knowledgeRepo := repository.NewKnowledgeRepository(db)
-
-	cfg, _ := config.LoadConfig()
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
 
 	// 2. Initialize Services
 	authService := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JwtRefreshTTL)
@@ -121,7 +122,7 @@ func NewContainer(db *gorm.DB, logger *zap.Logger) *Container {
 		logger,
 	)
 	// 3. Initialize Handlers
-	healthHandler := handler.NewHealthHandler(db, logger)
+	healthHandler := handler.NewHealthHandler(db)
 	authHandler := handler.NewAuthHandler(authService, logger)
 	userHandler := handler.NewUserHandler(userService, logger)
 	categoryHandler := handler.NewCategoryHandler(categoryService, logger)

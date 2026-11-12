@@ -1,0 +1,41 @@
+{
+  "chatMessages": null,
+  "chatModel": "",
+  "chatTools": [],
+  "err": "",
+  "events": [
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>"
+    },
+    {
+      "type": "text_delta",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "SUCCESS",
+      "delta": "⚠️ **Chưa cấu hình API Key.**\nVui lòng cấu hình các biến môi trường `NINE_ROUTER_*` (`NINE_ROUTER_URL`, `NINE_ROUTER_API_KEY`) trong file `.env` của backend `nexo-app-api` để sử dụng trợ lý AI!"
+    },
+    {
+      "type": "done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "SUCCESS"
+    }
+  ],
+  "stored": [
+    {
+      "Role": "user",
+      "Content": "Xin chào",
+      "Status": "SUCCESS"
+    },
+    {
+      "Role": "model",
+      "Content": "⚠️ **Chưa cấu hình API Key.**\nVui lòng cấu hình các biến môi trường `NINE_ROUTER_*` (`NINE_ROUTER_URL`, `NINE_ROUTER_API_KEY`) trong file `.env` của backend `nexo-app-api` để sử dụng trợ lý AI!",
+      "Status": "SUCCESS"
+    }
+  ],
+  "streamCalls": 0,
+  "streamMessages": null,
+  "streamModel": "",
+  "txnCreated": null
+}

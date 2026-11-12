@@ -22,7 +22,7 @@ import (
 
 type mockAuthService struct {
 	loginFn    func(ctx context.Context, email string, password string) (*model.User, error)
-	registerFn func(ctx context.Context, user *model.User) (*model.User, error)
+	registerFn func(ctx context.Context, req dto.RegisterRequest) (*model.User, error)
 	changePwFn func(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 	startFn    func(ctx context.Context, userID uuid.UUID, userAgent string) (string, error)
 	refreshFn  func(ctx context.Context, refreshToken, userAgent string) (*model.User, string, error)
@@ -64,9 +64,9 @@ func (m *mockAuthService) Login(ctx context.Context, email string, password stri
 	return nil, nil
 }
 
-func (m *mockAuthService) Register(ctx context.Context, user *model.User) (*model.User, error) {
+func (m *mockAuthService) Register(ctx context.Context, req dto.RegisterRequest) (*model.User, error) {
 	if m.registerFn != nil {
-		return m.registerFn(ctx, user)
+		return m.registerFn(ctx, req)
 	}
 	return nil, nil
 }
@@ -311,18 +311,14 @@ func TestAuthHandler_Register(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got *model.User
+			var got *dto.RegisterRequest
 			mockSvc := &mockAuthService{
-				registerFn: func(ctx context.Context, user *model.User) (*model.User, error) {
-					got = user
+				registerFn: func(ctx context.Context, req dto.RegisterRequest) (*model.User, error) {
+					got = &req
 					if tt.svcErr != nil {
 						return nil, tt.svcErr
 					}
-					created := *user
-					created.ID = uuid.New()
-					created.Password = "$2a$hashed"
-					created.Role = "user"
-					return &created, nil
+					return &model.User{ID: uuid.New(), Username: req.Username, Email: req.Email, Role: "user"}, nil
 				},
 			}
 			h := NewAuthHandler(mockSvc, zap.NewNop())
@@ -348,9 +344,6 @@ func TestAuthHandler_Register(t *testing.T) {
 			if got == nil || got.Username != "new_user" || got.Email != "new@example.com" || got.Password != "password123" {
 				t.Fatalf("unexpected user passed to service: %+v", got)
 			}
-			if got.Role != "" {
-				t.Fatalf("register must not set a role from the request, got %q", got.Role)
-			}
 			if strings.Contains(rr.Body.String(), "hashed") || strings.Contains(rr.Body.String(), "password123") {
 				t.Fatalf("password must not be returned: %s", rr.Body.String())
 			}
@@ -365,9 +358,11 @@ func TestAuthHandler_Register(t *testing.T) {
 func TestAuthHandler_RegisterIgnoresRoleInBody(t *testing.T) {
 	var got *model.User
 	mockSvc := &mockAuthService{
-		registerFn: func(ctx context.Context, user *model.User) (*model.User, error) {
-			got = user
-			return user, nil
+		registerFn: func(ctx context.Context, req dto.RegisterRequest) (*model.User, error) {
+			// RegisterRequest has no role field: whatever the body says, the
+			// service only gets username, email and password.
+			got = &model.User{Username: req.Username, Email: req.Email}
+			return got, nil
 		},
 	}
 	h := NewAuthHandler(mockSvc, zap.NewNop())

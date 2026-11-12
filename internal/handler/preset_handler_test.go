@@ -272,7 +272,7 @@ func TestPresetHandler_Delete(t *testing.T) {
 		rr := httptest.NewRecorder()
 		NewPresetHandler(svc, zap.NewNop()).Delete(rr, debtTestReq(http.MethodDelete, "/presets/"+id.String(), "", &userID, id.String()))
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-		assert.Equal(t, "Preset deleted successfully", decodeJSON(t, rr)["message"])
+		assert.JSONEq(t, `{"status":200,"success":true,"message":"Preset deleted successfully","data":null}`, rr.Body.String())
 		assert.Equal(t, userID, svc.gotUser)
 		assert.Equal(t, id, svc.gotID)
 	})

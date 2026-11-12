@@ -26,16 +26,16 @@ func (r *transactionStub) Create(_ context.Context, tx *model.Transaction) error
 	tx.ID = uuid.New()
 	return nil
 }
-func (r *transactionStub) GetByID(_ context.Context, _ uuid.UUID) (*model.Transaction, error) {
+func (r *transactionStub) GetByIDForUser(_ context.Context, _, _ uuid.UUID) (*model.Transaction, error) {
 	return r.stored, nil
 }
 func (r *transactionStub) Update(_ context.Context, tx *model.Transaction) error {
 	r.stored = tx
 	return nil
 }
-func (r *transactionStub) GetSummaryByUserID(_ context.Context, _ uuid.UUID, _ map[string]interface{}) (float64, float64, int64, float64, int64, float64, error) {
+func (r *transactionStub) GetSummaryByUserID(_ context.Context, _ uuid.UUID, _ map[string]interface{}) (repository.TransactionSummary, error) {
 	r.summaryCalls++
-	return r.summary, r.summary, 1500, 0, 0, 0, nil
+	return repository.TransactionSummary{SumAmount: r.summary, SumAmountForAverage: r.summary, Total: 1500}, nil
 }
 
 type categoryStub struct {
@@ -120,12 +120,12 @@ type walletOwnerStub struct {
 	calls int
 }
 
-func (r *walletOwnerStub) GetByID(_ context.Context, id, userID uuid.UUID) (*model.Wallet, error) {
+func (r *walletOwnerStub) GetByIDForUser(_ context.Context, userID, id uuid.UUID) (*model.Wallet, error) {
 	r.calls++
 	if owner, ok := r.owned[id]; ok && owner == userID {
 		return &model.Wallet{ID: id, UserID: userID}, nil
 	}
-	return nil, nil
+	return nil, repository.ErrWalletNotFound
 }
 
 func TestCreateTransactionRejectsForeignWallet(t *testing.T) {

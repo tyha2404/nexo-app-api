@@ -6,7 +6,7 @@ import (
 	"math"
 
 	"context"
-	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 
 	"github.com/google/uuid"
@@ -17,20 +17,23 @@ import (
 
 type CreditCardStatementRepository interface {
 	Create(ctx context.Context, s *model.CreditCardStatement) error
-	GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.CreditCardStatement, error)
-	GetByWalletID(ctx context.Context, walletID uuid.UUID, userID uuid.UUID) ([]model.CreditCardStatement, error)
+	GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.CreditCardStatement, error)
 	List(ctx context.Context, userID uuid.UUID, walletID *uuid.UUID, year *int, month *int) ([]model.CreditCardStatement, error)
-	Update(ctx context.Context, s *model.CreditCardStatement) error
-	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	// Update locks the user's statement row, applies mutate to it and writes
+	// back only the editable columns (see statementEditableColumns).
+	Update(ctx context.Context, userID, id uuid.UUID, mutate func(s *model.CreditCardStatement) error) (*model.CreditCardStatement, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 	PayStatement(ctx context.Context, userID, id uuid.UUID, amount float64, sourceWalletID *uuid.UUID) (*model.CreditCardStatement, error)
 }
 
 var (
+	// ErrStatementNotFound: no live statement with that id belongs to the user.
+	ErrStatementNotFound = constant.NewKindError(constant.ErrNotFound, "không tìm thấy kỳ sao kê")
 	// ErrStatementAlreadyPaid is returned when paying a statement whose status is PAID.
-	ErrStatementAlreadyPaid = errors.New("kỳ sao kê đã được thanh toán đủ")
+	ErrStatementAlreadyPaid = constant.NewKindError(constant.ErrInvalidInput, "kỳ sao kê đã được thanh toán đủ")
 	// ErrStatementInvalidPayment is returned for a non-positive amount or one
 	// larger than the remaining statement balance.
-	ErrStatementInvalidPayment = errors.New("số tiền thanh toán phải lớn hơn 0 và không vượt số dư còn lại của sao kê")
+	ErrStatementInvalidPayment = constant.NewKindError(constant.ErrInvalidInput, "số tiền thanh toán phải lớn hơn 0 và không vượt số dư còn lại của sao kê")
 )
 
 type creditCardStatementRepository struct {
@@ -42,38 +45,31 @@ func NewCreditCardStatementRepository(db *gorm.DB) CreditCardStatementRepository
 }
 
 func (r *creditCardStatementRepository) Create(ctx context.Context, s *model.CreditCardStatement) error {
-	err := r.db.WithContext(ctx).Create(s).Error
-	// 23505 = unique_violation: a statement for this card and period already exists
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	return mapStatementUniqueViolation(r.db.WithContext(ctx).Create(s).Error)
+}
+
+// mapStatementUniqueViolation turns a unique_violation (23505: a statement for
+// this card and period already exists) into constant.ErrAlreadyExists.
+func mapStatementUniqueViolation(err error) error {
+	if isUniqueViolation(err) {
 		return fmt.Errorf("%w: credit card statement for this period", constant.ErrAlreadyExists)
 	}
 	return err
 }
 
-func (r *creditCardStatementRepository) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.CreditCardStatement, error) {
+func (r *creditCardStatementRepository) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.CreditCardStatement, error) {
 	var s model.CreditCardStatement
 	err := r.db.WithContext(ctx).
 		Preload("Wallet", withDeleted).
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&s).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStatementNotFound
 		}
 		return nil, err
 	}
 	return &s, nil
-}
-
-func (r *creditCardStatementRepository) GetByWalletID(ctx context.Context, walletID uuid.UUID, userID uuid.UUID) ([]model.CreditCardStatement, error) {
-	var items []model.CreditCardStatement
-	err := r.db.WithContext(ctx).
-		Preload("Wallet", withDeleted).
-		Where("wallet_id = ? AND user_id = ?", walletID, userID).
-		Order("statement_year DESC, statement_month DESC, statement_date DESC").
-		Find(&items).Error
-	return items, err
 }
 
 func (r *creditCardStatementRepository) List(ctx context.Context, userID uuid.UUID, walletID *uuid.UUID, year *int, month *int) ([]model.CreditCardStatement, error) {
@@ -96,13 +92,59 @@ func (r *creditCardStatementRepository) List(ctx context.Context, userID uuid.UU
 	return items, err
 }
 
-func (r *creditCardStatementRepository) Update(ctx context.Context, s *model.CreditCardStatement) error {
-	return r.db.WithContext(ctx).Save(s).Error
+// statementEditableColumns are the columns UpdateStatement may change. id,
+// user_id, wallet_id and created_at are never written by an edit.
+var statementEditableColumns = []string{
+	"statement_month", "statement_year", "statement_date", "due_date", "statement_balance",
+	"minimum_payment", "previous_balance", "paid_amount", "status", "note", "updated_at",
+}
+
+// Update edits the user's statement in one DB transaction: the live row is
+// locked (FOR UPDATE, like PayStatement) so mutate sees the committed
+// paid_amount and a concurrent payment can no longer be overwritten by a stale
+// read-modify-write. Only statementEditableColumns are written, scoped by id
+// AND user_id (an explicit Select also writes zero values). Returns
+// constant.ErrNotFound when no live statement with that id belongs to the
+// user, constant.ErrAlreadyExists on a unique violation, or mutate's error.
+func (r *creditCardStatementRepository) Update(ctx context.Context, userID, id uuid.UUID, mutate func(s *model.CreditCardStatement) error) (*model.CreditCardStatement, error) {
+	var updated model.CreditCardStatement
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stmt model.CreditCardStatement
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", id, userID).
+			First(&stmt).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrStatementNotFound
+			}
+			return err
+		}
+		if err := mutate(&stmt); err != nil {
+			return err
+		}
+		stmt.ID, stmt.UserID = id, userID // an edit never moves the row
+		result := tx.Model(&stmt).Omit(clause.Associations).
+			Where("id = ? AND user_id = ?", id, userID).
+			Select(statementEditableColumns).
+			Updates(&stmt)
+		if result.Error != nil {
+			return mapStatementUniqueViolation(result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrStatementNotFound
+		}
+		return tx.Preload("Wallet", withDeleted).
+			Where("id = ? AND user_id = ?", id, userID).
+			First(&updated).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
 
 // Delete soft-deletes the user's statement. constant.ErrNotFound when no live
 // statement with that id belongs to the user.
-func (r *creditCardStatementRepository) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+func (r *creditCardStatementRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", id, userID).
 		Delete(&model.CreditCardStatement{})
@@ -124,14 +166,17 @@ func (r *creditCardStatementRepository) Delete(ctx context.Context, id uuid.UUID
 //     is negative debt) and its statement_balance snapshot set to the remainder;
 //  5. the statement's paid_amount/status are updated.
 //
-// Any error rolls back every step. Returns (nil, nil) if the statement does not
-// exist for this user (same convention as GetByID).
+// Any error rolls back every step. Returns ErrStatementNotFound if the
+// statement does not exist for this user.
 func (r *creditCardStatementRepository) PayStatement(ctx context.Context, userID, id uuid.UUID, amount float64, sourceWalletID *uuid.UUID) (*model.CreditCardStatement, error) {
 	var stmt model.CreditCardStatement
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND user_id = ?", id, userID).
 			First(&stmt).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrStatementNotFound
+			}
 			return err
 		}
 		if stmt.Status == model.StatementStatusPaid {
@@ -146,13 +191,11 @@ func (r *creditCardStatementRepository) PayStatement(ctx context.Context, userID
 			if *sourceWalletID == stmt.WalletID {
 				return fmt.Errorf("source wallet must differ from the card wallet: %w", ErrStatementInvalidPayment)
 			}
-			res := tx.Model(&model.Wallet{}).
-				Where("id = ? AND user_id = ?", *sourceWalletID, userID).
-				Update("balance", gorm.Expr("balance - ?", amount))
-			if res.Error != nil {
-				return res.Error
+			found, err := applyWalletEffect(tx, sourceWalletID, userID, -amount)
+			if err != nil {
+				return err
 			}
-			if res.RowsAffected == 0 {
+			if !found {
 				return fmt.Errorf("source wallet %w", constant.ErrNotFound)
 			}
 		}
@@ -181,9 +224,6 @@ func (r *creditCardStatementRepository) PayStatement(ctx context.Context, userID
 		stmt.Status = newStatus
 		return nil
 	})
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -201,10 +241,7 @@ func ApplyStatementPayment(statementBalance, paidAmount, amount float64) (float6
 		return 0, "", ErrStatementInvalidPayment
 	}
 	newPaid := roundMoney(paidAmount + amount)
-	if newPaid >= roundMoney(statementBalance) {
-		return newPaid, model.StatementStatusPaid, nil
-	}
-	return newPaid, model.StatementStatusPartiallyPaid, nil
+	return newPaid, model.StatementStatusFor(roundMoney(statementBalance), newPaid), nil
 }
 
 func roundMoney(v float64) float64 {

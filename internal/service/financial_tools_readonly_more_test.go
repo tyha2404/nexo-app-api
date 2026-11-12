@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -15,22 +18,26 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/util"
 )
 
-func TestExecuteReadOnlyFinancialTool_NotHandledFallsThrough(t *testing.T) {
+func TestExecuteFinancialTool_RefusesWriteTools(t *testing.T) {
 	e := newToolEnv(t)
-	res, handled := e.svc.executeReadOnlyFinancialTool(context.Background(), e.userID, "create_transaction", nil)
-	assert.False(t, handled)
+	e.addCategory("Ăn uống", model.CategoryTypeExpense)
+	res, err := e.svc.executeFinancialTool(context.Background(), e.userID, toolCall(t, "c", "create_transaction", map[string]interface{}{"amount": 1.0, "walletName": "tiền mặt"}))
+	require.Error(t, err, "write tools only run through a confirmed proposal")
 	assert.Nil(t, res)
+	assert.Empty(t, e.txnSvc.created)
 }
 
-func TestRunTool_HidesInternalErrors(t *testing.T) {
+func TestRunToolCall_HidesInternalErrors(t *testing.T) {
 	e := newToolEnv(t)
-	ok := &FinancialToolResult{ToolTitle: "ok", ResultJSON: "{}"}
-	assert.Same(t, ok, e.svc.runTool(ok, nil))
+	turn := &chatTurn{}
 
-	res := e.svc.runTool(nil, errors.New("pq: relation \"transactions\" does not exist"))
+	e.txnRepo.err = errors.New("pq: relation \"transactions\" does not exist")
+	res := e.svc.runToolCall(context.Background(), e.userID, turn, toolCall(t, "c", "search_transactions", nil))
 	assert.Equal(t, hiddenSystemError, toolError(t, res))
+	assert.Equal(t, "Lỗi thực thi công cụ", res.ToolTitle)
 
-	res = e.svc.runTool(nil, constant.ErrNotFound)
+	e.txnRepo.err = constant.ErrNotFound
+	res = e.svc.runToolCall(context.Background(), e.userID, turn, toolCall(t, "c", "search_transactions", nil))
 	assert.Equal(t, constant.ErrNotFound.Error(), toolError(t, res))
 }
 
@@ -162,14 +169,8 @@ func TestToolGetMonthlyTrend(t *testing.T) {
 				wantMonth := cur.AddDate(0, -(tc.want - 1 - i), 0).Format("2006-01")
 				assert.Equal(t, wantMonth, p.(map[string]interface{})["month"])
 			}
-			for _, r := range e.report.ranges {
-				s, err := time.Parse("2006-01-02", r[0])
-				require.NoError(t, err)
-				end, err := time.Parse("2006-01-02", r[1])
-				require.NoError(t, err)
-				assert.Equal(t, 1, s.Day())
-				assert.Equal(t, s.AddDate(0, 1, -1), end, "range covers the whole month")
-			}
+			assert.Equal(t, []int{tc.want}, e.report.trendMonths, "one trend query for the whole window")
+			assert.Empty(t, e.report.ranges, "no per-month summary queries")
 		})
 	}
 
@@ -187,6 +188,59 @@ func TestToolGetMonthlyTrend(t *testing.T) {
 
 	e.report.summaryErr = errInternalRepo
 	assert.Equal(t, hiddenSystemError, toolError(t, e.call(t, "get_monthly_trend", nil)))
+}
+
+// referenceMonthlyTrend is the pre-refactor get_monthly_trend algorithm (one
+// GetSummary per month), kept to prove the tool's output did not change.
+func referenceMonthlyTrend(t *testing.T, e *toolEnv, monthsBack int) string {
+	t.Helper()
+	currentMonthStart, _ := util.MonthRange(util.Now())
+	type MonthPoint struct {
+		Month       string  `json:"month"`
+		Income      float64 `json:"income"`
+		Expense     float64 `json:"expense"`
+		Investment  float64 `json:"investment"`
+		NetSavings  float64 `json:"netSavings"`
+		SavingsRate float64 `json:"savingsRatePercent"`
+	}
+	points := make([]MonthPoint, 0, monthsBack)
+	totalIncome, totalExpense := 0.0, 0.0
+	for i := monthsBack - 1; i >= 0; i-- {
+		start := currentMonthStart.AddDate(0, -i, 0)
+		end := start.AddDate(0, 1, -1)
+		summary, err := e.report.GetSummary(context.Background(), e.userID, start.Format(time.DateOnly), end.Format(time.DateOnly))
+		require.NoError(t, err)
+		net := summary.TotalIncome - summary.TotalExpense
+		rate := 0.0
+		if summary.TotalIncome > 0 {
+			rate = (net / summary.TotalIncome) * 100.0
+		}
+		points = append(points, MonthPoint{Month: start.Format("2006-01"), Income: summary.TotalIncome, Expense: summary.TotalExpense,
+			Investment: summary.TotalInvestment, NetSavings: net, SavingsRate: math.Round(rate*10) / 10})
+		totalIncome += summary.TotalIncome
+		totalExpense += summary.TotalExpense
+	}
+	raw, _ := json.Marshal(map[string]interface{}{
+		"months_count":          monthsBack,
+		"monthly_points":        points,
+		"avg_income_per_month":  math.Round(totalIncome/float64(monthsBack)*100) / 100,
+		"avg_expense_per_month": math.Round(totalExpense/float64(monthsBack)*100) / 100,
+		"avg_savings_per_month": math.Round((totalIncome-totalExpense)/float64(monthsBack)*100) / 100,
+	})
+	return string(raw)
+}
+
+func TestToolGetMonthlyTrend_MatchesPerMonthAlgorithm(t *testing.T) {
+	e := newToolEnv(t)
+	cur, _ := util.MonthRange(util.Now())
+	e.report.summaries[cur.Format("2006-01-02")] = &dto.SummaryReport{TotalIncome: 10_000_000, TotalExpense: 7_333_333, TotalInvestment: 1_000_000}
+	e.report.summaries[cur.AddDate(0, -1, 0).Format("2006-01-02")] = &dto.SummaryReport{TotalExpense: 1_000_000, TotalInvestment: 250_000}
+	e.report.summaries[cur.AddDate(0, -4, 0).Format("2006-01-02")] = &dto.SummaryReport{TotalIncome: 3_000_000, TotalExpense: 3_500_001}
+	for _, months := range []float64{2, 3, 6, 12} {
+		res := e.call(t, "get_monthly_trend", map[string]interface{}{"months": months})
+		assert.Equal(t, fmt.Sprintf("Đang phân tích xu hướng %d tháng...", int(months)), res.ToolTitle)
+		assert.Equal(t, referenceMonthlyTrend(t, e, int(months)), res.ResultJSON, "months=%v", months)
+	}
 }
 
 func TestToolGetWalletDetail(t *testing.T) {
@@ -346,7 +400,7 @@ func TestPreviewCreateCategory(t *testing.T) {
 	p, errRes, err = e.svc.previewCreateCategory(ctx, e.userID, map[string]interface{}{"name": " Thú cưng ", "type": "investment", "description": " chó "})
 	require.NoError(t, err)
 	require.Nil(t, errRes)
-	assert.Equal(t, map[string]interface{}{"name": "Thú cưng", "type": "INVESTMENT", "description": "chó"}, p.args)
+	assert.Equal(t, &createCategoryArgs{Name: "Thú cưng", Type: "INVESTMENT", Description: "chó"}, p.args)
 	assert.Contains(t, p.description, "Đầu tư")
 	assert.Empty(t, e.cats.created, "preview never writes")
 }
@@ -375,14 +429,14 @@ func TestPreviewDebtRepayment(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, errRes)
 	assert.Equal(t, "Ghi trả nợ", p.kind)
-	assert.Equal(t, "Vay anh Nam", p.args["debtTitle"], "normalised to the stored title")
+	assert.Equal(t, payable.ID, p.args.(*debtRepaymentArgs).DebtID, "resolved to the stored debt")
 	assert.Equal(t, payable.ID.String(), p.data["debtId"])
 	assert.Contains(t, p.description, "600.000")
 
 	p, _, err = e.svc.previewDebtRepayment(ctx, e.userID, map[string]interface{}{"debtTitle": "Lan", "amount": "50000"})
 	require.NoError(t, err)
 	assert.Equal(t, "Ghi thu nợ", p.kind)
-	assert.Equal(t, 50_000.0, p.args["amount"])
+	assert.Equal(t, 50_000.0, p.args.(*debtRepaymentArgs).Amount)
 	assert.Empty(t, e.debt.repaid, "preview never writes")
 
 	e.debt.getErr = errInternalRepo
@@ -410,26 +464,34 @@ func TestPreviewSetBudget(t *testing.T) {
 	p, errRes, err := e.svc.previewSetBudget(ctx, e.userID, map[string]interface{}{"categoryName": "ăn uống", "amount": 2_000_000.0})
 	require.NoError(t, err)
 	require.Nil(t, errRes)
-	assert.Equal(t, "2026-11-01", p.args["periodStart"])
-	assert.Equal(t, "Ăn uống", p.args["categoryName"])
+	budgetArgs := p.args.(*setBudgetArgs)
+	assert.Equal(t, "2026-11-01", budgetArgs.PeriodStart.Format("2006-01-02"))
+	assert.Equal(t, "Ăn uống", budgetArgs.CategoryName)
 
 	p, _, err = e.svc.previewSetBudget(ctx, e.userID, map[string]interface{}{"categoryName": "Ăn uống", "amount": 1.0, "periodStart": "2027-01-01"})
 	require.NoError(t, err)
-	assert.Equal(t, "2027-01-01", p.args["periodStart"])
+	assert.Equal(t, "2027-01-01", p.args.(*setBudgetArgs).PeriodStart.Format("2006-01-02"))
 	assert.Empty(t, e.budget.created, "preview never writes")
 }
 
 func TestPreviewSetTargetValidation(t *testing.T) {
-	_, errRes := previewSetTarget(map[string]interface{}{"targetType": "EXPENSE", "targetAmount": 1.0, "month": 13.0})
+	e := newToolEnv(t)
+	preview := func(args map[string]interface{}) (*writeProposal, *FinancialToolResult) {
+		p, errRes, err := e.svc.previewSetTarget(context.Background(), e.userID, args)
+		require.NoError(t, err)
+		return p, errRes
+	}
+	_, errRes := preview(map[string]interface{}{"targetType": "EXPENSE", "targetAmount": 1.0, "month": 13.0})
 	assert.NotEmpty(t, toolError(t, errRes))
-	_, errRes = previewSetTarget(map[string]interface{}{"targetType": "LOTTERY", "targetAmount": 1.0})
+	_, errRes = preview(map[string]interface{}{"targetType": "LOTTERY", "targetAmount": 1.0})
 	assert.NotEmpty(t, toolError(t, errRes))
-	_, errRes = previewSetTarget(map[string]interface{}{"targetType": "EXPENSE"})
+	_, errRes = preview(map[string]interface{}{"targetType": "EXPENSE"})
 	assert.NotEmpty(t, toolError(t, errRes))
-	p, errRes := previewSetTarget(map[string]interface{}{"targetType": "spending", "targetAmount": 3.0})
+	p, errRes := preview(map[string]interface{}{"targetType": "spending", "targetAmount": 3.0})
 	require.Nil(t, errRes)
-	assert.Equal(t, "EXPENSE", p.args["targetType"])
-	assert.Equal(t, float64(util.Now().Month()), p.args["month"])
+	targetArgs := p.args.(*setTargetArgs)
+	assert.Equal(t, "EXPENSE", targetArgs.TargetType)
+	assert.Equal(t, int(e.clock.Month()), targetArgs.Month)
 }
 
 func TestPreviewTransferAndCreateDebtErrors(t *testing.T) {
@@ -464,10 +526,10 @@ func TestPreviewTransferAndCreateDebtErrors(t *testing.T) {
 	require.ErrorIs(t, err, errInternalRepo)
 	assert.Empty(t, e.wallet.transfers)
 
-	p, errRes = previewCreateDebt(map[string]interface{}{"title": "Vay", "totalAmount": 1.0, "dueDate": "soon"})
+	p, errRes, _ = e.svc.previewCreateDebt(ctx, e.userID, map[string]interface{}{"title": "Vay", "totalAmount": 1.0, "dueDate": "soon"})
 	require.Nil(t, errRes)
-	assert.Equal(t, "", p.args["dueDate"])
-	assert.Equal(t, "PAYABLE", p.args["type"])
+	assert.Nil(t, p.args.(*createDebtArgs).DueDate)
+	assert.Equal(t, model.DebtTypePayable, p.args.(*createDebtArgs).Type)
 	assert.Equal(t, "Ghi khoản đi vay", p.kind)
 }
 
@@ -598,15 +660,16 @@ func TestConfirmAction_ToolErrorKeepsPending(t *testing.T) {
 	require.NoError(t, err)
 	actionID := uuid.MustParse(res.ActionCard.Data.(map[string]interface{})["actionId"].(string))
 
-	// The category disappears before confirmation: the tool returns an error payload.
-	e.cats.rows = nil
+	// The category disappears before confirmation (CreateBudget reports it
+	// not found): the tool returns an error payload.
+	e.budget.createErr = fmt.Errorf("category %w", constant.ErrNotFound)
 	_, err = e.svc.ConfirmAction(context.Background(), e.userID, actionID)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrPendingActionFailed)
+	assert.Contains(t, err.Error(), "Không tìm thấy danh mục 'Ăn uống'")
 	got, getErr := e.svc.pendingActions.Get(e.userID, actionID)
 	require.NoError(t, getErr)
 	assert.Equal(t, PendingActionPending, got.Status, "a failed confirm can be retried")
 
-	e.addCategory("Ăn uống", model.CategoryTypeExpense)
 	e.budget.createErr = constant.ErrAlreadyExists
 	_, err = e.svc.ConfirmAction(context.Background(), e.userID, actionID)
 	assert.ErrorIs(t, err, ErrPendingActionFailed, "business errors are reported as a failed action")
@@ -647,4 +710,30 @@ func TestToolGetDebtDetail_IgnoresUntitledDebts(t *testing.T) {
 	// Exact title wins over an earlier containment match.
 	out = decodeTool(t, e.call(t, "get_debt_detail", map[string]interface{}{"debtTitle": "vay anh nam"}))
 	assert.Equal(t, nam.ID.String(), out["id"])
+}
+
+func TestToolSearchTransactions_PrefersExactCategoryName(t *testing.T) {
+	e := newToolEnv(t)
+	e.addCategory("Ăn uống ngoài", model.CategoryTypeExpense)
+	food := e.addCategory("Ăn uống", model.CategoryTypeExpense)
+
+	e.call(t, "search_transactions", map[string]interface{}{"categoryName": "ăn uống"})
+	assert.Equal(t, food.ID.String(), e.txnRepo.lastFilters["categoryId"], "exact name wins over an earlier partial match")
+}
+
+func TestToolGetWalletDetail_ReportsAmbiguousName(t *testing.T) {
+	e := newToolEnv(t)
+	e.wallet.summary = &dto.WalletSummaryResponse{Wallets: []dto.WalletResponse{
+		{ID: uuid.New(), Name: "Techcombank"},
+		{ID: uuid.New(), Name: "Techcombank Visa"},
+	}}
+	e.txnRepo.lastFilters = nil
+
+	out := decodeTool(t, e.call(t, "get_wallet_detail", map[string]interface{}{"walletName": "techcom"}))
+	assert.Contains(t, out["error"], "nhiều ví")
+	assert.ElementsMatch(t, []interface{}{"Techcombank", "Techcombank Visa"}, out["hints"])
+	assert.Nil(t, e.txnRepo.lastFilters, "no lookup with a guessed wallet")
+
+	e.call(t, "get_wallet_detail", map[string]interface{}{"walletName": "techcombank"})
+	assert.Equal(t, e.wallet.summary.Wallets[0].ID.String(), e.txnRepo.lastFilters["walletId"], "exact name preferred")
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"gorm.io/gorm"
 )
 
@@ -41,6 +40,16 @@ func ParsePagination(r *http.Request) (page, limit int) {
 	return page, limit
 }
 
+// QueryInt returns the integer query parameter key, 0 when it is missing or
+// not an integer. Services apply their own defaults to 0 / out-of-range values.
+func QueryInt(r *http.Request, key string) int {
+	v, err := strconv.Atoi(r.URL.Query().Get(key))
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
 // IsNotFoundError reports whether err means the requested record does not
 // exist (or does not belong to the caller, which is reported the same way).
 func IsNotFoundError(err error) bool {
@@ -56,29 +65,23 @@ func GetUserFromContext(r *http.Request) (*model.User, error) {
 	return &user, nil
 }
 
-// ParseUUIDFromPath extracts a UUID from the URL path parameters
+// pathParamError reports an unparsable URL path parameter. It matches
+// constant.ErrInvalidInput (errors.Is) while keeping the parser's own text, so
+// the `error` detail of a 400 response is the same as before handlers shared
+// ParseUUIDFromPath (e.g. "invalid UUID length: 3").
+type pathParamError struct{ err error }
+
+func (e pathParamError) Error() string   { return e.err.Error() }
+func (e pathParamError) Unwrap() []error { return []error{constant.ErrInvalidInput, e.err} }
+
+// ParseUUIDFromPath extracts a UUID from the URL path parameters. The error
+// matches constant.ErrInvalidInput.
 func ParseUUIDFromPath(r *http.Request, param string) (uuid.UUID, error) {
-	idStr := chi.URLParam(r, param)
-	id, err := uuid.Parse(idStr)
+	id, err := uuid.Parse(chi.URLParam(r, param))
 	if err != nil {
-		return uuid.Nil, constant.ErrInvalidInput
+		return uuid.Nil, pathParamError{err: err}
 	}
 	return id, nil
-}
-
-// ParseQueryInt extracts an integer from query parameters with a default value
-func ParseQueryInt(r *http.Request, key string, defaultValue int) int {
-	valueStr := r.URL.Query().Get(key)
-	if valueStr == "" {
-		return defaultValue
-	}
-
-	value, err := strconv.Atoi(valueStr)
-	if err != nil || value < 0 {
-		return defaultValue
-	}
-
-	return value
 }
 
 // ParseQueryIntWithValidation extracts an integer from query parameters with validation
@@ -101,16 +104,6 @@ func DecodeJSONBody(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-// ValidateRequired checks if required fields are present in the request
-func ValidateRequired(fields map[string]string) error {
-	for _, value := range fields {
-		if value == "" {
-			return constant.ErrInvalidInput
-		}
-	}
-	return nil
-}
-
 // BuildFilterMap creates a filter map from query parameters
 func BuildFilterMap(r *http.Request, filterKeys []string) map[string]interface{} {
 	filters := make(map[string]interface{})
@@ -123,29 +116,4 @@ func BuildFilterMap(r *http.Request, filterKeys []string) map[string]interface{}
 	}
 
 	return filters
-}
-
-// SetCommonHeaders sets common HTTP headers for responses
-func SetCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("X-XSS-Protection", "1; mode=block")
-}
-
-// IsAuthenticated checks if the user is authenticated
-func IsAuthenticated(r *http.Request) bool {
-	_, err := GetUserFromContext(r)
-	return err == nil
-}
-
-// RequireAuthentication middleware helper
-func RequireAuthentication(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !IsAuthenticated(r) {
-			response.SendError(w, http.StatusUnauthorized, "Unauthorized", constant.ErrUnauthorized)
-			return
-		}
-		next(w, r)
-	}
 }

@@ -28,6 +28,23 @@ definitions:
     required:
     - amount
     type: object
+  dto.AlertResponse:
+    properties:
+      alertType:
+        type: string
+      budgetId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      triggeredAt:
+        type: string
+      userId:
+        type: string
+    type: object
   dto.AllocatedWalletDetail:
     properties:
       allocatedAmount:
@@ -65,6 +82,45 @@ definitions:
       sourceWalletId:
         type: string
       totalAllocated:
+        type: number
+    type: object
+  dto.BudgetResponse:
+    properties:
+      amount:
+        type: number
+      categoryId:
+        type: string
+      categoryName:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      periodStart:
+        type: string
+      periodType:
+        type: string
+      userId:
+        type: string
+    type: object
+  dto.CategoryBreakdownItem:
+    properties:
+      categoryId:
+        type: string
+      categoryName:
+        type: string
+      percentage:
+        type: number
+      totalAmount:
+        type: number
+    type: object
+  dto.CategoryBreakdownReport:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.CategoryBreakdownItem'
+        type: array
+      totalExpense:
         type: number
     type: object
   dto.ChangePasswordRequest:
@@ -160,6 +216,25 @@ definitions:
       updatedAt:
         type: string
     type: object
+  dto.CreateBudgetRequest:
+    properties:
+      amount:
+        type: number
+      categoryId:
+        type: string
+      periodStart:
+        type: string
+      periodType:
+        enum:
+        - monthly
+        - yearly
+        type: string
+    required:
+    - amount
+    - categoryId
+    - periodStart
+    - periodType
+    type: object
   dto.CreateCategoryRequest:
     properties:
       description:
@@ -186,6 +261,38 @@ definitions:
     - type
     type: object
   dto.CreateCostRequest:
+    type: object
+  dto.CreateDebtRequest:
+    type: object
+  dto.CreatePresetRequest:
+    properties:
+      amount:
+        maximum: 9999999999
+        type: number
+      categoryId:
+        type: string
+      description:
+        maxLength: 255
+        type: string
+      icon:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 100
+        type: string
+      sortOrder:
+        type: integer
+      type:
+        enum:
+        - INCOME
+        - EXPENSE
+        - INVESTMENT
+        type: string
+    required:
+    - amount
+    - categoryId
+    - name
+    - type
     type: object
   dto.CreateStatementRequest:
     properties:
@@ -405,6 +512,45 @@ definitions:
       walletId:
         type: string
     type: object
+  dto.DebtSummaryResponse:
+    properties:
+      overdueCount:
+        type: integer
+      pendingCount:
+        type: integer
+      totalPayable:
+        type: number
+      totalReceivable:
+        type: number
+    type: object
+  dto.ExpenseSummary:
+    properties:
+      dailyAllowance:
+        type: number
+      isOverBudget:
+        type: boolean
+      overspentAmount:
+        type: number
+      remainingAmount:
+        type: number
+      spentAmount:
+        type: number
+      targetAmount:
+        type: number
+    type: object
+  dto.InvestmentSummary:
+    properties:
+      investedAmount:
+        type: number
+      isTargetReached:
+        type: boolean
+      remainingAmount:
+        type: number
+      surplusAmount:
+        type: number
+      targetAmount:
+        type: number
+    type: object
   dto.LoginRequest:
     properties:
       email:
@@ -445,6 +591,11 @@ definitions:
         type: number
       income:
         description: Total income for the month
+        type: number
+      investment:
+        description: |-
+          Investment is the month's active (HOLDING) investment, the same
+          definition as /reports/summary totalInvestment.
         type: number
       label:
         description: e.g. "T10/25"
@@ -516,6 +667,29 @@ definitions:
         type: string
     required:
     - amount
+    type: object
+  dto.PresetResponse:
+    properties:
+      amount:
+        type: number
+      categoryId:
+        type: string
+      categoryName:
+        type: string
+      description:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      sortOrder:
+        type: integer
+      type:
+        type: string
+      userId:
+        type: string
     type: object
   dto.RefreshTokenRequest:
     properties:
@@ -616,6 +790,17 @@ definitions:
       walletName:
         type: string
     type: object
+  dto.SummaryReport:
+    properties:
+      realizedPnL:
+        type: number
+      totalExpense:
+        type: number
+      totalIncome:
+        type: number
+      totalInvestment:
+        type: number
+    type: object
   dto.TagSummary:
     properties:
       count:
@@ -634,6 +819,23 @@ definitions:
       totalIncome:
         example: 0
         type: number
+    type: object
+  dto.TargetSummaryResponse:
+    properties:
+      currentDay:
+        type: integer
+      daysInMonth:
+        type: integer
+      daysRemaining:
+        type: integer
+      expense:
+        $ref: '#/definitions/dto.ExpenseSummary'
+      investment:
+        $ref: '#/definitions/dto.InvestmentSummary'
+      month:
+        type: integer
+      year:
+        type: integer
     type: object
   dto.TokenResponse:
     properties:
@@ -702,6 +904,21 @@ definitions:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
     type: object
+  dto.TransactionSummaryDTO:
+    properties:
+      holdingAmount:
+        type: number
+      holdingCount:
+        type: integer
+      realizedPnl:
+        type: number
+      sumAmount:
+        type: number
+      sumAmountForAverage:
+        type: number
+      total:
+        type: integer
+    type: object
   dto.TransferMoneyRequest:
     properties:
       amount:
@@ -721,6 +938,16 @@ definitions:
     - amount
     - fromWalletId
     - toWalletId
+    type: object
+  dto.UpdateBudgetRequest:
+    properties:
+      amount:
+        type: number
+      periodType:
+        enum:
+        - monthly
+        - yearly
+        type: string
     type: object
   dto.UpdateCategoryRequest:
     properties:
@@ -747,6 +974,32 @@ definitions:
   dto.UpdateCostRequest:
     type: object
   dto.UpdateDebtRequest:
+    type: object
+  dto.UpdatePresetRequest:
+    properties:
+      amount:
+        maximum: 9999999999
+        type: number
+      categoryId:
+        type: string
+      description:
+        maxLength: 255
+        type: string
+      icon:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      sortOrder:
+        type: integer
+      type:
+        enum:
+        - INCOME
+        - EXPENSE
+        - INVESTMENT
+        type: string
     type: object
   dto.UpdateStatementRequest:
     properties:
@@ -867,6 +1120,30 @@ definitions:
         - JAR
         example: CASH
     type: object
+  dto.UpsertTargetRequest:
+    properties:
+      month:
+        maximum: 12
+        minimum: 1
+        type: integer
+      targetAmount:
+        maximum: 9999999999
+        type: number
+      targetType:
+        enum:
+        - EXPENSE
+        - INVESTMENT
+        type: string
+      year:
+        maximum: 2100
+        minimum: 2000
+        type: integer
+    required:
+    - month
+    - targetAmount
+    - targetType
+    - year
+    type: object
   dto.UserResponse:
     properties:
       createdAt:
@@ -971,19 +1248,282 @@ definitions:
       userId:
         type: string
     type: object
+  handler.AlertPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.AlertResponse'
+        type: array
+      limit:
+        type: integer
+      message:
+        type: string
+      page:
+        type: integer
+      status:
+        type: integer
+      success:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  handler.AutoAllocateEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.AutoAllocateResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.BudgetEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.BudgetResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.BudgetPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.BudgetResponse'
+        type: array
+      limit:
+        type: integer
+      message:
+        type: string
+      page:
+        type: integer
+      status:
+        type: integer
+      success:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  handler.CategoryBreakdownEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.CategoryBreakdownReport'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.CategoryEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/model.Category'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.CategoryPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/model.Category'
+        type: array
+      limit:
+        type: integer
+      message:
+        type: string
+      page:
+        type: integer
+      status:
+        type: integer
+      success:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  handler.ChangePasswordEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.ChangePasswordResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.ChatActionResultEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.ChatActionResult'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.ChatModelsEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.ChatModelsResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.ChatSessionEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.ChatSessionResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.ChatSessionListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.ChatSessionResponse'
+        type: array
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.CostEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/model.Cost'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.CostPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/model.Cost'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      status:
+        type: integer
+      success:
+        type: boolean
+      total:
+        type: integer
+    type: object
   handler.DailyReportResponse:
     properties:
       data:
         $ref: '#/definitions/dto.DailyReport'
+      message:
+        type: string
       status:
         type: integer
       success:
+        type: boolean
+    type: object
+  handler.DebtEnvelopeResponse:
+    properties:
+      data:
+        $ref: '#/definitions/dto.DebtResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.DebtListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.DebtResponse'
+        type: array
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.DebtSummaryEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.DebtSummaryResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.LoginEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.LoginResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.LogoutEnvelope:
+    properties:
+      data:
+        additionalProperties:
+          type: string
+        type: object
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.MessageResponse:
+    properties:
+      data:
+        type: object
+      message:
+        example: Transaction deleted successfully
+        type: string
+      status:
+        example: 200
+        type: integer
+      success:
+        example: true
         type: boolean
     type: object
   handler.MonthlyTrendResponse:
     properties:
       data:
         $ref: '#/definitions/dto.MonthlyTrendReport'
+      message:
+        type: string
       status:
         type: integer
       success:
@@ -993,15 +1533,75 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/dto.NetWorthReport'
+      message:
+        type: string
       status:
         type: integer
       success:
         type: boolean
     type: object
-  handler.RepaymentResponse:
+  handler.PresetEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.DebtResponse'
+        $ref: '#/definitions/dto.PresetResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.PresetListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.PresetResponse'
+        type: array
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.StatementEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.StatementResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.StatementListEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.StatementListResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.StringEnvelope:
+    properties:
+      data:
+        example: Đã xóa toàn bộ lịch sử trò chuyện
+        type: string
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.SummaryReportEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.SummaryReport'
       message:
         type: string
       status:
@@ -1015,6 +1615,123 @@ definitions:
         items:
           $ref: '#/definitions/dto.TagSummary'
         type: array
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.TargetSummaryEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.TargetSummaryResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.TokenEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.TokenResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.TransactionEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.TransactionResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.TransactionPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.TransactionResponse'
+        type: array
+      limit:
+        type: integer
+      message:
+        type: string
+      page:
+        type: integer
+      status:
+        type: integer
+      success:
+        type: boolean
+      summary:
+        $ref: '#/definitions/dto.TransactionSummaryDTO'
+      total:
+        type: integer
+    type: object
+  handler.UserEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/model.User'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.UserPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/model.User'
+        type: array
+      limit:
+        type: integer
+      message:
+        type: string
+      page:
+        type: integer
+      status:
+        type: integer
+      success:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  handler.WalletEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.WalletResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.WalletSummaryEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.WalletSummaryResponse'
+      message:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  handler.WalletTransferEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.WalletTransferResponse'
+      message:
+        type: string
       status:
         type: integer
       success:
@@ -1164,6 +1881,7 @@ definitions:
       id:
         type: string
       role:
+        description: '"user" (RoleUser, the default) or "admin" (RoleAdmin)'
         type: string
       updatedAt:
         type: string
@@ -1208,6 +1926,74 @@ info:
   title: Nexo API
   version: "1.0"
 paths:
+  /alerts:
+    get:
+      description: Paginated budget alerts of the caller, newest first.
+      parameters:
+      - description: Page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 10, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.AlertPage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to list alerts
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List budget alerts
+      tags:
+      - Alerts
+  /alerts/{id}:
+    delete:
+      parameters:
+      - description: Alert ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.MessageResponse'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Alert not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to delete alert
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a budget alert
+      tags:
+      - Alerts
   /auth/change-password:
     post:
       consumes:
@@ -1229,24 +2015,24 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ChangePasswordResponse'
+            $ref: '#/definitions/handler.ChangePasswordEnvelope'
         "400":
           description: Invalid request payload, wrong current password or unchanged
             password
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "409":
           description: Password is managed by Supabase Auth
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to change password
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Change password
@@ -1270,19 +2056,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.LoginResponse'
+            $ref: '#/definitions/handler.LoginEnvelope'
         "400":
           description: Invalid request payload
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Invalid credentials
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to process login
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Login a user
       tags:
       - auth
@@ -1305,17 +2091,15 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.LogoutEnvelope'
         "400":
           description: Invalid request payload
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to logout
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Logout
       tags:
       - auth
@@ -1339,19 +2123,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TokenResponse'
+            $ref: '#/definitions/handler.TokenEnvelope'
         "400":
           description: Invalid request payload
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Invalid, expired or revoked refresh token
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to refresh session
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Refresh the access token
       tags:
       - auth
@@ -1373,15 +2157,15 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/model.User'
+            $ref: '#/definitions/handler.UserEnvelope'
         "400":
           description: Invalid request payload
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to create user
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Register a new user
       tags:
       - auth
@@ -1394,16 +2178,208 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.User'
+            $ref: '#/definitions/handler.UserEnvelope'
         "401":
           description: Unauthorized
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get current user info
       tags:
       - auth
+  /budgets:
+    get:
+      parameters:
+      - description: Page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 10, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.BudgetPage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to list budgets
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List budgets
+      tags:
+      - Budgets
+    post:
+      consumes:
+      - application/json
+      description: Creates a budget for one of the caller's categories and period.
+      parameters:
+      - description: Budget
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateBudgetRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.BudgetEnvelope'
+        "400":
+          description: Invalid request payload / Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Category not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: A budget for this category and period already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to create budget
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a budget
+      tags:
+      - Budgets
+  /budgets/{id}:
+    delete:
+      parameters:
+      - description: Budget ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.MessageResponse'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Budget not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to delete budget
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a budget
+      tags:
+      - Budgets
+    get:
+      parameters:
+      - description: Budget ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.BudgetEnvelope'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Budget not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get budget
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a budget
+      tags:
+      - Budgets
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Budget ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateBudgetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.BudgetEnvelope'
+        "400":
+          description: Invalid ID format / Invalid request payload / Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Budget not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: A budget for this category and period already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to update budget
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a budget
+      tags:
+      - Budgets
   /categories:
     get:
       description: |-
@@ -1428,9 +2404,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/model.Category'
-            type: array
+            $ref: '#/definitions/handler.CategoryPage'
         "401":
           description: Unauthorized
           schema:
@@ -1461,13 +2435,17 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/model.Category'
+            $ref: '#/definitions/handler.CategoryEnvelope'
         "400":
           description: Invalid request payload
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: A category with this name already exists
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -1488,11 +2466,13 @@ paths:
         name: id
         required: true
         type: string
+      produces:
+      - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            type: string
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Invalid category ID
           schema:
@@ -1528,7 +2508,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Category'
+            $ref: '#/definitions/handler.CategoryEnvelope'
         "400":
           description: Invalid category ID
           schema:
@@ -1572,7 +2552,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Category'
+            $ref: '#/definitions/handler.CategoryEnvelope'
         "400":
           description: Invalid category ID or payload
           schema:
@@ -1583,6 +2563,10 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Category not found (or not owned by the caller)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: A category with this name already exists
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -1609,7 +2593,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ChatActionResult'
+            $ref: '#/definitions/handler.ChatActionResultEnvelope'
         "400":
           description: Invalid action ID
           schema:
@@ -1656,7 +2640,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ChatActionResult'
+            $ref: '#/definitions/handler.ChatActionResultEnvelope'
         "400":
           description: Invalid action ID
           schema:
@@ -1700,9 +2684,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.StringEnvelope'
         "401":
           description: Unauthorized
           schema:
@@ -1725,7 +2707,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ChatModelsResponse'
+            $ref: '#/definitions/handler.ChatModelsEnvelope'
       security:
       - BearerAuth: []
       summary: List available models from 9Router
@@ -1740,9 +2722,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/dto.ChatSessionResponse'
-            type: array
+            $ref: '#/definitions/handler.ChatSessionListEnvelope'
         "401":
           description: Unauthorized
           schema:
@@ -1771,9 +2751,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Bad Request
           schema:
@@ -1810,7 +2788,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ChatSessionResponse'
+            $ref: '#/definitions/handler.ChatSessionEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -1837,7 +2815,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Stream financial advisory and tool responses using Requesty AI (OpenAI Compatible)
+        Stream financial advisory and tool responses through the 9Router gateway (OpenAI compatible)
         Messages longer than 4000 characters are rejected. `model` must be one of GET /chat/models (otherwise the server default is used). Rate limited to 20 messages per minute per user.
       parameters:
       - description: Send Message Request
@@ -1900,13 +2878,11 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/model.Cost'
-            type: array
+            $ref: '#/definitions/handler.CostPage'
         "500":
           description: Failed to list costs
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List costs
@@ -1929,11 +2905,11 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/model.Cost'
+            $ref: '#/definitions/handler.CostEnvelope'
         "400":
           description: Invalid request payload
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Category not found
           schema:
@@ -1941,7 +2917,7 @@ paths:
         "500":
           description: Failed to create cost
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a new cost
@@ -1964,15 +2940,15 @@ paths:
         "400":
           description: Invalid cost ID
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Cost not found
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to delete cost
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a cost
@@ -1992,19 +2968,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Cost'
+            $ref: '#/definitions/handler.CostEnvelope'
         "400":
           description: Invalid cost ID
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Cost not found
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to get cost
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a cost by ID
@@ -2032,19 +3008,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Cost'
+            $ref: '#/definitions/handler.CostEnvelope'
         "400":
           description: Invalid cost ID or payload
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Cost not found
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Failed to update cost
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update a cost
@@ -2073,7 +3049,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.StatementListResponse'
+            $ref: '#/definitions/handler.StatementListEnvelope'
+        "400":
+          description: Invalid wallet ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
@@ -2104,7 +3084,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.StatementResponse'
+            $ref: '#/definitions/handler.StatementEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -2145,7 +3125,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Bad Request
           schema:
@@ -2181,7 +3161,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.StatementResponse'
+            $ref: '#/definitions/handler.StatementEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -2225,9 +3205,9 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.StatementResponse'
+            $ref: '#/definitions/handler.StatementEnvelope'
         "400":
-          description: Bad Request
+          description: Invalid ID, payload or date (YYYY-MM-DD)
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "401":
@@ -2236,6 +3216,10 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: A statement for this period already exists
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -2273,7 +3257,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.StatementResponse'
+            $ref: '#/definitions/handler.StatementEnvelope'
         "400":
           description: Invalid amount or overpayment
           schema:
@@ -2299,6 +3283,77 @@ paths:
       summary: Pay a credit card statement
       tags:
       - CreditCardStatements
+  /debts:
+    get:
+      parameters:
+      - description: PAYABLE or RECEIVABLE
+        in: query
+        name: type
+        type: string
+      - description: PENDING, COMPLETED or OVERDUE
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.DebtListEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get debts
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List debts
+      tags:
+      - Debts
+    post:
+      consumes:
+      - application/json
+      description: Creates a PAYABLE or RECEIVABLE debt; with a walletId the amount
+        moves that wallet's balance in the same DB transaction.
+      parameters:
+      - description: Debt
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateDebtRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.DebtEnvelopeResponse'
+        "400":
+          description: Invalid request payload / Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Wallet not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to create debt
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a debt
+      tags:
+      - Debts
   /debts/{id}:
     delete:
       description: Soft-deletes the debt and its repayments and, in one DB transaction,
@@ -2315,9 +3370,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Bad Request
           schema:
@@ -2364,7 +3417,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handler.RepaymentResponse'
+            $ref: '#/definitions/handler.DebtEnvelopeResponse'
         "400":
           description: Invalid input or amount below what was repaid
           schema:
@@ -2408,7 +3461,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handler.RepaymentResponse'
+            $ref: '#/definitions/handler.DebtEnvelopeResponse'
         "400":
           description: Invalid amount, debt already completed, or repayment exceeds
             remaining balance
@@ -2431,6 +3484,243 @@ paths:
       summary: Record a debt repayment
       tags:
       - Debts
+  /debts/summary:
+    get:
+      description: Totals still payable/receivable and the number of pending and overdue
+        debts.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.DebtSummaryEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get debt summary
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get the debt summary
+      tags:
+      - Debts
+  /presets:
+    get:
+      description: All quick-add presets of the caller (not paginated).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.PresetListEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to list presets
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List presets
+      tags:
+      - Presets
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Preset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreatePresetRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.PresetEnvelope'
+        "400":
+          description: Invalid request payload / Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Category not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to create preset
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a quick-add preset
+      tags:
+      - Presets
+  /presets/{id}:
+    delete:
+      parameters:
+      - description: Preset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.MessageResponse'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Preset not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to delete preset
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a preset
+      tags:
+      - Presets
+    get:
+      parameters:
+      - description: Preset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.PresetEnvelope'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Preset not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get preset
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a preset
+      tags:
+      - Presets
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Preset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePresetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.PresetEnvelope'
+        "400":
+          description: Invalid ID format / Invalid request payload / Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Preset or category not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to update preset
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a preset
+      tags:
+      - Presets
+  /reports/category-breakdown:
+    get:
+      description: Expense per category for [startDate, endDate]; without both dates
+        the period comes from range (weekly, monthly — the default — or yearly) in
+        the app timezone.
+      parameters:
+      - description: YYYY-MM-DD
+        in: query
+        name: startDate
+        type: string
+      - description: YYYY-MM-DD
+        in: query
+        name: endDate
+        type: string
+      - description: weekly, monthly (default) or yearly
+        in: query
+        name: range
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.CategoryBreakdownEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get category breakdown
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get spending by category
+      tags:
+      - Reports
   /reports/daily:
     get:
       description: Per-day income, expense and transaction count for every day of
@@ -2466,11 +3756,11 @@ paths:
       - Reports
   /reports/monthly-trend:
     get:
-      consumes:
-      - application/json
-      description: Get 12-month expense, income, target and average trend
+      description: Monthly expense, income, expense target and average expense for
+        the last `months` calendar months (default 12, max 36; values outside 1–36
+        use 12), ending with the current month in the app timezone.
       parameters:
-      - description: 'Number of months (default: 12)'
+      - description: 'Number of months (default: 12, max 36)'
         in: query
         name: months
         type: integer
@@ -2526,6 +3816,48 @@ paths:
       summary: Get month-end net worth over time
       tags:
       - Reports
+  /reports/summary:
+    get:
+      description: Totals for [startDate, endDate]. Without both dates the period
+        comes from range (weekly, monthly — the default — or yearly) in the app timezone;
+        range=all or allTime=true sums all time.
+      parameters:
+      - description: YYYY-MM-DD
+        in: query
+        name: startDate
+        type: string
+      - description: YYYY-MM-DD
+        in: query
+        name: endDate
+        type: string
+      - description: weekly, monthly (default), yearly or all
+        in: query
+        name: range
+        type: string
+      - description: true to sum all time
+        in: query
+        name: allTime
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.SummaryReportEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get summary
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get the income/expense summary
+      tags:
+      - Reports
   /tags:
     get:
       description: Every tag used on the user's transactions, with count, total expense/income
@@ -2550,6 +3882,76 @@ paths:
       summary: List transaction tags
       tags:
       - transactions
+  /targets/monthly:
+    post:
+      consumes:
+      - application/json
+      description: Creates or replaces the caller's EXPENSE (spending limit) or INVESTMENT
+        target of a month.
+      parameters:
+      - description: Target
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpsertTargetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.MessageResponse'
+        "400":
+          description: Invalid request payload / Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to upsert target
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set a monthly financial target
+      tags:
+      - Targets
+  /targets/summary:
+    get:
+      description: Spending vs. EXPENSE target and invested amount vs. INVESTMENT
+        target of a month.
+      parameters:
+      - description: 'Month 1-12 (default: current month in the app timezone)'
+        in: query
+        name: month
+        type: integer
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TargetSummaryEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Failed to get target summary
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get the monthly target summary
+      tags:
+      - Targets
   /transactions:
     get:
       description: List transactions
@@ -2561,6 +3963,38 @@ paths:
       - description: Only transactions carrying this tag (exact match)
         in: query
         name: tag
+        type: string
+      - description: Transaction type
+        enum:
+        - INCOME
+        - EXPENSE
+        - INVESTMENT
+        in: query
+        name: type
+        type: string
+      - description: Investment status (HOLDING also matches transactions without
+          a status)
+        enum:
+        - HOLDING
+        - SOLD
+        - MATURED
+        - CANCELLED
+        in: query
+        name: status
+        type: string
+      - description: Category ID (UUID); invalid IDs are ignored
+        in: query
+        name: categoryId
+        type: string
+      - description: Only transactions on or after this date (YYYY-MM-DD); invalid
+          dates are ignored
+        in: query
+        name: startDate
+        type: string
+      - description: Only transactions up to this date (YYYY-MM-DD); invalid dates
+          are ignored
+        in: query
+        name: endDate
         type: string
       - description: Page number
         in: query
@@ -2576,9 +4010,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/dto.TransactionResponse'
-            type: array
+            $ref: '#/definitions/handler.TransactionPage'
         "401":
           description: Unauthorized
           schema:
@@ -2612,7 +4044,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.TransactionResponse'
+            $ref: '#/definitions/handler.TransactionEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -2650,9 +4082,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Bad Request
           schema:
@@ -2688,7 +4118,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TransactionResponse'
+            $ref: '#/definitions/handler.TransactionEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -2733,7 +4163,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TransactionResponse'
+            $ref: '#/definitions/handler.TransactionEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -2772,7 +4202,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TransactionResponse'
+            $ref: '#/definitions/handler.TransactionEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -2816,9 +4246,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/model.User'
-            type: array
+            $ref: '#/definitions/handler.UserPage'
         "401":
           description: Unauthorized
           schema:
@@ -2854,7 +4282,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/model.User'
+            $ref: '#/definitions/handler.UserEnvelope'
         "400":
           description: Invalid request payload
           schema:
@@ -2889,11 +4317,13 @@ paths:
         name: id
         required: true
         type: string
+      produces:
+      - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
           schema:
-            type: string
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Invalid user ID
           schema:
@@ -2933,7 +4363,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.User'
+            $ref: '#/definitions/handler.UserEnvelope'
         "400":
           description: Invalid user ID
           schema:
@@ -2982,7 +4412,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.User'
+            $ref: '#/definitions/handler.UserEnvelope'
         "400":
           description: Invalid user ID or payload
           schema:
@@ -3023,7 +4453,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletSummaryResponse'
+            $ref: '#/definitions/handler.WalletSummaryEnvelope'
         "401":
           description: Unauthorized
           schema:
@@ -3055,7 +4485,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/handler.WalletEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -3088,9 +4518,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.MessageResponse'
         "400":
           description: Bad Request
           schema:
@@ -3126,7 +4554,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/handler.WalletEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -3171,7 +4599,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/handler.WalletEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -3213,7 +4641,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.AutoAllocateResponse'
+            $ref: '#/definitions/handler.AutoAllocateEnvelope'
         "400":
           description: Bad Request
           schema:
@@ -3254,7 +4682,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletTransferResponse'
+            $ref: '#/definitions/handler.WalletTransferEnvelope'
         "400":
           description: Bad Request
           schema:

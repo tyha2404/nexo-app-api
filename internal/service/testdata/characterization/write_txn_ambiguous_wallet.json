@@ -1,0 +1,88 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_transaction",
+    "actionCard": {
+      "actionType": "TRANSACTION_CREATED",
+      "title": "Đã ghi nhận Chi tiêu",
+      "description": "5 ₫ - Khác (Tạo mới danh mục: Khác)",
+      "data": {
+        "amount": 5,
+        "category": "Khác",
+        "date": "2026-11-08",
+        "description": "Khác",
+        "id": "<id-2>",
+        "isNewCategoryCreated": true,
+        "type": "EXPENSE",
+        "wallet": "Techcombank Visa"
+      }
+    },
+    "result": {
+      "amount": 5,
+      "category": "Khác",
+      "date": "2026-11-08",
+      "description": "Khác",
+      "isNewCategoryCreated": true,
+      "message": "Giao dịch đã được lưu thành công vào hệ thống Nexo.",
+      "success": true,
+      "transactionId": "<id-2>",
+      "type": "EXPENSE",
+      "wallet": "Techcombank Visa"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi chi tiêu — 5 ₫ - Khác (Tạo mới danh mục: Khác)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi chi tiêu",
+      "description": "5 ₫ - Khác (Tạo mới danh mục: Khác)",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 5,
+        "categoryName": "Khác",
+        "date": "2026-11-08",
+        "description": "Khác",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "isNewCategoryCreated": true,
+        "kind": "Ghi chi tiêu",
+        "status": "PENDING",
+        "toolName": "create_transaction",
+        "type": "EXPENSE",
+        "walletName": "Techcombank Visa"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": [
+      {
+        "id": "<id-3>",
+        "userId": "<id-4>",
+        "name": "Khác",
+        "type": "EXPENSE",
+        "excludeFromAverageDaily": false,
+        "createdAt": "0001-01-01T00:00:00Z",
+        "updatedAt": "0001-01-01T00:00:00Z",
+        "deletedAt": null,
+        "User": null
+      }
+    ],
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": [
+      {
+        "categoryId": "<id-3>",
+        "walletId": "<id-5>",
+        "amount": 5,
+        "type": "EXPENSE",
+        "description": "Khác",
+        "transactionDate": "2026-11-08T00:00:00Z"
+      }
+    ],
+    "transfers": null
+  }
+}

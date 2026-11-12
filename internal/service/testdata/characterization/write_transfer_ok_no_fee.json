@@ -1,0 +1,71 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "transfer_between_wallets",
+    "actionCard": {
+      "actionType": "WALLET_TRANSFER",
+      "title": "Chuyển tiền thành công",
+      "description": "Đã chuyển 1 ₫ từ ví Techcombank sang ví Ví Điện tử",
+      "data": {
+        "id": "<id-2>",
+        "userId": "<id-3>",
+        "fromWalletId": "<id-4>",
+        "toWalletId": "<id-5>",
+        "amount": 1,
+        "fee": 0,
+        "transferDate": "",
+        "createdAt": ""
+      }
+    },
+    "result": {
+      "amount": 1,
+      "createdAt": "",
+      "fee": 0,
+      "fromWalletId": "<id-4>",
+      "id": "<id-2>",
+      "toWalletId": "<id-5>",
+      "transferDate": "",
+      "userId": "<id-3>"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Chuyển tiền giữa ví — Chuyển 1 ₫ từ ví Techcombank sang ví Ví Điện tử\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Chuyển tiền giữa ví",
+      "description": "Chuyển 1 ₫ từ ví Techcombank sang ví Ví Điện tử",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "description": "",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "fee": 0,
+        "fromWalletName": "Techcombank",
+        "kind": "Chuyển tiền giữa ví",
+        "status": "PENDING",
+        "toWalletName": "Ví Điện tử",
+        "toolName": "transfer_between_wallets",
+        "walletName": "Techcombank"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": [
+      {
+        "fromWalletId": "<id-4>",
+        "toWalletId": "<id-5>",
+        "amount": 1,
+        "fee": 0
+      }
+    ]
+  }
+}

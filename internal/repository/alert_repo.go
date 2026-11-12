@@ -13,9 +13,10 @@ type AlertRepository interface {
 	// Create inserts the alert unless one of the same type already exists for
 	// the budget; created reports whether a new row was inserted.
 	Create(ctx context.Context, alert *model.Alert) (created bool, err error)
-	GetByID(ctx context.Context, id uuid.UUID) (*model.Alert, error)
 	ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Alert, int64, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	// Delete soft-deletes the user's alert; constant.ErrNotFound when no live
+	// alert with that id belongs to the user.
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 }
 
 type alertRepository struct {
@@ -54,15 +55,6 @@ func (r *alertRepository) Create(ctx context.Context, alert *model.Alert) (bool,
 	return created, nil
 }
 
-func (r *alertRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Alert, error) {
-	var alert model.Alert
-	err := r.db.WithContext(ctx).Preload("Budget", withDeleted).First(&alert, "id = ?", id).Error
-	if err != nil {
-		return nil, err
-	}
-	return &alert, nil
-}
-
 func (r *alertRepository) ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Alert, int64, error) {
 	var alerts []model.Alert
 	var total int64
@@ -76,6 +68,6 @@ func (r *alertRepository) ListByUserID(ctx context.Context, userID uuid.UUID, li
 	return alerts, total, err
 }
 
-func (r *alertRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&model.Alert{}, "id = ?", id).Error
+func (r *alertRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	return deleteForUser(r.db.WithContext(ctx), &model.Alert{}, "alert", userID, id)
 }

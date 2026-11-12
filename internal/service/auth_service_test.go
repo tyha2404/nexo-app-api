@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"testing"
 
 	"github.com/google/uuid"
@@ -43,12 +44,20 @@ func (m *mockUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, 
 	return u, nil
 }
 
-func (m *mockUserRepo) List(ctx context.Context, limit, offset int) ([]model.User, error) {
+func (m *mockUserRepo) List(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
 	var list []model.User
 	for _, u := range m.usersByID {
 		list = append(list, *u)
 	}
-	return list, nil
+	total := int64(len(list))
+	if offset >= len(list) {
+		return nil, total, nil
+	}
+	list = list[offset:]
+	if limit > 0 && len(list) > limit {
+		list = list[:limit]
+	}
+	return list, total, nil
 }
 
 func (m *mockUserRepo) Update(ctx context.Context, user *model.User) error {
@@ -102,9 +111,9 @@ func TestAuthService_Register(t *testing.T) {
 	repo := newMockUserRepo()
 	svc := NewAuthService(repo, newMockRefreshTokenRepo(), 0)
 
-	userToReg := &model.User{
+	userToReg := dto.RegisterRequest{
 		Username: "newuser",
-		Email:    "new@example.com",
+		Email:    " New@Example.com ",
 		Password: "password123",
 	}
 
@@ -115,6 +124,12 @@ func TestAuthService_Register(t *testing.T) {
 
 	if created.Username != userToReg.Username {
 		t.Errorf("expected username %s, got %s", userToReg.Username, created.Username)
+	}
+	if created.Email != "new@example.com" {
+		t.Errorf("expected the email to be normalized, got %q", created.Email)
+	}
+	if created.Role != "" && created.Role != "user" {
+		t.Errorf("register must not grant a role, got %q", created.Role)
 	}
 	if created.Password != "" {
 		t.Error("expected password to be cleared in response, but it was not")

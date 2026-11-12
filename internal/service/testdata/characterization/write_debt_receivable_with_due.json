@@ -1,0 +1,83 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_debt",
+    "actionCard": {
+      "actionType": "DEBT_CREATED",
+      "title": "Đã ghi nhận Khoản cho vay (cần thu)",
+      "description": "2.000.000 ₫ - Cho Lan vay",
+      "data": {
+        "id": "<id-2>",
+        "userId": "<id-3>",
+        "type": "RECEIVABLE",
+        "title": "Cho Lan vay",
+        "totalAmount": 2000000,
+        "paidAmount": 0,
+        "remaining": 2000000,
+        "startDate": null,
+        "dueDate": "2026-12-31",
+        "status": "",
+        "notes": "",
+        "createdAt": "0001-01-01T00:00:00Z",
+        "updatedAt": "0001-01-01T00:00:00Z"
+      }
+    },
+    "result": {
+      "createdAt": "0001-01-01T00:00:00Z",
+      "dueDate": "2026-12-31",
+      "id": "<id-2>",
+      "notes": "",
+      "paidAmount": 0,
+      "remaining": 2000000,
+      "startDate": null,
+      "status": "",
+      "title": "Cho Lan vay",
+      "totalAmount": 2000000,
+      "type": "RECEIVABLE",
+      "updatedAt": "0001-01-01T00:00:00Z",
+      "userId": "<id-3>"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi khoản cho vay — 2.000.000 ₫ - Cho Lan vay, hạn 2026-12-31\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi khoản cho vay",
+      "description": "2.000.000 ₫ - Cho Lan vay, hạn 2026-12-31",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 2000000,
+        "date": "2026-12-31",
+        "debtType": "RECEIVABLE",
+        "description": "trả cuối năm",
+        "dueDate": "2026-12-31",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Ghi khoản cho vay",
+        "status": "PENDING",
+        "title": "Cho Lan vay",
+        "toolName": "create_debt"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": [
+      {
+        "type": "RECEIVABLE",
+        "title": "Cho Lan vay",
+        "totalAmount": 2000000,
+        "startDate": null,
+        "dueDate": "2026-12-31T00:00:00Z",
+        "notes": "trả cuối năm"
+      }
+    ],
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

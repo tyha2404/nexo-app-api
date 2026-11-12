@@ -1,0 +1,76 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_transaction",
+    "actionCard": {
+      "actionType": "TRANSACTION_CREATED",
+      "title": "Đã ghi nhận Chi tiêu",
+      "description": "35.000 ₫ - Cafe sáng (Cafe sáng)",
+      "data": {
+        "amount": 35000,
+        "category": "Cafe sáng",
+        "date": "2026-11-08",
+        "description": "Cafe sáng",
+        "id": "<id-2>",
+        "isNewCategoryCreated": false,
+        "type": "EXPENSE",
+        "wallet": "Ví Điện tử"
+      }
+    },
+    "result": {
+      "amount": 35000,
+      "category": "Cafe sáng",
+      "date": "2026-11-08",
+      "description": "Cafe sáng",
+      "isNewCategoryCreated": false,
+      "message": "Giao dịch đã được lưu thành công vào hệ thống Nexo.",
+      "success": true,
+      "transactionId": "<id-2>",
+      "type": "EXPENSE",
+      "wallet": "Ví Điện tử"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi chi tiêu — 35.000 ₫ - Cafe sáng (Cafe sáng)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi chi tiêu",
+      "description": "35.000 ₫ - Cafe sáng (Cafe sáng)",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 35000,
+        "categoryName": "Cafe sáng",
+        "date": "2026-11-08",
+        "description": "Cafe sáng",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "isNewCategoryCreated": false,
+        "kind": "Ghi chi tiêu",
+        "status": "PENDING",
+        "toolName": "create_transaction",
+        "type": "EXPENSE",
+        "walletName": "Ví Điện tử"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": [
+      {
+        "categoryId": "<id-3>",
+        "walletId": "<id-4>",
+        "amount": 35000,
+        "type": "EXPENSE",
+        "description": "Cafe sáng",
+        "transactionDate": "2026-11-08T00:00:00Z"
+      }
+    ],
+    "transfers": null
+  }
+}

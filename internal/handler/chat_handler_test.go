@@ -171,7 +171,7 @@ func TestChatHandler_DeleteSession(t *testing.T) {
 			require.Equal(t, http.StatusOK, rr.Code)
 			assert.Equal(t, userID, gotUser)
 			assert.Equal(t, sessID, gotSess)
-			assert.Equal(t, true, decodeJSON(t, rr)["success"])
+			assert.JSONEq(t, `{"status":200,"success":true,"message":"Phiên trò chuyện đã được xóa thành công","data":null}`, rr.Body.String())
 		})
 	}
 }

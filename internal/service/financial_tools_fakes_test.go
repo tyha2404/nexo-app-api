@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"sync"
 	"testing"
 	"time"
@@ -21,13 +22,14 @@ import (
 
 type tfReportSvc struct {
 	ReportService
-	mu         sync.Mutex
-	summaries  map[string]*dto.SummaryReport // key: startDate
-	breakdown  *dto.CategoryBreakdownReport
-	summaryErr error
-	breakErr   error
-	users      []uuid.UUID
-	ranges     [][2]string
+	mu          sync.Mutex
+	summaries   map[string]*dto.SummaryReport // key: startDate
+	breakdown   *dto.CategoryBreakdownReport
+	summaryErr  error
+	breakErr    error
+	trendMonths []int
+	users       []uuid.UUID
+	ranges      [][2]string
 }
 
 func (r *tfReportSvc) GetSummary(_ context.Context, userID uuid.UUID, start, end string) (*dto.SummaryReport, error) {
@@ -42,6 +44,32 @@ func (r *tfReportSvc) GetSummary(_ context.Context, userID uuid.UUID, start, end
 		return s, nil
 	}
 	return &dto.SummaryReport{}, nil
+}
+
+// GetMonthlyTrend serves the same per-month data as GetSummary (keyed by the
+// month's first day), over the window reportService.GetMonthlyTrend uses.
+func (r *tfReportSvc) GetMonthlyTrend(_ context.Context, userID uuid.UUID, months int) (*dto.MonthlyTrendReport, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.users = append(r.users, userID)
+	r.trendMonths = append(r.trendMonths, months)
+	if r.summaryErr != nil {
+		return nil, r.summaryErr
+	}
+	if months <= 0 || months > 36 {
+		months = 12
+	}
+	cur, _ := util.MonthRange(util.Now())
+	report := &dto.MonthlyTrendReport{}
+	for i := months - 1; i >= 0; i-- {
+		start := cur.AddDate(0, -i, 0)
+		item := dto.MonthlyTrendItem{Month: start.Format("2006-01")}
+		if s, ok := r.summaries[start.Format("2006-01-02")]; ok {
+			item.Income, item.Expense, item.Investment = s.TotalIncome, s.TotalExpense, s.TotalInvestment
+		}
+		report.Items = append(report.Items, item)
+	}
+	return report, nil
 }
 
 func (r *tfReportSvc) GetCategoryBreakdown(_ context.Context, userID uuid.UUID, start, end string) (*dto.CategoryBreakdownReport, error) {
@@ -147,6 +175,18 @@ type tfBudgetSvc struct {
 	createErr error
 	created   []dto.CreateBudgetRequest
 	users     []uuid.UUID
+	activeAt  []time.Time
+}
+
+// ListActiveBudgets returns budgets as if they were all in force at at (the
+// real per-month filtering is in budgetRepository.ListActiveByUserID).
+func (b *tfBudgetSvc) ListActiveBudgets(_ context.Context, userID uuid.UUID, at time.Time) ([]dto.BudgetResponse, error) {
+	b.users = append(b.users, userID)
+	b.activeAt = append(b.activeAt, at)
+	if b.listErr != nil {
+		return nil, b.listErr
+	}
+	return b.budgets, nil
 }
 
 func (b *tfBudgetSvc) ListBudgets(_ context.Context, userID uuid.UUID, _, _ int) ([]dto.BudgetResponse, int64, error) {
@@ -245,21 +285,14 @@ func (r *tfTxnRepo) SearchByUserID(_ context.Context, userID uuid.UUID, limit, _
 
 type tfWalletRepo struct {
 	repository.WalletRepository
-	wallets    []model.Wallet
-	summary    *dto.WalletSummaryResponse
-	listErr    error
-	summaryErr error
-	users      []uuid.UUID
+	wallets []model.Wallet
+	listErr error
+	users   []uuid.UUID
 }
 
 func (r *tfWalletRepo) ListByUserID(_ context.Context, userID uuid.UUID) ([]model.Wallet, error) {
 	r.users = append(r.users, userID)
 	return r.wallets, r.listErr
-}
-
-func (r *tfWalletRepo) GetSummaryByUserID(_ context.Context, userID uuid.UUID) (*dto.WalletSummaryResponse, error) {
-	r.users = append(r.users, userID)
-	return r.summary, r.summaryErr
 }
 
 type tfRAG struct {
@@ -334,10 +367,28 @@ func (e *toolEnv) call(t *testing.T, name string, args map[string]interface{}) *
 	t.Helper()
 	raw, err := json.Marshal(args)
 	require.NoError(t, err)
-	res, err := e.svc.executeFinancialTool(context.Background(), e.userID, ToolCall{ID: "c1", Type: "function", Function: ToolCallFunction{Name: name, Arguments: string(raw)}})
+	call := ToolCall{ID: "c1", Type: "function", Function: ToolCallFunction{Name: name, Arguments: string(raw)}}
+	var res *FinancialToolResult
+	if IsChatWriteTool(name) {
+		res, err = e.svc.previewThenExecute(context.Background(), e.userID, call)
+	} else {
+		// The stream's path: errors become tool error results.
+		res = e.svc.runToolCall(context.Background(), e.userID, &chatTurn{}, call)
+	}
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	return res
+}
+
+// previewThenExecute runs a write tool as if its proposal were confirmed at
+// once: the preview's error result, or the execution of its typed args.
+func (s *chatService) previewThenExecute(ctx context.Context, userID uuid.UUID, call ToolCall) (*FinancialToolResult, error) {
+	tool := chatToolRegistry.lookup(call.Function.Name)
+	p, errRes, err := tool.preview(s, ctx, userID, parseToolArgs(call.Function.Arguments))
+	if err != nil || errRes != nil {
+		return errRes, err
+	}
+	return p.args.execute(ctx, s, userID)
 }
 
 // decodeTool parses a tool's ResultJSON.

@@ -95,7 +95,6 @@ func TestCreditCardStatementHandler_ListStatements_QueryParsing(t *testing.T) {
 	}{
 		{"no filters", "", nil, nil, nil},
 		{"all filters", "?walletId=" + walletID.String() + "&year=2026&month=8", &walletID, intp(2026), intp(8)},
-		{"invalid wallet ignored", "?walletId=nope&year=2025", nil, intp(2025), nil},
 		{"non-numeric year/month ignored", "?year=abc&month=x", nil, nil, nil},
 		{"zero and negative ignored", "?year=0&month=-1", nil, nil, nil},
 	}
@@ -116,6 +115,15 @@ func TestCreditCardStatementHandler_ListStatements_QueryParsing(t *testing.T) {
 			assert.Equal(t, float64(400), data["totalRemaining"])
 		})
 	}
+}
+
+func TestCreditCardStatementHandler_ListStatements_InvalidWalletIDIs400(t *testing.T) {
+	userID := uuid.New()
+	svc := &stubCCStatementService{}
+	rr := httptest.NewRecorder()
+	NewCreditCardStatementHandler(svc, zap.NewNop()).ListStatements(rr, debtTestReq(http.MethodGet, "/credit-card-statements?walletId=nope&year=2025", "", &userID, ""))
+	debtAssertError(t, rr, http.StatusBadRequest, "Invalid wallet ID")
+	assert.Zero(t, svc.calls, "an invalid filter is not silently dropped")
 }
 
 func TestCreditCardStatementHandler_ListStatements_Errors(t *testing.T) {
@@ -241,6 +249,8 @@ func TestCreditCardStatementHandler_UpdateStatement(t *testing.T) {
 		{"negative balance", false, id.String(), `{"statementBalance":-1}`, nil, http.StatusBadRequest, "Validation failed", false},
 		{"not found", false, id.String(), `{}`, service.ErrStatementNotFound, http.StatusNotFound, "Statement not found", true},
 		{"internal error", false, id.String(), `{}`, errors.New("boom"), http.StatusInternalServerError, "Failed to update statement", true},
+		{"invalid date", false, id.String(), `{"dueDate":"31/12/2026"}`, service.ErrInvalidDate, http.StatusBadRequest, "Invalid statement date", true},
+		{"period already exists", false, id.String(), `{"statementMonth":10}`, fmt.Errorf("%w: credit card statement for this period", constant.ErrAlreadyExists), http.StatusConflict, "Kỳ sao kê này đã tồn tại", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -14,7 +14,6 @@ import (
 
 type AuthHandler struct {
 	svc          service.AuthService
-	log          *zap.Logger
 	errorHandler *ErrorHandler
 	validator    *Validator
 }
@@ -22,7 +21,6 @@ type AuthHandler struct {
 func NewAuthHandler(svc service.AuthService, log *zap.Logger) *AuthHandler {
 	return &AuthHandler{
 		svc:          svc,
-		log:          log,
 		errorHandler: NewErrorHandler(log),
 		validator:    NewValidator(),
 	}
@@ -35,10 +33,10 @@ func NewAuthHandler(svc service.AuthService, log *zap.Logger) *AuthHandler {
 // @Accept json
 // @Produce json
 // @Param request body dto.LoginRequest true "Login credentials"
-// @Success 200 {object} dto.LoginResponse
-// @Failure 400 {string} string "Invalid request payload"
-// @Failure 401 {string} string "Invalid credentials"
-// @Failure 500 {string} string "Failed to process login"
+// @Success 200 {object} LoginEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid credentials"
+// @Failure 500 {object} response.ErrorResponse "Failed to process login"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequest
@@ -82,10 +80,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param request body dto.RefreshTokenRequest true "Refresh token"
-// @Success 200 {object} dto.TokenResponse
-// @Failure 400 {string} string "Invalid request payload"
-// @Failure 401 {string} string "Invalid, expired or revoked refresh token"
-// @Failure 500 {string} string "Failed to refresh session"
+// @Success 200 {object} TokenEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid, expired or revoked refresh token"
+// @Failure 500 {object} response.ErrorResponse "Failed to refresh session"
 // @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshTokenRequest
@@ -124,9 +122,9 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param request body dto.RefreshTokenRequest true "Refresh token"
-// @Success 200 {object} map[string]string
-// @Failure 400 {string} string "Invalid request payload"
-// @Failure 500 {string} string "Failed to logout"
+// @Success 200 {object} LogoutEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 500 {object} response.ErrorResponse "Failed to logout"
 // @Router /auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshTokenRequest
@@ -168,9 +166,9 @@ func (h *AuthHandler) newSession(r *http.Request, user *model.User) (dto.TokenRe
 // @Accept json
 // @Produce json
 // @Param request body dto.RegisterRequest true "User registration data"
-// @Success 201 {object} model.User
-// @Failure 400 {string} string "Invalid request payload"
-// @Failure 500 {string} string "Failed to create user"
+// @Success 201 {object} UserEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 500 {object} response.ErrorResponse "Failed to create user"
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequest
@@ -179,13 +177,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := &model.User{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
-	}
-
-	createdUser, err := h.svc.Register(r.Context(), user)
+	createdUser, err := h.svc.Register(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, constant.ErrEmailAlreadyExists) {
 			h.errorHandler.HandleError(w, err, http.StatusConflict, "Email already exists", "register")
@@ -206,8 +198,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Tags auth
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} model.User
-// @Failure 401 {string} string "Unauthorized"
+// @Success 200 {object} UserEnvelope
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Router /auth/whoami [get]
 func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	// Get user from context
@@ -228,11 +220,11 @@ func (h *AuthHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.ChangePasswordRequest true "Current and new password"
-// @Success 200 {object} dto.ChangePasswordResponse
-// @Failure 400 {string} string "Invalid request payload, wrong current password or unchanged password"
-// @Failure 401 {string} string "Unauthorized"
-// @Failure 409 {string} string "Password is managed by Supabase Auth"
-// @Failure 500 {string} string "Failed to change password"
+// @Success 200 {object} ChangePasswordEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload, wrong current password or unchanged password"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 409 {object} response.ErrorResponse "Password is managed by Supabase Auth"
+// @Failure 500 {object} response.ErrorResponse "Failed to change password"
 // @Router /auth/change-password [post]
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user, err := GetUserFromContext(r)

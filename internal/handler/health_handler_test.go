@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -61,7 +61,7 @@ func TestHealthHandler_Health(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewHealthHandler(tt.db(t), zap.NewNop())
+			h := NewHealthHandler(tt.db(t))
 			rr := httptest.NewRecorder()
 
 			h.Health(rr, httptest.NewRequest(http.MethodGet, "/health", nil))
@@ -78,15 +78,31 @@ func TestHealthHandler_Health(t *testing.T) {
 }
 
 func TestHealthHandler_ReadyAndLive(t *testing.T) {
-	h := NewHealthHandler(nil, zap.NewNop())
+	h := NewHealthHandler(nil)
 
 	rr := httptest.NewRecorder()
 	h.Ready(rr, httptest.NewRequest(http.MethodGet, "/ready", nil))
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.JSONEq(t, `{"status":"ready"}`, rr.Body.String())
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
 	rr = httptest.NewRecorder()
 	h.Live(rr, httptest.NewRequest(http.MethodGet, "/live", nil))
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.JSONEq(t, `{"status":"alive"}`, rr.Body.String())
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+}
+
+func TestPingWithTimeout_SetsDeadline(t *testing.T) {
+	err := pingWithTimeout(context.Background(), func(ctx context.Context) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return errors.New("no deadline")
+		}
+		if time.Until(deadline) > healthPingTimeout {
+			return errors.New("deadline too far")
+		}
+		return nil
+	})
+	assert.NoError(t, err)
 }

@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Cần xác nhận ví giao dịch",
+    "ResultJSON": "{\"error\":\"Tên ví 'ví' khớp với nhiều ví: Ví Tiền mặt, Ví Điện tử, Techcombank Visa. Hãy hỏi lại người dùng để chọn đúng một ví.\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

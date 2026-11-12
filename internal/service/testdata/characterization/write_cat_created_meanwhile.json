@@ -1,0 +1,56 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_category",
+    "actionCard": {
+      "actionType": "CATEGORY_CREATED",
+      "title": "Danh mục đã tồn tại",
+      "description": "Danh mục \"du lịch\" (Chi tiêu) đã có trong hệ thống",
+      "data": {
+        "id": "<id-2>",
+        "isDuplicate": true,
+        "name": "du lịch",
+        "type": "EXPENSE"
+      }
+    },
+    "result": {
+      "categoryId": "<id-2>",
+      "isDuplicate": true,
+      "message": "Danh mục \"du lịch\" đã tồn tại sẵn trong hệ thống.",
+      "name": "du lịch",
+      "success": true,
+      "type": "EXPENSE"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Tạo danh mục — Danh mục: Du lịch (Chi tiêu)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Tạo danh mục",
+      "description": "Danh mục: Du lịch (Chi tiêu)",
+      "data": {
+        "actionId": "<id-1>",
+        "categoryName": "Du lịch",
+        "description": "",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Tạo danh mục",
+        "name": "Du lịch",
+        "status": "PENDING",
+        "toolName": "create_category",
+        "type": "EXPENSE"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

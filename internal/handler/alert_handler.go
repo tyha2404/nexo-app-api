@@ -1,13 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
@@ -21,6 +16,18 @@ func NewAlertHandler(svc service.AlertService, log *zap.Logger) *AlertHandler {
 	return &AlertHandler{svc: svc, errorHandler: NewErrorHandler(log)}
 }
 
+// List handles GET /alerts
+// @Summary List budget alerts
+// @Description Paginated budget alerts of the caller, newest first.
+// @Tags Alerts
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page (default 1)"
+// @Param limit query int false "Page size (default 10, max 100)"
+// @Success 200 {object} AlertPage
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Failed to list alerts"
+// @Router /alerts [get]
 func (h *AlertHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, limit := ParsePagination(r)
 
@@ -36,19 +43,23 @@ func (h *AlertHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.PaginationResponse[dto.AlertResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Items:   items,
-		Total:   int(total),
-		Page:    page,
-		Limit:   limit,
-	})
+	h.errorHandler.HandlePaginated(w, http.StatusOK, items, int(total), page, limit, nil)
 }
 
+// Delete handles DELETE /alerts/{id}
+// @Summary Delete a budget alert
+// @Tags Alerts
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Alert ID"
+// @Success 200 {object} MessageResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Alert not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to delete alert"
+// @Router /alerts/{id} [delete]
 func (h *AlertHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "delete_alert")
 		return
@@ -69,6 +80,5 @@ func (h *AlertHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Alert deleted successfully"})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Alert deleted successfully")
 }

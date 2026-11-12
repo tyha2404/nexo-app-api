@@ -66,28 +66,6 @@ func TestIsNotFoundError(t *testing.T) {
 	}
 }
 
-func TestParseQueryInt(t *testing.T) {
-	tests := []struct {
-		query string
-		want  int
-	}{
-		{"", 7},
-		{"?n=3", 3},
-		{"?n=0", 0},
-		{"?n=-1", 7},
-		{"?n=abc", 7},
-		{"?n=2.5", 7},
-	}
-	for _, tt := range tests {
-		t.Run(tt.query, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, "/x"+tt.query, nil)
-			if got := ParseQueryInt(r, "n", 7); got != tt.want {
-				t.Fatalf("ParseQueryInt(%q) = %d, want %d", tt.query, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestParseQueryIntWithValidation(t *testing.T) {
 	tests := []struct {
 		query string
@@ -124,18 +102,6 @@ func TestBuildFilterMap(t *testing.T) {
 	}
 }
 
-func TestValidateRequired(t *testing.T) {
-	if err := ValidateRequired(map[string]string{"a": "1", "b": "2"}); err != nil {
-		t.Fatalf("expected nil, got %v", err)
-	}
-	if err := ValidateRequired(nil); err != nil {
-		t.Fatalf("expected nil for no fields, got %v", err)
-	}
-	if err := ValidateRequired(map[string]string{"a": "1", "b": ""}); !errors.Is(err, constant.ErrInvalidInput) {
-		t.Fatalf("expected ErrInvalidInput, got %v", err)
-	}
-}
-
 func TestGetUserFromContext(t *testing.T) {
 	id := uuid.New()
 	tests := []struct {
@@ -160,12 +126,9 @@ func TestGetUserFromContext(t *testing.T) {
 				if !errors.Is(err, constant.ErrUnauthorized) || u != nil {
 					t.Fatalf("expected ErrUnauthorized, got %v / %v", u, err)
 				}
-				if IsAuthenticated(r) {
-					t.Fatal("IsAuthenticated must be false")
-				}
 				return
 			}
-			if err != nil || u.ID != id || !IsAuthenticated(r) {
+			if err != nil || u.ID != id {
 				t.Fatalf("expected user %s, got %v / %v", id, u, err)
 			}
 		})
@@ -187,47 +150,16 @@ func TestParseUUIDFromPath(t *testing.T) {
 	if _, err := ParseUUIDFromPath(httptest.NewRequest(http.MethodGet, "/", nil), "walletId"); !errors.Is(err, constant.ErrInvalidInput) {
 		t.Fatalf("missing param: expected ErrInvalidInput, got %v", err)
 	}
-}
 
-func TestRequireAuthentication(t *testing.T) {
-	called := false
-	next := func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusNoContent)
-	}
-	h := RequireAuthentication(next)
-
-	rr := httptest.NewRecorder()
-	h(rr, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rr.Code != http.StatusUnauthorized || called {
-		t.Fatalf("anonymous: expected 401 without calling next, got %d (called=%v)", rr.Code, called)
-	}
-	body := decodeJSON(t, rr)
-	if body["message"] != "Unauthorized" || body["success"] != false {
-		t.Fatalf("unexpected envelope: %v", body)
-	}
-
-	rr = httptest.NewRecorder()
-	h(rr, withUser(httptest.NewRequest(http.MethodGet, "/", nil), uuid.New()))
-	if rr.Code != http.StatusNoContent || !called {
-		t.Fatalf("authenticated: expected next to run, got %d (called=%v)", rr.Code, called)
+	// The error text stays the uuid parser's own, which 400 responses expose
+	// in their `error` field.
+	_, parseErr := uuid.Parse("abc")
+	if _, err := ParseUUIDFromPath(withURLParam(httptest.NewRequest(http.MethodGet, "/", nil), "walletId", "abc"), "walletId"); err == nil || err.Error() != parseErr.Error() {
+		t.Fatalf("error text = %v, want %v", err, parseErr)
 	}
 }
 
-func TestSetCommonHeadersAndDecodeJSONBody(t *testing.T) {
-	rr := httptest.NewRecorder()
-	SetCommonHeaders(rr)
-	for k, v := range map[string]string{
-		"Content-Type":           "application/json",
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "DENY",
-		"X-XSS-Protection":       "1; mode=block",
-	} {
-		if got := rr.Header().Get(k); got != v {
-			t.Errorf("%s = %q, want %q", k, got, v)
-		}
-	}
-
+func TestDecodeJSONBody(t *testing.T) {
 	var dst struct {
 		A int `json:"a"`
 	}

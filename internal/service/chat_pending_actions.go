@@ -48,8 +48,8 @@ type PendingAction struct {
 	SessionID uuid.UUID
 	MessageID uuid.UUID
 	ToolName  string
-	// Args are the normalized tool arguments executed on confirm.
-	Args       map[string]interface{}
+	// Args are the validated tool arguments executed on confirm.
+	Args       writeArgs
 	Status     PendingActionStatus
 	ResultCard *dto.ActionCard
 	CreatedAt  time.Time

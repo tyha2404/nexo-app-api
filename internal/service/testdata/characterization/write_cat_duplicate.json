@@ -1,0 +1,27 @@
+{
+  "preview": {
+    "ToolTitle": "Đang kiểm tra danh mục...",
+    "ResultJSON": "{\"categoryId\":\"<id-1>\",\"isDuplicate\":true,\"message\":\"Danh mục \\\"Lương\\\" đã tồn tại sẵn trong hệ thống.\",\"name\":\"Lương\",\"success\":true,\"type\":\"INCOME\"}",
+    "ActionCard": {
+      "actionType": "CATEGORY_CREATED",
+      "title": "Danh mục đã tồn tại",
+      "description": "Danh mục \"Lương\" (Thu nhập) đã có trong hệ thống",
+      "data": {
+        "id": "<id-1>",
+        "isDuplicate": true,
+        "name": "Lương",
+        "type": "INCOME"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "INCOME",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

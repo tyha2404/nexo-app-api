@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Cần xác nhận ví thanh toán",
+    "ResultJSON": "{\"error\":\"Bạn chưa có ví nào nên không thể dùng ví 'tiền mặt'. Có thể ghi nhận trả nợ mà không chọn ví.\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

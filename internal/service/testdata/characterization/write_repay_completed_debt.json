@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Ghi nhận trả nợ",
+    "ResultJSON": "{\"error\":\"Khoản nợ 'Mua laptop' đã được thanh toán đủ, không thể ghi nhận thêm.\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

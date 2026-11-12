@@ -2,15 +2,23 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/render"
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 )
+
+// sendAuthError writes the standard error envelope
+// {status, success: false, message, error} with msg as both message and
+// error (error carried msg alone before; clients only rely on the status).
+func sendAuthError(w http.ResponseWriter, status int, msg string) {
+	response.SendError(w, status, msg, errors.New(msg))
+}
 
 // AuthMiddleware is a middleware that verifies JWT tokens
 func AuthMiddleware(next http.Handler) http.Handler {
@@ -18,8 +26,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// Get the Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			render.Status(r, http.StatusUnauthorized)
-			render.JSON(w, r, map[string]string{"error": "Authorization header is required"})
+			sendAuthError(w, http.StatusUnauthorized, "Authorization header is required")
 			return
 		}
 
@@ -27,8 +34,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// Format: "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			render.Status(r, http.StatusUnauthorized)
-			render.JSON(w, r, map[string]string{"error": "Authorization header format must be 'Bearer {token}'"})
+			sendAuthError(w, http.StatusUnauthorized, "Authorization header format must be 'Bearer {token}'")
 			return
 		}
 
@@ -37,8 +43,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// Validate the token
 		claims, err := util.ValidateToken(tokenString)
 		if err != nil {
-			render.Status(r, http.StatusUnauthorized)
-			render.JSON(w, r, map[string]string{"error": "Invalid or expired token"})
+			sendAuthError(w, http.StatusUnauthorized, "Invalid or expired token")
 			return
 		}
 
@@ -65,14 +70,12 @@ func AdminOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 		if !ok {
-			render.Status(r, http.StatusUnauthorized)
-			render.JSON(w, r, map[string]string{"error": "User not found in context"})
+			sendAuthError(w, http.StatusUnauthorized, "User not found in context")
 			return
 		}
 
-		if user.Role != "admin" {
-			render.Status(r, http.StatusForbidden)
-			render.JSON(w, r, map[string]string{"error": "Admin access required"})
+		if user.Role != model.RoleAdmin {
+			sendAuthError(w, http.StatusForbidden, "Admin access required")
 			return
 		}
 
@@ -91,14 +94,12 @@ func RequireCurrentRole(role string, lookup RoleLookup) func(http.Handler) http.
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, ok := r.Context().Value(constant.UserContextKey).(model.User)
 			if !ok {
-				render.Status(r, http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "User not found in context"})
+				sendAuthError(w, http.StatusUnauthorized, "User not found in context")
 				return
 			}
 			current, err := lookup(r.Context(), user.ID)
 			if err != nil || current != role {
-				render.Status(r, http.StatusForbidden)
-				render.JSON(w, r, map[string]string{"error": "Admin access required"})
+				sendAuthError(w, http.StatusForbidden, "Admin access required")
 				return
 			}
 			next.ServeHTTP(w, r)

@@ -38,8 +38,8 @@ func main() {
 	}
 
 	knowledgeRepo := repository.NewKnowledgeRepository(gormDB)
-	requestyService := service.NewRequestyService(cfg, logg)
-	ragService := service.NewRAGService(knowledgeRepo, requestyService, logg)
+	nineRouterService := service.NewNineRouterService(cfg, logg)
+	ragService := service.NewRAGService(knowledgeRepo, nineRouterService, logg)
 
 	ctx := context.Background()
 
@@ -51,7 +51,7 @@ func main() {
 	fmt.Printf("\n🚀 Nexo Knowledge Base Seeder\n")
 	fmt.Printf("------------------------------------------------------------------\n")
 	fmt.Printf("Loaded %d knowledge files from internal/data/knowledge/\n", len(fileDocs))
-	fmt.Printf("Force re-embed: %v | Requesty AI Configured: %v\n\n", *forceFlag, requestyService.IsConfigured())
+	fmt.Printf("Force re-embed: %v | 9Router AI Configured: %v\n\n", *forceFlag, nineRouterService.IsConfigured())
 
 	if *forceFlag {
 		for _, doc := range fileDocs {
@@ -73,10 +73,8 @@ func main() {
 	fmt.Printf("%-3s | %-24s | %-45s | %s\n", "No.", "Topic", "Title", "Embedding Status")
 	fmt.Printf("----+--------------------------+-----------------------------------------------+-----------------\n")
 	for i, d := range docs {
-		status := "✅ Valid Vector"
-		if d.Embedding == "" || d.Embedding == "[]" || len(d.Embedding) < 10 {
-			status = "❌ Empty"
-		} else {
+		status := "❌ Empty"
+		if d.Embedding != "" && d.Embedding != "[]" && len(d.Embedding) >= 10 {
 			status = fmt.Sprintf("✅ %d chars", len(d.Embedding))
 		}
 		title := d.Title

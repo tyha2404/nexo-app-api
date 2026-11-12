@@ -48,8 +48,12 @@ func (rw *responseWriter) Unwrap() http.ResponseWriter {
 	return rw.ResponseWriter
 }
 
-// LoggingMiddleware logs request information with colorful terminal badges and structured logs
-func LoggingMiddleware(logg *zap.Logger) func(http.Handler) http.Handler {
+// LoggingMiddleware logs every request. In development it prints a colored
+// console line (incl. the query string) and records 5xx responses in the zap
+// log. In production (APP_ENV, see config.IsProductionEnv) every request is
+// logged through zap only, without ANSI colors and without the query string,
+// which may carry search text or other user data.
+func LoggingMiddleware(logg *zap.Logger, production bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -59,6 +63,23 @@ func LoggingMiddleware(logg *zap.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(rw, r)
 
 			duration := time.Since(start)
+
+			if production {
+				fields := []zap.Field{
+					zap.String("method", r.Method),
+					zap.String("path", r.URL.Path),
+					zap.Int("status", rw.statusCode),
+					zap.Duration("duration", duration),
+					zap.String("remote_addr", r.RemoteAddr),
+					zap.Int64("bytes", rw.bytesWritten),
+				}
+				if rw.statusCode >= 500 {
+					logg.Error("HTTP Server Error", fields...)
+				} else {
+					logg.Info("HTTP request", fields...)
+				}
+				return
+			}
 
 			// Visual fine-grained colorful console format:
 			// [HTTP] 15:04:05.123 | [ 200 OK ] |  12.45ms |   1.2 KB | 127.0.0.1:54321 | [ GET ] /api/v1/transactions?page=1

@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Chuyển tiền nội bộ",
+    "ResultJSON": "{\"error\":\"Cần nêu rõ cả ví nguồn và ví đích. Các ví hiện có: Ví Tiền mặt, Tài khoản Ngân hàng, Ví Điện tử, Techcombank, Techcombank Visa.\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

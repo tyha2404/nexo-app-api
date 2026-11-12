@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Đặt ngân sách",
+    "ResultJSON": "{\"error\":\"Không tìm thấy danh mục 'Du lịch' trong hệ thống của bạn\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

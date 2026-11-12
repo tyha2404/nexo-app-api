@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -143,5 +144,56 @@ func TestRequireCurrentRole_UsesDatabaseRole(t *testing.T) {
 	}
 	if code := serve(deleted); code != http.StatusForbidden {
 		t.Errorf("deleted admin: expected 403, got %d", code)
+	}
+}
+
+// Auth errors use the standard error envelope (response.SendError) with the
+// same status codes as before.
+func TestAuthErrors_UseStandardEnvelope(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	admin := func(r *http.Request) *http.Request {
+		return r.WithContext(context.WithValue(r.Context(), constant.UserContextKey, model.User{ID: uuid.New(), Role: "user"}))
+	}
+	tests := []struct {
+		name    string
+		handler http.Handler
+		req     func() *http.Request
+		status  int
+		msg     string
+	}{
+		{"missing header", AuthMiddleware(next), func() *http.Request { return httptest.NewRequest("GET", "/x", nil) },
+			http.StatusUnauthorized, "Authorization header is required"},
+		{"bad format", AuthMiddleware(next), func() *http.Request {
+			r := httptest.NewRequest("GET", "/x", nil)
+			r.Header.Set("Authorization", "Token abc")
+			return r
+		}, http.StatusUnauthorized, "Authorization header format must be 'Bearer {token}'"},
+		{"invalid token", AuthMiddleware(next), func() *http.Request {
+			r := httptest.NewRequest("GET", "/x", nil)
+			r.Header.Set("Authorization", "Bearer not-a-jwt")
+			return r
+		}, http.StatusUnauthorized, "Invalid or expired token"},
+		{"no user", AdminOnly(next), func() *http.Request { return httptest.NewRequest("GET", "/x", nil) },
+			http.StatusUnauthorized, "User not found in context"},
+		{"not admin", AdminOnly(next), func() *http.Request { return admin(httptest.NewRequest("GET", "/x", nil)) },
+			http.StatusForbidden, "Admin access required"},
+		{"role re-check", RequireCurrentRole(model.RoleAdmin, func(context.Context, uuid.UUID) (string, error) { return "user", nil })(next),
+			func() *http.Request { return admin(httptest.NewRequest("GET", "/x", nil)) }, http.StatusForbidden, "Admin access required"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			tt.handler.ServeHTTP(rr, tt.req())
+			if rr.Code != tt.status {
+				t.Fatalf("status = %d, want %d", rr.Code, tt.status)
+			}
+			if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+				t.Fatalf("Content-Type = %q", ct)
+			}
+			want := fmt.Sprintf(`{"status":%d,"success":false,"message":%q,"error":%q}`+"\n", tt.status, tt.msg, tt.msg)
+			if got := rr.Body.String(); got != want {
+				t.Fatalf("body = %s, want %s", got, want)
+			}
+		})
 	}
 }

@@ -5,28 +5,20 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type TransactionHandler struct {
 	transactionService service.TransactionService
-	validator          *validator.Validate
-	log                *zap.Logger
 	errorHandler       *ErrorHandler
 }
 
 func NewTransactionHandler(transactionService service.TransactionService, log *zap.Logger) *TransactionHandler {
 	return &TransactionHandler{
 		transactionService: transactionService,
-		validator:          newStructValidator(),
-		log:                log,
 		errorHandler:       NewErrorHandler(log),
 	}
 }
@@ -39,7 +31,7 @@ func NewTransactionHandler(transactionService service.TransactionService, log *z
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.CreateTransactionRequest true "Create transaction request"
-// @Success 201 {object} dto.TransactionResponse
+// @Success 201 {object} TransactionEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Category or wallet not found"
@@ -47,13 +39,7 @@ func NewTransactionHandler(transactionService service.TransactionService, log *z
 // @Router /transactions [post]
 func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateTransactionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "create_transaction")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "create_transaction")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "create_transaction") {
 		return
 	}
 
@@ -77,13 +63,7 @@ func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.TransactionResponse]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    *transaction,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, *transaction)
 }
 
 // GetTransaction returns a single transaction
@@ -93,14 +73,14 @@ func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Re
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Transaction ID"
-// @Success 200 {object} dto.TransactionResponse
+// @Success 200 {object} TransactionEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /transactions/{id} [get]
 func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "get_transaction")
 		return
@@ -122,12 +102,7 @@ func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.TransactionResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *transaction,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *transaction)
 }
 
 // ListTransactions returns a list of transactions
@@ -138,9 +113,14 @@ func (h *TransactionHandler) GetTransaction(w http.ResponseWriter, r *http.Reque
 // @Tags transactions
 // @Produce json
 // @Security BearerAuth
+// @Param type query string false "Transaction type" Enums(INCOME, EXPENSE, INVESTMENT)
+// @Param status query string false "Investment status (HOLDING also matches transactions without a status)" Enums(HOLDING, SOLD, MATURED, CANCELLED)
+// @Param categoryId query string false "Category ID (UUID); invalid IDs are ignored"
+// @Param startDate query string false "Only transactions on or after this date (YYYY-MM-DD); invalid dates are ignored"
+// @Param endDate query string false "Only transactions up to this date (YYYY-MM-DD); invalid dates are ignored"
 // @Param page query int false "Page number"
 // @Param limit query int false "Page limit (default 10, max 100)"
-// @Success 200 {array} dto.TransactionResponse
+// @Success 200 {object} TransactionPage
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /transactions [get]
@@ -161,16 +141,7 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.PaginationResponse[dto.TransactionResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Items:   transactions,
-		Total:   int(total),
-		Page:    page,
-		Limit:   limit,
-		Summary: summary,
-	})
+	h.errorHandler.HandlePaginated(w, http.StatusOK, transactions, int(total), page, limit, summary)
 }
 
 // UpdateTransaction updates an existing transaction
@@ -182,27 +153,21 @@ func (h *TransactionHandler) ListTransactions(w http.ResponseWriter, r *http.Req
 // @Security BearerAuth
 // @Param id path string true "Transaction ID"
 // @Param request body dto.UpdateTransactionRequest true "Update transaction request"
-// @Success 200 {object} dto.TransactionResponse
+// @Success 200 {object} TransactionEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /transactions/{id} [put]
 func (h *TransactionHandler) UpdateTransaction(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "update_transaction")
 		return
 	}
 
 	var req dto.UpdateTransactionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "update_transaction")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "update_transaction")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "update_transaction") {
 		return
 	}
 
@@ -226,12 +191,7 @@ func (h *TransactionHandler) UpdateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.TransactionResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *transaction,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *transaction)
 }
 
 // DeleteTransaction deletes a transaction
@@ -241,14 +201,14 @@ func (h *TransactionHandler) UpdateTransaction(w http.ResponseWriter, r *http.Re
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Transaction ID"
-// @Success 200 {object} map[string]string
+// @Success 200 {object} MessageResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /transactions/{id} [delete]
 func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "delete_transaction")
 		return
@@ -269,8 +229,7 @@ func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Transaction deleted successfully"})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Transaction deleted successfully")
 }
 
 // RestoreTransaction undoes the deletion of a transaction
@@ -280,14 +239,14 @@ func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Re
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Transaction ID"
-// @Success 200 {object} dto.TransactionResponse
+// @Success 200 {object} TransactionEnvelope
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "No deleted transaction with this id"
 // @Failure 500 {object} response.ErrorResponse
 // @Router /transactions/{id}/restore [post]
 func (h *TransactionHandler) RestoreTransaction(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "restore_transaction")
 		return
@@ -309,12 +268,7 @@ func (h *TransactionHandler) RestoreTransaction(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.TransactionResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *transaction,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *transaction)
 }
 
 // ListTags returns the user's transaction tags

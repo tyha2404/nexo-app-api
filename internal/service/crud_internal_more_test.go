@@ -67,12 +67,12 @@ func TestCategoryService_CreateAndList(t *testing.T) {
 	svc := NewCategoryService(repo)
 	ctx := context.Background()
 
-	created, err := svc.Create(ctx, &model.Category{UserID: owner, Name: "Ăn uống", Type: model.CategoryTypeExpense})
+	created, err := svc.Create(ctx, owner, dto.CreateCategoryRequest{Name: "Ăn uống", Type: "EXPENSE"})
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, created.ID)
 
 	repo.createErr = errInternalRepo
-	_, err = svc.Create(ctx, &model.Category{UserID: owner, Name: "x"})
+	_, err = svc.Create(ctx, owner, dto.CreateCategoryRequest{Name: "x"})
 	require.ErrorIs(t, err, errInternalRepo)
 
 	list, err := svc.List(ctx, owner, "EXPENSE", 20, 40)
@@ -142,7 +142,7 @@ func TestCostService_CreateAndListWithCategory(t *testing.T) {
 	svc := NewCostService(repo, cats)
 	ctx := context.Background()
 
-	cost, err := svc.Create(ctx, &model.Cost{UserID: owner, CategoryID: cat.ID, Title: "Cafe", Amount: 35_000})
+	cost, err := svc.Create(ctx, owner, dto.CreateCostRequest{CategoryID: cat.ID, Title: "Cafe", Amount: 35_000})
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, cost.ID)
 
@@ -156,12 +156,12 @@ func TestCostService_CreateAndListWithCategory(t *testing.T) {
 	require.Equal(t, filters, repo.listFilters)
 
 	repo.createErr = errInternalRepo
-	_, err = svc.Create(ctx, &model.Cost{UserID: owner, CategoryID: cat.ID})
+	_, err = svc.Create(ctx, owner, dto.CreateCostRequest{CategoryID: cat.ID})
 	require.ErrorIs(t, err, errInternalRepo)
 
 	// A DB failure on the category lookup is not turned into a 404.
 	failing := &failingCategoryRepo{err: errInternalRepo}
-	_, err = NewCostService(repo, failing).Create(ctx, &model.Cost{UserID: owner, CategoryID: cat.ID})
+	_, err = NewCostService(repo, failing).Create(ctx, owner, dto.CreateCostRequest{CategoryID: cat.ID})
 	require.ErrorIs(t, err, errInternalRepo)
 	require.NotErrorIs(t, err, constant.ErrNotFound)
 }
@@ -206,9 +206,10 @@ func TestUserService_GetListDelete(t *testing.T) {
 	_, err = svc.Get(ctx, uuid.New())
 	require.ErrorIs(t, err, constant.ErrNotFound)
 
-	list, err := svc.List(ctx, 10, 0)
+	list, total, err := svc.List(ctx, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, list, 2)
+	require.Equal(t, int64(2), total)
 
 	require.ErrorIs(t, svc.Delete(ctx, uuid.New()), constant.ErrNotFound)
 	require.NoError(t, svc.Delete(ctx, a.ID))

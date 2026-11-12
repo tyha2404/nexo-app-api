@@ -39,15 +39,11 @@ type PresetResponse struct {
 }
 
 func ToPresetResponse(p *model.Preset) *PresetResponse {
-	var catName string
-	if p.Category.Name != "" {
-		catName = p.Category.Name
-	}
 	return &PresetResponse{
 		ID:           p.ID,
 		UserID:       p.UserID,
 		CategoryID:   p.CategoryID,
-		CategoryName: catName,
+		CategoryName: p.Category.Name,
 		Name:         p.Name,
 		Amount:       p.Amount,
 		Type:         string(p.Type),

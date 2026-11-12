@@ -1,0 +1,76 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_transaction",
+    "actionCard": {
+      "actionType": "TRANSACTION_CREATED",
+      "title": "Đã ghi nhận Chi tiêu",
+      "description": "50.000 ₫ - Phở (Ăn uống)",
+      "data": {
+        "amount": 50000,
+        "category": "Ăn uống",
+        "date": "2026-11-07",
+        "description": "Phở",
+        "id": "<id-2>",
+        "isNewCategoryCreated": false,
+        "type": "EXPENSE",
+        "wallet": "Ví Tiền mặt"
+      }
+    },
+    "result": {
+      "amount": 50000,
+      "category": "Ăn uống",
+      "date": "2026-11-07",
+      "description": "Phở",
+      "isNewCategoryCreated": false,
+      "message": "Giao dịch đã được lưu thành công vào hệ thống Nexo.",
+      "success": true,
+      "transactionId": "<id-2>",
+      "type": "EXPENSE",
+      "wallet": "Ví Tiền mặt"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi chi tiêu — 50.000 ₫ - Phở (Ăn uống)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi chi tiêu",
+      "description": "50.000 ₫ - Phở (Ăn uống)",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 50000,
+        "categoryName": "Ăn uống",
+        "date": "2026-11-07",
+        "description": "Phở",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "isNewCategoryCreated": false,
+        "kind": "Ghi chi tiêu",
+        "status": "PENDING",
+        "toolName": "create_transaction",
+        "type": "EXPENSE",
+        "walletName": "Ví Tiền mặt"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": [
+      {
+        "categoryId": "<id-3>",
+        "walletId": "<id-4>",
+        "amount": 50000,
+        "type": "EXPENSE",
+        "description": "Phở",
+        "transactionDate": "2026-11-07T00:00:00Z"
+      }
+    ],
+    "transfers": null
+  }
+}

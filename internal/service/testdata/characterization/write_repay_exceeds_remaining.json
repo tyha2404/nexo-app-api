@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Ghi nhận trả nợ",
+    "ResultJSON": "{\"error\":\"Số tiền 600.001 ₫ vượt quá số còn lại của khoản nợ 'Vay anh Nam' (600.000 ₫).\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

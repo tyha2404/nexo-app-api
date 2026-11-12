@@ -2,12 +2,12 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	ErrDebtNotFound     = errors.New("debt not found")
+	ErrDebtNotFound     = repository.ErrDebtNotFound
 	ErrInvalidRepayment = repository.ErrInvalidRepayment
 	// ErrDebtAlreadyCompleted wraps ErrInvalidRepayment so callers treat it as a 400.
 	ErrDebtAlreadyCompleted = fmt.Errorf("khoản nợ đã hoàn tất, không thể trả thêm: %w", repository.ErrInvalidRepayment)
 	// ErrInvalidDebtUpdate is returned (as a 400) when an edit would leave the debt inconsistent.
-	ErrInvalidDebtUpdate = errors.New("dữ liệu sửa khoản nợ không hợp lệ")
+	ErrInvalidDebtUpdate = constant.NewKindError(constant.ErrInvalidInput, "dữ liệu sửa khoản nợ không hợp lệ")
 )
 
 type DebtService interface {
@@ -101,16 +101,22 @@ func (s *debtService) GetDebts(ctx context.Context, userID uuid.UUID, debtType m
 }
 
 func (s *debtService) GetDebtSummary(ctx context.Context, userID uuid.UUID) (*dto.DebtSummaryResponse, error) {
-	return s.debtRepo.GetSummaryByUserID(ctx, userID)
-}
-
-func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID uuid.UUID, req dto.AddRepaymentRequest) (*dto.DebtResponse, error) {
-	debt, err := s.debtRepo.FindByID(ctx, debtID, userID)
+	sum, err := s.debtRepo.GetSummaryByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if debt == nil {
-		return nil, ErrDebtNotFound
+	return &dto.DebtSummaryResponse{
+		TotalPayable:    sum.TotalPayable,
+		TotalReceivable: sum.TotalReceivable,
+		OverdueCount:    sum.OverdueCount,
+		PendingCount:    sum.PendingCount,
+	}, nil
+}
+
+func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID uuid.UUID, req dto.AddRepaymentRequest) (*dto.DebtResponse, error) {
+	debt, err := s.debtRepo.GetByIDForUser(ctx, userID, debtID)
+	if err != nil {
+		return nil, err
 	}
 	if debt.Status == model.DebtStatusCompleted {
 		return nil, ErrDebtAlreadyCompleted
@@ -120,8 +126,8 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 		return nil, ErrInvalidRepayment
 	}
 	// Do not mutate the repository snapshot before persistence succeeds.
-	copy := *debt
-	debt = &copy
+	snapshot := *debt
+	debt = &snapshot
 
 	paidAt := util.Now()
 	if req.PaidAt != nil {
@@ -140,14 +146,7 @@ func (s *debtService) AddRepayment(ctx context.Context, userID uuid.UUID, debtID
 
 	debt.PaidAmount += req.Amount
 	debt.UpdatedAt = util.Now()
-
-	if debt.PaidAmount >= debt.TotalAmount {
-		debt.Status = model.DebtStatusCompleted
-	} else if debt.DueDate != nil && util.IsPastDate(*debt.DueDate) {
-		debt.Status = model.DebtStatusOverdue
-	} else {
-		debt.Status = model.DebtStatusPending
-	}
+	debt.Status = deriveDebtStatus(debt)
 
 	var balanceDelta float64
 	if req.WalletID != nil {
@@ -174,7 +173,7 @@ func (s *debtService) UpdateDebt(ctx context.Context, userID uuid.UUID, debtID u
 		return nil, fmt.Errorf("hạn thanh toán phải từ ngày bắt đầu trở đi: %w", ErrInvalidDebtUpdate)
 	}
 
-	debt, err := s.debtRepo.UpdateWithWallet(ctx, debtID, userID, func(d *model.Debt) error {
+	debt, err := s.debtRepo.UpdateWithWallet(ctx, userID, debtID, func(d *model.Debt) error {
 		if math.Round(req.TotalAmount*100) < math.Round(d.PaidAmount*100) {
 			return fmt.Errorf("tổng số tiền không được nhỏ hơn số đã thanh toán (%.0f): %w", d.PaidAmount, ErrInvalidDebtUpdate)
 		}
@@ -186,20 +185,10 @@ func (s *debtService) UpdateDebt(ctx context.Context, userID uuid.UUID, debtID u
 		d.DueDate = dueDate
 		d.Notes = req.Notes
 		d.WalletID = req.WalletID
-		switch {
-		case d.PaidAmount >= d.TotalAmount:
-			d.Status = model.DebtStatusCompleted
-		case d.DueDate != nil && util.IsPastDate(*d.DueDate):
-			d.Status = model.DebtStatusOverdue
-		default:
-			d.Status = model.DebtStatusPending
-		}
+		d.Status = deriveDebtStatus(d)
 		d.UpdatedAt = util.Now()
 		return nil
 	})
-	if errors.Is(err, repository.ErrDebtNotFound) {
-		return nil, ErrDebtNotFound
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -209,11 +198,21 @@ func (s *debtService) UpdateDebt(ctx context.Context, userID uuid.UUID, debtID u
 // DeleteDebt soft-deletes the debt and its repayments and reverses their wallet
 // effects in one DB transaction (see model.DebtCreationWalletDelta).
 func (s *debtService) DeleteDebt(ctx context.Context, userID uuid.UUID, debtID uuid.UUID) error {
-	err := s.debtRepo.Delete(ctx, debtID, userID)
-	if errors.Is(err, repository.ErrDebtNotFound) {
-		return ErrDebtNotFound
+	return s.debtRepo.Delete(ctx, userID, debtID)
+}
+
+// deriveDebtStatus returns the status a debt has after its paid amount or due
+// date changed: COMPLETED once fully paid, OVERDUE past its due date
+// (util.IsPastDate), PENDING otherwise.
+func deriveDebtStatus(d *model.Debt) model.DebtStatus {
+	switch {
+	case d.PaidAmount >= d.TotalAmount:
+		return model.DebtStatusCompleted
+	case d.DueDate != nil && util.IsPastDate(*d.DueDate):
+		return model.DebtStatusOverdue
+	default:
+		return model.DebtStatusPending
 	}
-	return err
 }
 
 // debtDay turns a requested start/due date into UTC midnight of its calendar

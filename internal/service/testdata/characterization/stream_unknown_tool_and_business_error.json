@@ -1,0 +1,167 @@
+{
+  "chatMessages": [
+    {
+      "role": "system",
+      "content": "Bạn là Nexo AI Advisor - Trợ lý Cố vấn \u0026 Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.\nHôm nay là: <today>.\n\nBạn ĐƯỢC TRANG BỊ các công cụ (tools) để tra cứu dữ liệu tài chính thực tế và thực hiện tác vụ cho người dùng. \nBẮT BUỘC: Khi người dùng hỏi hoặc yêu cầu bất kỳ điều gì liên quan đến dữ liệu cá nhân (số dư, giao dịch, chi tiêu, thu nhập, ngân sách, nợ, ví), bạn PHẢI GỌI TOOL tương ứng. KHÔNG ĐƯỢC tự suy đoán hay bịa ra số liệu.\n\nHướng dẫn gọi tool cụ thể:\n1. Tổng quan tài chính (thu/chi/số dư/tiết kiệm) -\u003e gọi \"get_financial_overview\".\n2. Danh mục chi tiêu, cơ cấu chi tiêu -\u003e gọi \"get_spending_by_category\".\n3. Xem giao dịch gần đây -\u003e gọi \"list_recent_transactions\"; tìm kiếm/lọc nâng cao -\u003e gọi \"search_transactions\".\n4. Ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: \"vừa ăn phở 50k\", \"thêm chi tiêu 100k\", \"nhận lương 25tr\") -\u003e gọi \"create_transaction\".\n5. Tạo mới danh mục thu/chi/đầu tư -\u003e gọi \"create_category\".\n6. Ngân sách \u0026 hạn mức chi tiêu -\u003e gọi \"get_budget_status\".\n7. Các khoản nợ / cho vay -\u003e gọi \"get_debt_summary\" hoặc \"get_debt_detail\".\n8. Số dư ví, danh sách tài khoản -\u003e gọi \"list_wallets\" hoặc \"get_wallet_detail\".\n9. Danh mục kèm mức chi tháng này -\u003e gọi \"list_categories\".\n10. Xu hướng chi tiêu qua các tháng -\u003e gọi \"get_monthly_trend\".\n11. Danh mục đầu tư, tài sản -\u003e gọi \"get_investment_summary\".\n12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có \"KIẾN THỨC NỘI BỘ LIÊN QUAN\" -\u003e dùng ngay thông tin đó và KHÔNG gọi \"search_financial_knowledge\"; CHỈ gọi tool này khi thiếu thông tin.\n\nQuy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):\n- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả \"pending_confirmation\" nghĩa là đang chờ người dùng bấm \"Xác nhận\" trên thẻ đề xuất.\n- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm \"Xác nhận\" (hoặc \"Huỷ\").\n\nQuy tắc trả lời sau khi nhận kết quả từ Tool:\n- Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.\n- Sử dụng định dạng Markdown (in đậm số tiền, bullet points, bảng).\n- Định dạng tiền tệ chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).\n- Đưa ra nhận xét hoặc lời khuyên hữu ích dựa trên số liệu thực tế vừa tra cứu."
+    },
+    {
+      "role": "user",
+      "content": "x"
+    }
+  ],
+  "chatModel": "",
+  "chatTools": [
+    "get_financial_overview",
+    "list_recent_transactions",
+    "create_transaction",
+    "create_category",
+    "get_budget_status",
+    "get_debt_summary",
+    "list_wallets",
+    "get_spending_by_category",
+    "transfer_between_wallets",
+    "create_debt",
+    "record_debt_repayment",
+    "set_budget",
+    "compare_financial_periods",
+    "get_financial_targets",
+    "set_financial_target",
+    "search_transactions",
+    "list_categories",
+    "get_monthly_trend",
+    "get_wallet_detail",
+    "get_debt_detail",
+    "get_investment_summary",
+    "search_financial_knowledge"
+  ],
+  "err": "",
+  "events": [
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>"
+    },
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "no_such_tool",
+      "toolTitle": "Đang xử lý no_such_tool..."
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "get_debt_detail",
+      "toolTitle": "Đang xử lý get_debt_detail..."
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "record_debt_repayment",
+      "toolTitle": "Đang xử lý record_debt_repayment..."
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "SUCCESS"
+    }
+  ],
+  "stored": [
+    {
+      "Role": "user",
+      "Content": "x",
+      "Status": "SUCCESS"
+    },
+    {
+      "Role": "model",
+      "Content": "",
+      "Status": "SUCCESS"
+    }
+  ],
+  "streamCalls": 1,
+  "streamMessages": [
+    {
+      "role": "system",
+      "content": "Bạn là Nexo AI Advisor - Trợ lý Cố vấn \u0026 Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.\nHôm nay là: <today>.\n\nBạn ĐƯỢC TRANG BỊ các công cụ (tools) để tra cứu dữ liệu tài chính thực tế và thực hiện tác vụ cho người dùng. \nBẮT BUỘC: Khi người dùng hỏi hoặc yêu cầu bất kỳ điều gì liên quan đến dữ liệu cá nhân (số dư, giao dịch, chi tiêu, thu nhập, ngân sách, nợ, ví), bạn PHẢI GỌI TOOL tương ứng. KHÔNG ĐƯỢC tự suy đoán hay bịa ra số liệu.\n\nHướng dẫn gọi tool cụ thể:\n1. Tổng quan tài chính (thu/chi/số dư/tiết kiệm) -\u003e gọi \"get_financial_overview\".\n2. Danh mục chi tiêu, cơ cấu chi tiêu -\u003e gọi \"get_spending_by_category\".\n3. Xem giao dịch gần đây -\u003e gọi \"list_recent_transactions\"; tìm kiếm/lọc nâng cao -\u003e gọi \"search_transactions\".\n4. Ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: \"vừa ăn phở 50k\", \"thêm chi tiêu 100k\", \"nhận lương 25tr\") -\u003e gọi \"create_transaction\".\n5. Tạo mới danh mục thu/chi/đầu tư -\u003e gọi \"create_category\".\n6. Ngân sách \u0026 hạn mức chi tiêu -\u003e gọi \"get_budget_status\".\n7. Các khoản nợ / cho vay -\u003e gọi \"get_debt_summary\" hoặc \"get_debt_detail\".\n8. Số dư ví, danh sách tài khoản -\u003e gọi \"list_wallets\" hoặc \"get_wallet_detail\".\n9. Danh mục kèm mức chi tháng này -\u003e gọi \"list_categories\".\n10. Xu hướng chi tiêu qua các tháng -\u003e gọi \"get_monthly_trend\".\n11. Danh mục đầu tư, tài sản -\u003e gọi \"get_investment_summary\".\n12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có \"KIẾN THỨC NỘI BỘ LIÊN QUAN\" -\u003e dùng ngay thông tin đó và KHÔNG gọi \"search_financial_knowledge\"; CHỈ gọi tool này khi thiếu thông tin.\n\nQuy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):\n- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả \"pending_confirmation\" nghĩa là đang chờ người dùng bấm \"Xác nhận\" trên thẻ đề xuất.\n- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm \"Xác nhận\" (hoặc \"Huỷ\").\n\nQuy tắc trả lời sau khi nhận kết quả từ Tool:\n- Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.\n- Sử dụng định dạng Markdown (in đậm số tiền, bullet points, bảng).\n- Định dạng tiền tệ chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).\n- Đưa ra nhận xét hoặc lời khuyên hữu ích dựa trên số liệu thực tế vừa tra cứu."
+    },
+    {
+      "role": "user",
+      "content": "x"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "no_such_tool",
+            "arguments": "null"
+          }
+        },
+        {
+          "id": "c2",
+          "type": "function",
+          "function": {
+            "name": "get_debt_detail",
+            "arguments": "{\"debtTitle\":\"Nam\"}"
+          }
+        },
+        {
+          "id": "c3",
+          "type": "function",
+          "function": {
+            "name": "record_debt_repayment",
+            "arguments": "{\"amount\":1,\"debtTitle\":\"Nam\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"Không tìm thấy công cụ no_such_tool\"}",
+      "tool_call_id": "c1"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"debt not found\"}",
+      "tool_call_id": "c2"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"debt not found\"}",
+      "tool_call_id": "c3"
+    }
+  ],
+  "streamModel": "",
+  "txnCreated": null
+}

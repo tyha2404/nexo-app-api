@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Tạo danh mục mới",
+    "ResultJSON": "{\"error\":\"Tên danh mục (name) không được để trống\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Lỗi thiết lập mục tiêu",
+    "ResultJSON": "{\"error\":\"loại mục tiêu phải là EXPENSE hoặc INVESTMENT: invalid input\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

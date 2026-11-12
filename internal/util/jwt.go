@@ -23,11 +23,9 @@ var (
 	jwksInitOnce sync.Once
 )
 
-// InitJWT initializes JWT secret from config
+// InitJWT initializes the JWT secret from config. The secret itself is
+// validated by config.LoadConfig (at least 32 characters, no placeholder).
 func InitJWT(cfg *config.Config) {
-	if cfg.JwtSecret == "replace_me" || cfg.JwtSecret == "" {
-		panic("JWT_SECRET must be set to a secure value")
-	}
 	jwtKey = []byte(cfg.JwtSecret)
 	accessTTL = config.DefaultJwtAccessTTL
 	if cfg.JwtAccessTTL > 0 {
@@ -137,7 +135,7 @@ func ValidateToken(tokenString string) (*Claims, error) {
 					if roleStr, _ := roleClaim.(string); roleStr != "authenticated" {
 						return nil, jwt.ErrTokenInvalidClaims
 					}
-					roleStr := "user"
+					roleStr := model.RoleUser
 
 					username := emailStr
 					if strings.Contains(emailStr, "@") {

@@ -8,7 +8,6 @@ import (
 	"github.com/tyha2404/nexo-app-api/internal/handler"
 	"github.com/tyha2404/nexo-app-api/internal/middleware"
 	"github.com/tyha2404/nexo-app-api/internal/response"
-	"go.uber.org/zap"
 )
 
 // AuthLimitPerMinute is how many login/register/change-password attempts one
@@ -22,7 +21,6 @@ const RefreshLimitPerMinute = 30
 
 type AuthRouter struct {
 	handler        *handler.AuthHandler
-	logger         *zap.Logger
 	authLimiter    *middleware.RateLimiter
 	refreshLimiter *middleware.RateLimiter
 	// DisableRegister makes POST /auth/register answer 403. Local sign-up
@@ -31,10 +29,9 @@ type AuthRouter struct {
 }
 
 // NewAuthRouter creates a new instance of AuthRouter
-func NewAuthRouter(handler *handler.AuthHandler, logger *zap.Logger) *AuthRouter {
+func NewAuthRouter(handler *handler.AuthHandler) *AuthRouter {
 	return &AuthRouter{
 		handler: handler,
-		logger:  logger,
 		authLimiter: middleware.NewRateLimiter(AuthLimitPerMinute, time.Minute, middleware.ClientIPKey,
 			"Quá nhiều lần thử, vui lòng thử lại sau ít phút"),
 		refreshLimiter: middleware.NewRateLimiter(RefreshLimitPerMinute, time.Minute, middleware.ClientIPKey,

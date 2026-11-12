@@ -49,6 +49,10 @@ type Config struct {
 	LocalRegisterEnabled bool
 	// AppTimezone is the IANA zone used for "today"/"this month" (APP_TIMEZONE).
 	AppTimezone string
+	// AutoMigrate runs GORM AutoMigrate on startup (AUTO_MIGRATE=true, default
+	// false). Goose migrations are the schema source of truth; this is only an
+	// opt-in convenience for a throwaway local DB and is refused in production.
+	AutoMigrate bool
 }
 
 // DefaultCORSAllowedOrigins are used when CORS_ALLOWED_ORIGINS is unset: the
@@ -121,6 +125,7 @@ func LoadConfig() (*Config, error) {
 		SupabaseJWKSURL:          getEnv("SUPABASE_JWKS_URL", ""),
 		CORSAllowedOrigins:       ParseOrigins(getEnv("CORS_ALLOWED_ORIGINS", DefaultCORSAllowedOrigins)),
 		AppTimezone:              getEnv("APP_TIMEZONE", DefaultAppTimezone),
+		AutoMigrate:              strings.EqualFold(strings.TrimSpace(getEnv("AUTO_MIGRATE", "false")), "true"),
 	}
 
 	var err error
@@ -167,9 +172,21 @@ func splitList(raw string) []string {
 	return out
 }
 
-// IsProduction reports whether APP_ENV is "production".
+// IsProduction reports whether APP_ENV is a production environment (see
+// IsProductionEnv).
 func (c *Config) IsProduction() bool {
-	return c.AppEnv == "production"
+	return IsProductionEnv(c.AppEnv)
+}
+
+// IsProductionEnv is the single definition of "production" for APP_ENV:
+// "production" or "prod" (case-insensitive). Use it (or Config.IsProduction)
+// for every production check.
+func IsProductionEnv(appEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "production", "prod":
+		return true
+	}
+	return false
 }
 
 func getEnv(key, fallback string) string {

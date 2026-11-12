@@ -1,0 +1,323 @@
+{
+  "chatMessages": [
+    {
+      "role": "system",
+      "content": "Bạn là Nexo AI Advisor - Trợ lý Cố vấn \u0026 Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.\nHôm nay là: <today>.\n\nBạn ĐƯỢC TRANG BỊ các công cụ (tools) để tra cứu dữ liệu tài chính thực tế và thực hiện tác vụ cho người dùng. \nBẮT BUỘC: Khi người dùng hỏi hoặc yêu cầu bất kỳ điều gì liên quan đến dữ liệu cá nhân (số dư, giao dịch, chi tiêu, thu nhập, ngân sách, nợ, ví), bạn PHẢI GỌI TOOL tương ứng. KHÔNG ĐƯỢC tự suy đoán hay bịa ra số liệu.\n\nHướng dẫn gọi tool cụ thể:\n1. Tổng quan tài chính (thu/chi/số dư/tiết kiệm) -\u003e gọi \"get_financial_overview\".\n2. Danh mục chi tiêu, cơ cấu chi tiêu -\u003e gọi \"get_spending_by_category\".\n3. Xem giao dịch gần đây -\u003e gọi \"list_recent_transactions\"; tìm kiếm/lọc nâng cao -\u003e gọi \"search_transactions\".\n4. Ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: \"vừa ăn phở 50k\", \"thêm chi tiêu 100k\", \"nhận lương 25tr\") -\u003e gọi \"create_transaction\".\n5. Tạo mới danh mục thu/chi/đầu tư -\u003e gọi \"create_category\".\n6. Ngân sách \u0026 hạn mức chi tiêu -\u003e gọi \"get_budget_status\".\n7. Các khoản nợ / cho vay -\u003e gọi \"get_debt_summary\" hoặc \"get_debt_detail\".\n8. Số dư ví, danh sách tài khoản -\u003e gọi \"list_wallets\" hoặc \"get_wallet_detail\".\n9. Danh mục kèm mức chi tháng này -\u003e gọi \"list_categories\".\n10. Xu hướng chi tiêu qua các tháng -\u003e gọi \"get_monthly_trend\".\n11. Danh mục đầu tư, tài sản -\u003e gọi \"get_investment_summary\".\n12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có \"KIẾN THỨC NỘI BỘ LIÊN QUAN\" -\u003e dùng ngay thông tin đó và KHÔNG gọi \"search_financial_knowledge\"; CHỈ gọi tool này khi thiếu thông tin.\n\nQuy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):\n- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả \"pending_confirmation\" nghĩa là đang chờ người dùng bấm \"Xác nhận\" trên thẻ đề xuất.\n- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm \"Xác nhận\" (hoặc \"Huỷ\").\n\nQuy tắc trả lời sau khi nhận kết quả từ Tool:\n- Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.\n- Sử dụng định dạng Markdown (in đậm số tiền, bullet points, bảng).\n- Định dạng tiền tệ chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).\n- Đưa ra nhận xét hoặc lời khuyên hữu ích dựa trên số liệu thực tế vừa tra cứu."
+    },
+    {
+      "role": "user",
+      "content": "đặt ngân sách"
+    }
+  ],
+  "chatModel": "",
+  "chatTools": [
+    "get_financial_overview",
+    "list_recent_transactions",
+    "create_transaction",
+    "create_category",
+    "get_budget_status",
+    "get_debt_summary",
+    "list_wallets",
+    "get_spending_by_category",
+    "transfer_between_wallets",
+    "create_debt",
+    "record_debt_repayment",
+    "set_budget",
+    "compare_financial_periods",
+    "get_financial_targets",
+    "set_financial_target",
+    "search_transactions",
+    "list_categories",
+    "get_monthly_trend",
+    "get_wallet_detail",
+    "get_debt_detail",
+    "get_investment_summary",
+    "search_financial_knowledge"
+  ],
+  "err": "",
+  "events": [
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>"
+    },
+    {
+      "type": "session_info",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "set_budget",
+      "toolTitle": "Đang xử lý set_budget..."
+    },
+    {
+      "type": "action_card",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "actionCard": {
+        "actionType": "PENDING_CONFIRMATION",
+        "title": "Xác nhận: Đặt ngân sách",
+        "description": "Hạn mức danh mục Ăn uống: 3.000.000 ₫/tháng từ 2026-11-01",
+        "data": {
+          "actionId": "<id-3>",
+          "amount": 3000000,
+          "categoryName": "Ăn uống",
+          "date": "2026-11-01",
+          "expiresAt": "2026-11-08T09:15:00Z",
+          "kind": "Đặt ngân sách",
+          "status": "PENDING",
+          "toolName": "set_budget"
+        }
+      }
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "set_budget",
+      "toolTitle": "Đang xử lý set_budget..."
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "record_debt_repayment",
+      "toolTitle": "Đang xử lý record_debt_repayment..."
+    },
+    {
+      "type": "action_card",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "actionCard": {
+        "actionType": "PENDING_CONFIRMATION",
+        "title": "Xác nhận: Ghi trả nợ",
+        "description": "100.000 ₫ cho 'Vay Nam' (còn lại hiện tại: 1.000.000 ₫), trừ từ ví Techcombank Visa",
+        "data": {
+          "actionId": "<id-4>",
+          "amount": 100000,
+          "debtId": "<id-5>",
+          "description": "",
+          "expiresAt": "2026-11-08T09:15:00Z",
+          "kind": "Ghi trả nợ",
+          "remaining": 1000000,
+          "status": "PENDING",
+          "title": "Vay Nam",
+          "toolName": "record_debt_repayment",
+          "walletName": "Techcombank Visa"
+        }
+      }
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "tool_start",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "toolName": "create_debt",
+      "toolTitle": "Đang xử lý create_debt..."
+    },
+    {
+      "type": "action_card",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "actionCard": {
+        "actionType": "PENDING_CONFIRMATION",
+        "title": "Xác nhận: Ghi khoản cho vay",
+        "description": "2.000.000 ₫ - Cho Lan vay, hạn 2026-12-31",
+        "data": {
+          "actionId": "<id-6>",
+          "amount": 2000000,
+          "date": "2026-12-31",
+          "debtType": "RECEIVABLE",
+          "description": "",
+          "dueDate": "2026-12-31",
+          "expiresAt": "2026-11-08T09:15:00Z",
+          "kind": "Ghi khoản cho vay",
+          "status": "PENDING",
+          "title": "Cho Lan vay",
+          "toolName": "create_debt"
+        }
+      }
+    },
+    {
+      "type": "tool_done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING"
+    },
+    {
+      "type": "text_delta",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "STREAMING",
+      "delta": "Bạn kiểm tra nhé"
+    },
+    {
+      "type": "done",
+      "sessionId": "<id-1>",
+      "messageId": "<id-2>",
+      "status": "SUCCESS"
+    }
+  ],
+  "stored": [
+    {
+      "Role": "user",
+      "Content": "đặt ngân sách",
+      "Status": "SUCCESS"
+    },
+    {
+      "Role": "model",
+      "Content": "Bạn kiểm tra nhé",
+      "Status": "SUCCESS",
+      "ToolResults": [
+        {
+          "actionType": "PENDING_CONFIRMATION",
+          "data": {
+            "actionId": "<id-3>",
+            "amount": 3000000,
+            "categoryName": "Ăn uống",
+            "date": "2026-11-01",
+            "expiresAt": "2026-11-08T09:15:00Z",
+            "kind": "Đặt ngân sách",
+            "status": "PENDING",
+            "toolName": "set_budget"
+          },
+          "description": "Hạn mức danh mục Ăn uống: 3.000.000 ₫/tháng từ 2026-11-01",
+          "title": "Xác nhận: Đặt ngân sách"
+        },
+        {
+          "actionType": "PENDING_CONFIRMATION",
+          "data": {
+            "actionId": "<id-4>",
+            "amount": 100000,
+            "debtId": "<id-5>",
+            "description": "",
+            "expiresAt": "2026-11-08T09:15:00Z",
+            "kind": "Ghi trả nợ",
+            "remaining": 1000000,
+            "status": "PENDING",
+            "title": "Vay Nam",
+            "toolName": "record_debt_repayment",
+            "walletName": "Techcombank Visa"
+          },
+          "description": "100.000 ₫ cho 'Vay Nam' (còn lại hiện tại: 1.000.000 ₫), trừ từ ví Techcombank Visa",
+          "title": "Xác nhận: Ghi trả nợ"
+        },
+        {
+          "actionType": "PENDING_CONFIRMATION",
+          "data": {
+            "actionId": "<id-6>",
+            "amount": 2000000,
+            "date": "2026-12-31",
+            "debtType": "RECEIVABLE",
+            "description": "",
+            "dueDate": "2026-12-31",
+            "expiresAt": "2026-11-08T09:15:00Z",
+            "kind": "Ghi khoản cho vay",
+            "status": "PENDING",
+            "title": "Cho Lan vay",
+            "toolName": "create_debt"
+          },
+          "description": "2.000.000 ₫ - Cho Lan vay, hạn 2026-12-31",
+          "title": "Xác nhận: Ghi khoản cho vay"
+        }
+      ]
+    }
+  ],
+  "streamCalls": 1,
+  "streamMessages": [
+    {
+      "role": "system",
+      "content": "Bạn là Nexo AI Advisor - Trợ lý Cố vấn \u0026 Quản lý Tài chính Cá nhân thông minh của ứng dụng Nexo.\nHôm nay là: <today>.\n\nBạn ĐƯỢC TRANG BỊ các công cụ (tools) để tra cứu dữ liệu tài chính thực tế và thực hiện tác vụ cho người dùng. \nBẮT BUỘC: Khi người dùng hỏi hoặc yêu cầu bất kỳ điều gì liên quan đến dữ liệu cá nhân (số dư, giao dịch, chi tiêu, thu nhập, ngân sách, nợ, ví), bạn PHẢI GỌI TOOL tương ứng. KHÔNG ĐƯỢC tự suy đoán hay bịa ra số liệu.\n\nHướng dẫn gọi tool cụ thể:\n1. Tổng quan tài chính (thu/chi/số dư/tiết kiệm) -\u003e gọi \"get_financial_overview\".\n2. Danh mục chi tiêu, cơ cấu chi tiêu -\u003e gọi \"get_spending_by_category\".\n3. Xem giao dịch gần đây -\u003e gọi \"list_recent_transactions\"; tìm kiếm/lọc nâng cao -\u003e gọi \"search_transactions\".\n4. Ghi nhận/thêm chi tiêu hoặc thu nhập (ví dụ: \"vừa ăn phở 50k\", \"thêm chi tiêu 100k\", \"nhận lương 25tr\") -\u003e gọi \"create_transaction\".\n5. Tạo mới danh mục thu/chi/đầu tư -\u003e gọi \"create_category\".\n6. Ngân sách \u0026 hạn mức chi tiêu -\u003e gọi \"get_budget_status\".\n7. Các khoản nợ / cho vay -\u003e gọi \"get_debt_summary\" hoặc \"get_debt_detail\".\n8. Số dư ví, danh sách tài khoản -\u003e gọi \"list_wallets\" hoặc \"get_wallet_detail\".\n9. Danh mục kèm mức chi tháng này -\u003e gọi \"list_categories\".\n10. Xu hướng chi tiêu qua các tháng -\u003e gọi \"get_monthly_trend\".\n11. Danh mục đầu tư, tài sản -\u003e gọi \"get_investment_summary\".\n12. Kiến thức tài chính: NẾU trong ngữ cảnh đã có \"KIẾN THỨC NỘI BỘ LIÊN QUAN\" -\u003e dùng ngay thông tin đó và KHÔNG gọi \"search_financial_knowledge\"; CHỈ gọi tool này khi thiếu thông tin.\n\nQuy tắc với các tool GHI dữ liệu (create_transaction, create_category, transfer_between_wallets, create_debt, record_debt_repayment, set_budget, set_financial_target):\n- Gọi tool sẽ chỉ TẠO ĐỀ XUẤT, CHƯA lưu gì. Kết quả \"pending_confirmation\" nghĩa là đang chờ người dùng bấm \"Xác nhận\" trên thẻ đề xuất.\n- TUYỆT ĐỐI KHÔNG nói đã lưu/đã ghi/đã chuyển thành công. Hãy tóm tắt đề xuất và nhắc người dùng kiểm tra rồi bấm \"Xác nhận\" (hoặc \"Huỷ\").\n\nQuy tắc trả lời sau khi nhận kết quả từ Tool:\n- Trả lời bằng tiếng Việt tự nhiên, ngắn gọn, súc tích, thân thiện và chuyên nghiệp.\n- Sử dụng định dạng Markdown (in đậm số tiền, bullet points, bảng).\n- Định dạng tiền tệ chuẩn Việt Nam (ví dụ: 50.000 ₫, 12.500.000 ₫).\n- Đưa ra nhận xét hoặc lời khuyên hữu ích dựa trên số liệu thực tế vừa tra cứu."
+    },
+    {
+      "role": "user",
+      "content": "đặt ngân sách"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "set_budget",
+            "arguments": "{\"amount\":3000000,\"categoryName\":\"Ăn uống\",\"periodStart\":\"2026-11-01\"}"
+          }
+        },
+        {
+          "id": "c2",
+          "type": "function",
+          "function": {
+            "name": "set_budget",
+            "arguments": "{\"amount\":1,\"categoryName\":\"Du lịch\"}"
+          }
+        },
+        {
+          "id": "c3",
+          "type": "function",
+          "function": {
+            "name": "record_debt_repayment",
+            "arguments": "{\"amount\":100000,\"debtTitle\":\"Nam\",\"walletName\":\"techcombank visa\"}"
+          }
+        },
+        {
+          "id": "c4",
+          "type": "function",
+          "function": {
+            "name": "create_debt",
+            "arguments": "{\"dueDate\":\"2026-12-31\",\"title\":\"Cho Lan vay\",\"totalAmount\":2000000,\"type\":\"RECEIVABLE\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"actionId\":\"<id-3>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Đặt ngân sách — Hạn mức danh mục Ăn uống: 3.000.000 ₫/tháng từ 2026-11-01\"}",
+      "tool_call_id": "c1"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"Không tìm thấy danh mục 'Du lịch' trong hệ thống của bạn\"}",
+      "tool_call_id": "c2"
+    },
+    {
+      "role": "tool",
+      "content": "{\"actionId\":\"<id-4>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi trả nợ — 100.000 ₫ cho 'Vay Nam' (còn lại hiện tại: 1.000.000 ₫), trừ từ ví Techcombank Visa\"}",
+      "tool_call_id": "c3"
+    },
+    {
+      "role": "tool",
+      "content": "{\"actionId\":\"<id-6>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi khoản cho vay — 2.000.000 ₫ - Cho Lan vay, hạn 2026-12-31\"}",
+      "tool_call_id": "c4"
+    }
+  ],
+  "streamModel": "",
+  "txnCreated": null
+}

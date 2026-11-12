@@ -6,14 +6,12 @@ import (
 
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type CostHandler struct {
 	svc          service.CostService
-	log          *zap.Logger
 	errorHandler *ErrorHandler
 	validator    *Validator
 }
@@ -21,7 +19,6 @@ type CostHandler struct {
 func NewCostHandler(svc service.CostService, log *zap.Logger) *CostHandler {
 	return &CostHandler{
 		svc:          svc,
-		log:          log,
 		errorHandler: NewErrorHandler(log),
 		validator:    NewValidator(),
 	}
@@ -35,10 +32,10 @@ func NewCostHandler(svc service.CostService, log *zap.Logger) *CostHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param cost body dto.CreateCostRequest true "Cost object"
-// @Success 201 {object} model.Cost
-// @Failure 400 {string} string "Invalid request payload"
+// @Success 201 {object} CostEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
 // @Failure 404 {object} response.ErrorResponse "Category not found"
-// @Failure 500 {string} string "Failed to create cost"
+// @Failure 500 {object} response.ErrorResponse "Failed to create cost"
 // @Router /costs [post]
 func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateCostRequest
@@ -55,16 +52,7 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cost := &model.Cost{
-		Title:      req.Title,
-		Amount:     req.Amount,
-		Currency:   req.Currency,
-		IncurredAt: req.IncurredAt.Time,
-		CategoryID: req.CategoryID,
-		UserID:     user.ID,
-	}
-
-	createdCost, err := h.svc.Create(r.Context(), cost)
+	createdCost, err := h.svc.Create(r.Context(), user.ID, req)
 	if err != nil {
 		if IsNotFoundError(err) {
 			h.errorHandler.HandleError(w, err, http.StatusNotFound, "Category not found", "cost_create")
@@ -84,10 +72,10 @@ func (h *CostHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Cost ID"
-// @Success 200 {object} model.Cost
-// @Failure 400 {string} string "Invalid cost ID"
-// @Failure 404 {string} string "Cost not found"
-// @Failure 500 {string} string "Failed to get cost"
+// @Success 200 {object} CostEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid cost ID"
+// @Failure 404 {object} response.ErrorResponse "Cost not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to get cost"
 // @Router /costs/{id} [get]
 func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user
@@ -126,8 +114,8 @@ func (h *CostHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param offset query int false "Offset"
 // @Param startDate query string false "Start date filter (YYYY-MM-DD)"
 // @Param endDate query string false "End date filter (YYYY-MM-DD)"
-// @Success 200 {array} model.Cost
-// @Failure 500 {string} string "Failed to list costs"
+// @Success 200 {object} CostPage
+// @Failure 500 {object} response.ErrorResponse "Failed to list costs"
 // @Router /costs [get]
 func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user
@@ -160,10 +148,10 @@ func (h *CostHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Param id path string true "Cost ID"
 // @Param cost body dto.UpdateCostRequest true "Fields to update (owner cannot be changed)"
-// @Success 200 {object} model.Cost
-// @Failure 400 {string} string "Invalid cost ID or payload"
-// @Failure 404 {string} string "Cost not found"
-// @Failure 500 {string} string "Failed to update cost"
+// @Success 200 {object} CostEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid cost ID or payload"
+// @Failure 404 {object} response.ErrorResponse "Cost not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to update cost"
 // @Router /costs/{id} [put]
 func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user, err := GetUserFromContext(r)
@@ -208,9 +196,9 @@ func (h *CostHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Param id path string true "Cost ID"
 // @Success 204 {string} string "No Content"
-// @Failure 400 {string} string "Invalid cost ID"
-// @Failure 404 {string} string "Cost not found"
-// @Failure 500 {string} string "Failed to delete cost"
+// @Failure 400 {object} response.ErrorResponse "Invalid cost ID"
+// @Failure 404 {object} response.ErrorResponse "Cost not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to delete cost"
 // @Router /costs/{id} [delete]
 func (h *CostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	user, err := GetUserFromContext(r)

@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"testing"
 	"time"
 
@@ -23,7 +24,8 @@ func (m *MockWalletRepo) Create(ctx context.Context, wallet *model.Wallet) error
 	return args.Error(0)
 }
 
-func (m *MockWalletRepo) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.Wallet, error) {
+func (m *MockWalletRepo) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Wallet, error) {
+	// Expectations keep the (ctx, id, userID) argument order.
 	args := m.Called(ctx, id, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -41,7 +43,7 @@ func (m *MockWalletRepo) Update(ctx context.Context, wallet *model.Wallet, inclu
 	return args.Error(0)
 }
 
-func (m *MockWalletRepo) UpdateStatementSnapshot(ctx context.Context, walletID, userID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error {
+func (m *MockWalletRepo) UpdateStatementSnapshot(ctx context.Context, userID, walletID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error {
 	args := m.Called(ctx, walletID, userID, statementBalance, minimumPayment, previousBalance)
 	return args.Error(0)
 }
@@ -51,7 +53,8 @@ func (m *MockWalletRepo) SumAllocationPercent(ctx context.Context, userID uuid.U
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (m *MockWalletRepo) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+func (m *MockWalletRepo) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	// Expectations keep the (ctx, id, userID) argument order.
 	args := m.Called(ctx, id, userID)
 	return args.Error(0)
 }
@@ -61,20 +64,12 @@ func (m *MockWalletRepo) TransferMoney(ctx context.Context, transfer *model.Wall
 	return args.Error(0)
 }
 
-func (m *MockWalletRepo) AutoAllocateIncome(ctx context.Context, userID uuid.UUID, req *dto.AutoAllocateRequest) (*dto.AutoAllocateResponse, error) {
-	args := m.Called(ctx, userID, req)
+func (m *MockWalletRepo) AutoAllocateIncome(ctx context.Context, userID, sourceWalletID uuid.UUID, incomeAmount float64) (*repository.AutoAllocation, error) {
+	args := m.Called(ctx, userID, sourceWalletID, incomeAmount)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*dto.AutoAllocateResponse), args.Error(1)
-}
-
-func (m *MockWalletRepo) GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.WalletSummaryResponse, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*dto.WalletSummaryResponse), args.Error(1)
+	return args.Get(0).(*repository.AutoAllocation), args.Error(1)
 }
 
 func TestWalletService_CreateCreditCard(t *testing.T) {
@@ -148,7 +143,7 @@ func TestWalletService_CreditCardOutstandingCalculations(t *testing.T) {
 		UpdatedAt:         time.Now(),
 	}
 
-	mockRepo.On("GetByID", mock.Anything, cardID, userID).Return(wallet, nil)
+	mockRepo.On("GetByIDForUser", mock.Anything, cardID, userID).Return(wallet, nil)
 
 	resp, err := svc.GetWalletByID(context.Background(), userID, cardID)
 	assert.NoError(t, err)
@@ -230,7 +225,7 @@ func TestWalletService_UpdateWallet_AllocationExcludesSelfAndKeepsBalance(t *tes
 	userID, walletID := uuid.New(), uuid.New()
 	wallet := &model.Wallet{ID: walletID, UserID: userID, AllocationPercent: 50, Balance: 1000}
 
-	mockRepo.On("GetByID", mock.Anything, walletID, userID).Return(wallet, nil)
+	mockRepo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(wallet, nil)
 	mockRepo.On("SumAllocationPercent", mock.Anything, userID, mock.MatchedBy(func(id *uuid.UUID) bool { return id != nil && *id == walletID })).Return(40.0, nil)
 	// Balance not sent -> includeBalance=false so a stale balance is never written.
 	mockRepo.On("Update", mock.Anything, wallet, false).Return(nil)

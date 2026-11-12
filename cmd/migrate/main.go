@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tyha2404/nexo-app-api/internal/config"
-	"github.com/tyha2404/nexo-app-api/internal/logger"
+	"github.com/tyha2404/nexo-app-api/internal/db"
 )
 
 const (
@@ -66,17 +66,9 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	logg, err := logger.New(cfg.LogLevel)
-	if err != nil {
-		log.Fatalf("failed to init logger: %v", err)
-	}
-	defer logg.Sync()
-
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s default_query_exec_mode=simple_protocol",
-		cfg.DBHost, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBPort, cfg.DBSSL,
-	)
-
-	connConfig, err := pgx.ParseConfig(dsn)
+	// Same DSN as the server (incl. the app TimeZone), on the simple protocol
+	// required by connection poolers like Supavisor / PgBouncer.
+	connConfig, err := pgx.ParseConfig(db.BuildDSN(cfg))
 	if err != nil {
 		log.Fatalf("failed to parse DB config: %v", err)
 	}
@@ -98,8 +90,11 @@ func main() {
 		log.Fatalf("failed to create migrations directory: %v", err)
 	}
 
-	// Resync goose_db_version sequence if needed
-	_, _ = sqlDB.Exec(`SELECT setval(pg_get_serial_sequence('goose_db_version', 'id'), COALESCE((SELECT MAX(id) FROM goose_db_version), 1));`)
+	// Resync the goose_db_version sequence before commands that insert
+	// version rows; read-only commands such as status never write.
+	if command == "up" || command == "redo" {
+		_, _ = sqlDB.Exec(`SELECT setval(pg_get_serial_sequence('goose_db_version', 'id'), COALESCE((SELECT MAX(id) FROM goose_db_version), 1));`)
+	}
 
 	log.Printf("Executing goose command: %s", command)
 	var gooseArgs []string

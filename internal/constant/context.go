@@ -4,6 +4,7 @@ package constant
 type contextKey string
 
 const (
-	// userContextKey is the key for storing user information in context
+	// UserContextKey is the key for storing the authenticated model.User in
+	// the request context
 	UserContextKey contextKey = "user"
 )

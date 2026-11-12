@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,17 +42,7 @@ func (r *rolloverRepository) GetAllActiveUserIDs(ctx context.Context) ([]uuid.UU
 }
 
 func (r *rolloverRepository) GetTargetForMonth(ctx context.Context, userID uuid.UUID, targetType model.TargetType, month, year int) (*model.MonthlyTarget, error) {
-	var target model.MonthlyTarget
-	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND target_type = ? AND month = ? AND year = ?", userID, targetType, month, year).
-		First(&target).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &target, nil
+	return findMonthlyTarget(ctx, r.db, userID, targetType, month, year)
 }
 
 func (r *rolloverRepository) GetLatestTargetBefore(ctx context.Context, userID uuid.UUID, targetType model.TargetType, month, year int) (*model.MonthlyTarget, error) {
@@ -61,8 +52,8 @@ func (r *rolloverRepository) GetLatestTargetBefore(ctx context.Context, userID u
 		Order("year DESC, month DESC").
 		First(&target).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTargetNotFound
 		}
 		return nil, err
 	}

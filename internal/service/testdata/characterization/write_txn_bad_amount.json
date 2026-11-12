@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Đang ghi nhận giao dịch mới...",
+    "ResultJSON": "{\"error\":\"Số tiền giao dịch (amount) phải là số lớn hơn 0\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

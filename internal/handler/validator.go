@@ -29,6 +29,10 @@ func newStructValidator() *validator.Validate {
 	return v
 }
 
+// requestValidator is shared by decodeAndValidate. validator.Validate is safe
+// for concurrent use and caches struct metadata, so one instance is enough.
+var requestValidator = NewValidator()
+
 // NewValidator creates a new validator instance
 func NewValidator() *Validator {
 	return &Validator{
@@ -66,13 +70,13 @@ func (v *Validator) getErrorMessage(e validator.FieldError) string {
 	case "required":
 		return fmt.Sprintf("%s is required", field)
 	case "min":
-		return fmt.Sprintf("%s must be at least %s characters", field, param)
+		return fmt.Sprintf("%s must be at least %s%s", field, param, sizeUnit(e.Kind()))
 	case "max":
-		return fmt.Sprintf("%s must be at most %s characters", field, param)
+		return fmt.Sprintf("%s must be at most %s%s", field, param, sizeUnit(e.Kind()))
 	case "email":
 		return fmt.Sprintf("%s must be a valid email address", field)
 	case "len":
-		return fmt.Sprintf("%s must be exactly %s characters", field, param)
+		return fmt.Sprintf("%s must be exactly %s%s", field, param, sizeUnit(e.Kind()))
 	case "alphanum":
 		return fmt.Sprintf("%s must contain only alphanumeric characters", field)
 	case "username":
@@ -100,53 +104,16 @@ func (v *Validator) ValidateRequest(r *http.Request, dest interface{}) error {
 	return v.ValidateStruct(dest)
 }
 
-// ValidatePartial validates only the fields that are present in the request
-func (v *Validator) ValidatePartial(r *http.Request, dest interface{}) error {
-	if err := DecodeJSONBody(r, dest); err != nil {
-		return err
+// sizeUnit names what min/max/len count for a field of the given kind: the
+// length of a string, the number of entries of a slice/array/map, or (for
+// numbers) the value itself, which needs no unit.
+func sizeUnit(kind reflect.Kind) string {
+	switch kind {
+	case reflect.String:
+		return " characters"
+	case reflect.Slice, reflect.Array, reflect.Map:
+		return " items"
+	default:
+		return ""
 	}
-
-	// Only validate non-zero fields
-	val := reflect.ValueOf(dest)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	if val.Kind() != reflect.Struct {
-		return nil
-	}
-
-	var errors []string
-	typ := val.Type()
-
-	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
-		fieldType := typ.Field(i)
-
-		// Skip zero values
-		if field.IsZero() {
-			continue
-		}
-
-		// Validate the field
-		fieldValue := field.Interface()
-		if err := v.validate.Var(fieldValue, fieldType.Tag.Get("validate")); err != nil {
-			if validationErrors, ok := err.(validator.ValidationErrors); ok {
-				for _, e := range validationErrors {
-					errors = append(errors, v.getErrorMessage(e))
-				}
-			}
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("validation failed: %s", strings.Join(errors, "; "))
-	}
-
-	return nil
-}
-
-// RegisterCustomValidation allows registering custom validation functions
-func (v *Validator) RegisterCustomValidation(tag string, fn validator.Func) error {
-	return v.validate.RegisterValidation(tag, fn)
 }

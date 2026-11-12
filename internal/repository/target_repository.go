@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -16,16 +19,12 @@ type TargetRepository interface {
 	GetMonthlyTotalByCategoryType(ctx context.Context, userID uuid.UUID, catType model.CategoryType, startDate, endDate time.Time) (float64, error)
 }
 
-// targetRepository also implements ReportRepository (via the embedded
-// reportRepository on the same DB), so services that only receive a
-// TargetRepository can still aggregate in SQL; see AsReportRepository.
 type targetRepository struct {
 	db *gorm.DB
-	*reportRepository
 }
 
 func NewTargetRepository(db *gorm.DB) TargetRepository {
-	return &targetRepository{db: db, reportRepository: &reportRepository{db: db}}
+	return &targetRepository{db: db}
 }
 
 func (r *targetRepository) UpsertTarget(ctx context.Context, target *model.MonthlyTarget) error {
@@ -39,13 +38,22 @@ func (r *targetRepository) UpsertTarget(ctx context.Context, target *model.Month
 }
 
 func (r *targetRepository) GetTarget(ctx context.Context, userID uuid.UUID, targetType model.TargetType, month, year int) (*model.MonthlyTarget, error) {
+	return findMonthlyTarget(ctx, r.db, userID, targetType, month, year)
+}
+
+// ErrTargetNotFound: the user has no target of that type for the month.
+var ErrTargetNotFound = constant.NewKindError(constant.ErrNotFound, "target not found")
+
+// findMonthlyTarget returns the user's target of one type for month/year, or
+// ErrTargetNotFound when none is set.
+func findMonthlyTarget(ctx context.Context, db *gorm.DB, userID uuid.UUID, targetType model.TargetType, month, year int) (*model.MonthlyTarget, error) {
 	var target model.MonthlyTarget
-	err := r.db.WithContext(ctx).
+	err := db.WithContext(ctx).
 		Where("user_id = ? AND target_type = ? AND month = ? AND year = ?", userID, targetType, month, year).
 		First(&target).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTargetNotFound
 		}
 		return nil, err
 	}
@@ -56,7 +64,7 @@ func (r *targetRepository) GetTarget(ctx context.Context, userID uuid.UUID, targ
 // [startDate, endDate] (calendar dates) using the shared report definitions
 // (investment = still HOLDING).
 func (r *targetRepository) GetMonthlyTotalByCategoryType(ctx context.Context, userID uuid.UUID, catType model.CategoryType, startDate, endDate time.Time) (float64, error) {
-	totals, err := sumTransactionTotals(ctx, r.db, userID, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	totals, err := sumTransactionTotals(ctx, r.db, userID, util.DateString(startDate), util.DateString(endDate))
 	if err != nil {
 		return 0, err
 	}

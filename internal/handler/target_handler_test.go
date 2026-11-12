@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/service"
-	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -88,17 +87,18 @@ func TestTargetHandler_UpsertTarget(t *testing.T) {
 
 func TestTargetHandler_GetSummary(t *testing.T) {
 	userID := uuid.New()
-	now := util.Now()
 	tests := []struct {
 		name      string
 		query     string
 		wantMonth int
 		wantYear  int
 	}{
+		// The handler passes raw values (0 when missing/invalid);
+		// targetService.GetSummary applies the defaults.
 		{"explicit month and year", "?month=2&year=2025", 2, 2025},
-		{"defaults to current period", "", int(now.Month()), now.Year()},
-		{"invalid values fall back", "?month=abc&year=-3", int(now.Month()), now.Year()},
-		{"zero month falls back", "?month=0&year=2024", int(now.Month()), 2024},
+		{"missing", "", 0, 0},
+		{"invalid values", "?month=abc&year=-3", 0, -3},
+		{"zero month", "?month=0&year=2024", 0, 2024},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

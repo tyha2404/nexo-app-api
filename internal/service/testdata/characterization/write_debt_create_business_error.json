@@ -1,0 +1,37 @@
+{
+  "confirm": null,
+  "confirmErr": "pending action failed: invalid input: hạn trả không hợp lệ",
+  "confirmErrIsFailed": true,
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi khoản đi vay — 1 ₫ - x\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi khoản đi vay",
+      "description": "1 ₫ - x",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "date": "",
+        "debtType": "PAYABLE",
+        "description": "",
+        "dueDate": "",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Ghi khoản đi vay",
+        "status": "PENDING",
+        "title": "x",
+        "toolName": "create_debt"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

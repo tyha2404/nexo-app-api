@@ -91,11 +91,11 @@ func (s *scopedCategoryService) Get(ctx context.Context, userID, id uuid.UUID) (
 	}
 	return &model.Category{ID: id, UserID: userID}, nil
 }
-func (s *scopedCategoryService) UpdateFields(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error {
+func (s *scopedCategoryService) Update(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCategoryRequest) (*model.Category, error) {
 	if userID != s.owner {
-		return constant.ErrNotFound
+		return nil, constant.ErrNotFound
 	}
-	return nil
+	return &model.Category{ID: id, UserID: userID}, nil
 }
 func (s *scopedCategoryService) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	if userID != s.owner {
@@ -216,5 +216,28 @@ func TestChatHandler_RejectsTooLongMessage(t *testing.T) {
 	h.StreamMessage(rr, req)
 	if rr.Code != http.StatusOK || !svc.streamed {
 		t.Fatalf("expected stream for max-length message, got %d", rr.Code)
+	}
+}
+
+type panickingChatService struct {
+	service.ChatService
+}
+
+func (panickingChatService) ProcessMessageStream(ctx context.Context, userID uuid.UUID, req dto.SendMessageRequest, eventChan chan<- dto.ChatStreamEvent) error {
+	defer close(eventChan) // as the real service does
+	eventChan <- dto.ChatStreamEvent{Type: "text_delta", Delta: "xin"}
+	panic("tool exploded")
+}
+
+// A panic in the stream goroutine (not covered by the HTTP Recoverer) is
+// logged; it must not crash the server (an unrecovered goroutine panic would
+// abort this test binary) and the response still ends.
+func TestChatHandler_StreamPanicIsRecovered(t *testing.T) {
+	h := NewChatHandler(panickingChatService{}, zap.NewNop())
+	req := withUser(httptest.NewRequest(http.MethodPost, "/chat/stream", strings.NewReader(`{"message":"chào"}`)), uuid.New())
+	rr := httptest.NewRecorder()
+	h.StreamMessage(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "xin") {
+		t.Fatalf("expected the events sent before the panic, got %d %q", rr.Code, rr.Body.String())
 	}
 }

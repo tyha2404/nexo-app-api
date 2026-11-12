@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
-	"strings"
 
 	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -16,14 +14,15 @@ import (
 
 type WalletRepository interface {
 	Create(ctx context.Context, wallet *model.Wallet) error
-	GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.Wallet, error)
+	GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Wallet, error)
 	ListByUserID(ctx context.Context, userID uuid.UUID) ([]model.Wallet, error)
 	Update(ctx context.Context, wallet *model.Wallet, includeBalance bool) error
-	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 	TransferMoney(ctx context.Context, transfer *model.WalletTransfer) error
-	AutoAllocateIncome(ctx context.Context, userID uuid.UUID, req *dto.AutoAllocateRequest) (*dto.AutoAllocateResponse, error)
-	GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.WalletSummaryResponse, error)
-	UpdateStatementSnapshot(ctx context.Context, walletID, userID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error
+	// AutoAllocateIncome splits incomeAmount over the wallets with an
+	// allocation percent (and debits sourceWalletID unless it is uuid.Nil).
+	AutoAllocateIncome(ctx context.Context, userID, sourceWalletID uuid.UUID, incomeAmount float64) (*AutoAllocation, error)
+	UpdateStatementSnapshot(ctx context.Context, userID, walletID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error
 	SumAllocationPercent(ctx context.Context, userID uuid.UUID, excludeWalletID *uuid.UUID) (float64, error)
 }
 
@@ -39,12 +38,17 @@ func (r *walletRepository) Create(ctx context.Context, wallet *model.Wallet) err
 	return r.db.WithContext(ctx).Create(wallet).Error
 }
 
-func (r *walletRepository) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.Wallet, error) {
+// ErrWalletNotFound: no live wallet with that id belongs to the user.
+var ErrWalletNotFound = constant.NewKindError(constant.ErrNotFound, "wallet not found")
+
+// GetByID returns the user's wallet, ErrWalletNotFound when it is missing or
+// belongs to someone else.
+func (r *walletRepository) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Wallet, error) {
 	var wallet model.Wallet
 	err := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&wallet).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+			return nil, ErrWalletNotFound
 		}
 		return nil, err
 	}
@@ -57,20 +61,42 @@ func (r *walletRepository) ListByUserID(ctx context.Context, userID uuid.UUID) (
 	return wallets, err
 }
 
-// Update saves the wallet's editable fields. balance is written only when
-// includeBalance is true (the user explicitly set it); otherwise the stale
-// in-memory balance of this read-modify-write is never persisted, so a
-// concurrent transaction/transfer that moved the balance is not overwritten.
-func (r *walletRepository) Update(ctx context.Context, wallet *model.Wallet, includeBalance bool) error {
-	omit := []string{clause.Associations, "user_id", "created_at"}
-	if !includeBalance {
-		omit = append(omit, "balance")
-	}
-	return r.db.WithContext(ctx).Omit(omit...).Save(wallet).Error
+// walletEditableColumns are written by Update (an explicit Select also writes
+// zero values and NULLs, e.g. allocation_percent = 0 or is_included_in_total =
+// false). balance is added only on request, see Update.
+var walletEditableColumns = []string{
+	"name", "type", "currency", "icon", "jar_category", "allocation_percent", "is_included_in_total",
+	"credit_limit", "statement_day", "due_day", "statement_balance", "minimum_payment", "previous_balance", "updated_at",
 }
 
-func (r *walletRepository) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
-	return r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&model.Wallet{}).Error
+// Update writes the wallet's editable columns, scoped by id AND user_id.
+// balance is written only when includeBalance is true (the user explicitly set
+// it); otherwise the stale in-memory balance of this read-modify-write is never
+// persisted, so a concurrent transaction/transfer that moved the balance is not
+// overwritten. Unlike Save, it never inserts: a wallet deleted meanwhile is not
+// resurrected and constant.ErrNotFound is returned instead.
+func (r *walletRepository) Update(ctx context.Context, wallet *model.Wallet, includeBalance bool) error {
+	cols := walletEditableColumns
+	if includeBalance {
+		cols = append(append([]string{}, walletEditableColumns...), "balance")
+	}
+	result := r.db.WithContext(ctx).Model(wallet).Omit(clause.Associations).
+		Where("id = ? AND user_id = ?", wallet.ID, wallet.UserID).
+		Select(cols).
+		Updates(wallet)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("wallet %w", constant.ErrNotFound)
+	}
+	return nil
+}
+
+// Delete soft-deletes the user's wallet; "wallet not found"
+// (constant.ErrNotFound) when no live wallet with that id belongs to the user.
+func (r *walletRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	return deleteForUser(r.db.WithContext(ctx), &model.Wallet{}, "wallet", userID, id)
 }
 
 // ErrAllocationPercentExceeded means the user's wallets allocate more than 100%.
@@ -119,13 +145,23 @@ func (r *walletRepository) TransferMoney(ctx context.Context, transfer *model.Wa
 	})
 }
 
-func (r *walletRepository) AutoAllocateIncome(ctx context.Context, userID uuid.UUID, req *dto.AutoAllocateRequest) (*dto.AutoAllocateResponse, error) {
-	resp := &dto.AutoAllocateResponse{
-		IncomeAmount: req.IncomeAmount,
-	}
-	if req.SourceWalletID != uuid.Nil {
-		resp.SourceWalletID = &req.SourceWalletID
-	}
+// WalletAllocation is the share of an auto-allocated income one wallet got.
+type WalletAllocation struct {
+	WalletID          uuid.UUID
+	WalletName        string
+	AllocationPercent float64
+	AllocatedAmount   float64
+	NewBalance        float64
+}
+
+// AutoAllocation is the outcome of AutoAllocateIncome.
+type AutoAllocation struct {
+	Allocations    []WalletAllocation
+	TotalAllocated float64
+}
+
+func (r *walletRepository) AutoAllocateIncome(ctx context.Context, userID, sourceWalletID uuid.UUID, incomeAmount float64) (*AutoAllocation, error) {
+	resp := &AutoAllocation{}
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var targetWallets []model.Wallet
@@ -144,10 +180,10 @@ func (r *walletRepository) AutoAllocateIncome(ctx context.Context, userID uuid.U
 		}
 
 		var totalAllocated float64
-		details := make([]dto.AllocatedWalletDetail, 0, len(targetWallets))
+		details := make([]WalletAllocation, 0, len(targetWallets))
 		for i := range targetWallets {
 			w := &targetWallets[i]
-			allocated := (req.IncomeAmount * w.AllocationPercent) / 100.0
+			allocated := (incomeAmount * w.AllocationPercent) / 100.0
 			// Relative update; RETURNING gives the committed balance for the response.
 			if err := tx.Model(w).
 				Clauses(clause.Returning{Columns: []clause.Column{{Name: "balance"}}}).
@@ -155,7 +191,7 @@ func (r *walletRepository) AutoAllocateIncome(ctx context.Context, userID uuid.U
 				return err
 			}
 			totalAllocated += allocated
-			details = append(details, dto.AllocatedWalletDetail{
+			details = append(details, WalletAllocation{
 				WalletID:          w.ID,
 				WalletName:        w.Name,
 				AllocationPercent: w.AllocationPercent,
@@ -164,14 +200,12 @@ func (r *walletRepository) AutoAllocateIncome(ctx context.Context, userID uuid.U
 			})
 		}
 
-		if req.SourceWalletID != uuid.Nil {
-			res := tx.Model(&model.Wallet{}).
-				Where("id = ? AND user_id = ?", req.SourceWalletID, userID).
-				Update("balance", gorm.Expr("balance - ?", totalAllocated))
-			if res.Error != nil {
-				return res.Error
+		if sourceWalletID != uuid.Nil {
+			found, err := applyWalletEffect(tx, &sourceWalletID, userID, -totalAllocated)
+			if err != nil {
+				return err
 			}
-			if res.RowsAffected == 0 {
+			if !found {
 				return fmt.Errorf("source wallet %w", constant.ErrNotFound)
 			}
 		}
@@ -187,48 +221,10 @@ func (r *walletRepository) AutoAllocateIncome(ctx context.Context, userID uuid.U
 	return resp, nil
 }
 
-func (r *walletRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID) (*dto.WalletSummaryResponse, error) {
-	wallets, err := r.ListByUserID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return SummarizeWallets(wallets), nil
-}
-
-// BaseCurrency is the user's base currency; TotalBalance is expressed in it.
-const BaseCurrency = "VND"
-
-// SummarizeWallets builds the wallet summary. Balances in different currencies
-// are never added together (there is no FX conversion): TotalBalance only sums
-// included wallets in BaseCurrency (an empty currency counts as VND, the column
-// default), and TotalsByCurrency reports every currency separately.
-func SummarizeWallets(wallets []model.Wallet) *dto.WalletSummaryResponse {
-	totals := make(map[string]float64)
-	walletDTOs := make([]dto.WalletResponse, 0, len(wallets))
-	for i := range wallets {
-		w := &wallets[i]
-		if w.IsIncludedInTotal {
-			currency := strings.ToUpper(strings.TrimSpace(w.Currency))
-			if currency == "" {
-				currency = BaseCurrency
-			}
-			totals[currency] += w.Balance
-		}
-		walletDTOs = append(walletDTOs, dto.ToWalletResponse(w))
-	}
-	return &dto.WalletSummaryResponse{
-		TotalBalance:     totals[BaseCurrency],
-		BaseCurrency:     BaseCurrency,
-		TotalsByCurrency: totals,
-		Wallets:          walletDTOs,
-		TotalWallets:     len(wallets),
-	}
-}
-
 // UpdateStatementSnapshot writes only the credit-card statement snapshot columns.
 // It never touches balance, so it cannot clobber a concurrent balance change the
 // way a read-modify-write Save of the whole wallet would.
-func (r *walletRepository) UpdateStatementSnapshot(ctx context.Context, walletID, userID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error {
+func (r *walletRepository) UpdateStatementSnapshot(ctx context.Context, userID, walletID uuid.UUID, statementBalance, minimumPayment, previousBalance float64) error {
 	res := r.db.WithContext(ctx).Model(&model.Wallet{}).
 		Where("id = ? AND user_id = ?", walletID, userID).
 		Updates(map[string]interface{}{

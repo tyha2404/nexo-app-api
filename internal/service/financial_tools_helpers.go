@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -18,6 +19,31 @@ import (
 func toolErrorJSON(msg string) string {
 	b, _ := json.Marshal(map[string]string{"error": msg})
 	return string(b)
+}
+
+// toolCategoryListLimit caps how many of the user's categories the AI tools
+// load to resolve a category name.
+const toolCategoryListLimit = 200
+
+// toolHintsResult is a "not found" tool result: the error, the names the
+// model may pick from (hints) and what to do next (message).
+func toolHintsResult(title, errMsg string, hints []string, message string) *FinancialToolResult {
+	b, _ := json.Marshal(map[string]interface{}{
+		"error":   errMsg,
+		"hints":   hints,
+		"message": message,
+	})
+	return &FinancialToolResult{ToolTitle: title, ResultJSON: string(b)}
+}
+
+// walletMatchHints returns the wallet names to offer after matchWalletByName
+// failed: the ambiguous candidates, or every wallet.
+func walletMatchHints(matchErr error, wallets []model.Wallet) []string {
+	var wmErr *walletMatchError
+	if errors.As(matchErr, &wmErr) {
+		return wmErr.candidates
+	}
+	return walletNames(wallets)
 }
 
 // toolNumberArg reads a numeric tool argument. Models sometimes send numbers
@@ -95,13 +121,14 @@ func normalizeName(s string) string {
 type walletMatchError struct {
 	query      string
 	candidates []string
+	ambiguous  bool // the query matched every candidate (vs. matched none)
 }
 
 func (e *walletMatchError) Error() string {
 	if e.query == "" {
 		return fmt.Sprintf("Người dùng chưa nói rõ dùng ví nào. Hãy hỏi lại người dùng muốn dùng ví nào trong các ví: %s.", strings.Join(e.candidates, ", "))
 	}
-	if len(e.candidates) > 1 {
+	if e.ambiguous {
 		return fmt.Sprintf("Tên ví '%s' khớp với nhiều ví: %s. Hãy hỏi lại người dùng để chọn đúng một ví.", e.query, strings.Join(e.candidates, ", "))
 	}
 	return fmt.Sprintf("Không tìm thấy ví '%s'. Hãy hỏi lại người dùng muốn dùng ví nào trong các ví: %s.", e.query, strings.Join(e.candidates, ", "))
@@ -155,9 +182,25 @@ func matchWalletByName(wallets []model.Wallet, name string) (*model.Wallet, erro
 		for _, i := range pick {
 			names = append(names, wallets[i].Name)
 		}
-		return nil, &walletMatchError{query: name, candidates: names}
+		return nil, &walletMatchError{query: name, candidates: names, ambiguous: true}
 	}
 	return nil, &walletMatchError{query: name, candidates: walletNames(wallets)}
+}
+
+// walletNamedInQuery returns the only wallet whose name appears in query
+// (e.g. "số dư ví tiền mặt" names "Ví Tiền mặt"), or nil when none or several do.
+func walletNamedInQuery(wallets []model.Wallet, query string) *model.Wallet {
+	q := normalizeName(query)
+	var found *model.Wallet
+	for i := range wallets {
+		if wn := normalizeName(wallets[i].Name); wn != "" && q != "" && strings.Contains(q, wn) {
+			if found != nil {
+				return nil
+			}
+			found = &wallets[i]
+		}
+	}
+	return found
 }
 
 // matchCategoryByName prefers a case-insensitive exact name, then the first

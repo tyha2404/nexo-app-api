@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -40,10 +41,10 @@ func newMemTxnRepo(txns ...*model.Transaction) *memTxnRepo {
 	return r
 }
 
-func (r *memTxnRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Transaction, error) {
+func (r *memTxnRepo) GetByIDForUser(_ context.Context, userID, id uuid.UUID) (*model.Transaction, error) {
 	tx, ok := r.rows[id]
-	if !ok {
-		return nil, constant.ErrNotFound
+	if !ok || tx.UserID != userID {
+		return nil, fmt.Errorf("transaction %w", constant.ErrNotFound)
 	}
 	cp := *tx
 	return &cp, nil
@@ -63,12 +64,13 @@ func (r *memTxnRepo) ListByUserID(_ context.Context, userID uuid.UUID, limit, of
 	return out, int64(len(out)), nil
 }
 
-func (r *memTxnRepo) GetSummaryByUserID(_ context.Context, _ uuid.UUID, _ map[string]interface{}) (float64, float64, int64, float64, int64, float64, error) {
+func (r *memTxnRepo) GetSummaryByUserID(_ context.Context, _ uuid.UUID, _ map[string]interface{}) (repository.TransactionSummary, error) {
 	if r.summaryErr != nil {
-		return 0, 0, 0, 0, 0, 0, r.summaryErr
+		return repository.TransactionSummary{}, r.summaryErr
 	}
 	s := r.summary
-	return s.SumAmount, s.SumAmountForAverage, s.Total, s.HoldingAmount, s.HoldingCount, s.RealizedPnL, nil
+	return repository.TransactionSummary{SumAmount: s.SumAmount, SumAmountForAverage: s.SumAmountForAverage, Total: s.Total,
+		HoldingAmount: s.HoldingAmount, HoldingCount: s.HoldingCount, RealizedPnL: s.RealizedPnL}, nil
 }
 
 func (r *memTxnRepo) Update(_ context.Context, tx *model.Transaction) error {
@@ -81,7 +83,10 @@ func (r *memTxnRepo) Update(_ context.Context, tx *model.Transaction) error {
 	return nil
 }
 
-func (r *memTxnRepo) Delete(_ context.Context, id uuid.UUID) error {
+func (r *memTxnRepo) Delete(_ context.Context, userID, id uuid.UUID) error {
+	if tx, ok := r.rows[id]; !ok || tx.UserID != userID {
+		return fmt.Errorf("transaction %w", constant.ErrNotFound)
+	}
 	delete(r.rows, id)
 	r.deleted = append(r.deleted, id)
 	return nil

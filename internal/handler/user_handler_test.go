@@ -24,7 +24,7 @@ type stubUserService struct {
 	service.UserService
 	createFn func(ctx context.Context, req dto.CreateUserRequest) (*model.User, error)
 	getFn    func(ctx context.Context, id uuid.UUID) (*model.User, error)
-	listFn   func(ctx context.Context, limit, offset int) ([]model.User, error)
+	listFn   func(ctx context.Context, limit, offset int) ([]model.User, int64, error)
 	updateFn func(ctx context.Context, id uuid.UUID, req dto.UpdateUserRequest) (*model.User, error)
 	deleteFn func(ctx context.Context, id uuid.UUID) error
 }
@@ -35,7 +35,7 @@ func (s *stubUserService) Create(ctx context.Context, req dto.CreateUserRequest)
 func (s *stubUserService) Get(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	return s.getFn(ctx, id)
 }
-func (s *stubUserService) List(ctx context.Context, limit, offset int) ([]model.User, error) {
+func (s *stubUserService) List(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
 	return s.listFn(ctx, limit, offset)
 }
 func (s *stubUserService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateUserRequest) (*model.User, error) {
@@ -181,9 +181,9 @@ func TestUserHandler_List(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotLimit, gotOffset int
-			svc := &stubUserService{listFn: func(ctx context.Context, limit, offset int) ([]model.User, error) {
+			svc := &stubUserService{listFn: func(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
 				gotLimit, gotOffset = limit, offset
-				return []model.User{{Username: "a"}, {Username: "b"}}, nil
+				return []model.User{{Username: "a"}, {Username: "b"}}, 57, nil
 			}}
 			h := NewUserHandler(svc, zap.NewNop())
 			rr := httptest.NewRecorder()
@@ -195,13 +195,13 @@ func TestUserHandler_List(t *testing.T) {
 			body := decodeJSON(t, rr)
 			assert.Equal(t, float64(tt.wantPage), body["page"])
 			assert.Equal(t, float64(tt.wantLimit), body["limit"])
-			assert.Equal(t, float64(2), body["total"])
+			assert.Equal(t, float64(57), body["total"], "total is the number of users, not the page size")
 		})
 	}
 
 	t.Run("service error", func(t *testing.T) {
-		svc := &stubUserService{listFn: func(ctx context.Context, limit, offset int) ([]model.User, error) {
-			return nil, errors.New("db")
+		svc := &stubUserService{listFn: func(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
+			return nil, 0, errors.New("db")
 		}}
 		h := NewUserHandler(svc, zap.NewNop())
 		rr := httptest.NewRecorder()
@@ -250,7 +250,7 @@ func TestUserHandler_Delete(t *testing.T) {
 		wantStatus int
 		wantMsg    string
 	}{
-		{"success", id.String(), nil, http.StatusNoContent, ""},
+		{"success", id.String(), nil, http.StatusOK, ""},
 		{"invalid uuid", "x", nil, http.StatusBadRequest, "Invalid user ID"},
 		{"not found", id.String(), constant.ErrNotFound, http.StatusNotFound, "User not found"},
 		{"service error", id.String(), errors.New("db"), http.StatusInternalServerError, "Failed to delete user"},
@@ -266,11 +266,12 @@ func TestUserHandler_Delete(t *testing.T) {
 			rr := httptest.NewRecorder()
 			h.Delete(rr, withURLParam(httptest.NewRequest(http.MethodDelete, "/users/x", nil), "id", tt.id))
 
-			if tt.wantStatus != http.StatusNoContent {
+			if tt.wantStatus != http.StatusOK {
 				categoryAssertError(t, rr, tt.wantStatus, tt.wantMsg)
 				return
 			}
-			require.Equal(t, http.StatusNoContent, rr.Code)
+			require.Equal(t, http.StatusOK, rr.Code)
+			assert.JSONEq(t, `{"status":200,"success":true,"message":"User deleted successfully","data":null}`, rr.Body.String())
 			assert.Equal(t, id, gotID)
 		})
 	}

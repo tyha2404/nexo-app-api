@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,7 +15,6 @@ import (
 
 type RolloverService interface {
 	ProcessRolloverForMonth(ctx context.Context, targetMonth, targetYear int) error
-	ProcessRolloverForUser(ctx context.Context, userID uuid.UUID, targetMonth, targetYear int) error
 }
 
 type rolloverService struct {
@@ -45,7 +46,7 @@ func (s *rolloverService) ProcessRolloverForMonth(ctx context.Context, targetMon
 	errorCount := 0
 
 	for _, userID := range userIDs {
-		if err := s.ProcessRolloverForUser(ctx, userID, targetMonth, targetYear); err != nil {
+		if err := s.processRolloverForUser(ctx, userID, targetMonth, targetYear); err != nil {
 			s.logger.Error("failed to process rollover for user",
 				zap.String("user_id", userID.String()),
 				zap.Int("month", targetMonth),
@@ -68,7 +69,7 @@ func (s *rolloverService) ProcessRolloverForMonth(ctx context.Context, targetMon
 	return nil
 }
 
-func (s *rolloverService) ProcessRolloverForUser(ctx context.Context, userID uuid.UUID, targetMonth, targetYear int) error {
+func (s *rolloverService) processRolloverForUser(ctx context.Context, userID uuid.UUID, targetMonth, targetYear int) error {
 	targetPeriodStart := time.Date(targetYear, time.Month(targetMonth), 1, 0, 0, 0, 0, time.UTC)
 
 	// 1. Process Monthly Targets (EXPENSE & INVESTMENT)
@@ -76,28 +77,29 @@ func (s *rolloverService) ProcessRolloverForUser(ctx context.Context, userID uui
 	targetTypes := []model.TargetType{model.TargetTypeExpense, model.TargetTypeInvestment}
 
 	for _, targetType := range targetTypes {
-		existingTarget, err := s.repo.GetTargetForMonth(ctx, userID, targetType, targetMonth, targetYear)
-		if err != nil {
+		_, err := s.repo.GetTargetForMonth(ctx, userID, targetType, targetMonth, targetYear)
+		if err == nil {
+			continue // the upcoming month already has a target
+		}
+		if !errors.Is(err, constant.ErrNotFound) {
 			return err
 		}
 
-		// If user doesn't have a target for the upcoming month, find the latest historical target
-		if existingTarget == nil {
-			latestTarget, err := s.repo.GetLatestTargetBefore(ctx, userID, targetType, targetMonth, targetYear)
-			if err != nil {
-				return err
-			}
-
-			if latestTarget != nil {
-				targetsToCreate = append(targetsToCreate, model.MonthlyTarget{
-					UserID:       userID,
-					TargetType:   targetType,
-					TargetAmount: latestTarget.TargetAmount,
-					Month:        targetMonth,
-					Year:         targetYear,
-				})
-			}
+		// Copy the latest historical target, if any, to the upcoming month.
+		latestTarget, err := s.repo.GetLatestTargetBefore(ctx, userID, targetType, targetMonth, targetYear)
+		if errors.Is(err, constant.ErrNotFound) {
+			continue
 		}
+		if err != nil {
+			return err
+		}
+		targetsToCreate = append(targetsToCreate, model.MonthlyTarget{
+			UserID:       userID,
+			TargetType:   targetType,
+			TargetAmount: latestTarget.TargetAmount,
+			Month:        targetMonth,
+			Year:         targetYear,
+		})
 	}
 
 	if len(targetsToCreate) > 0 {

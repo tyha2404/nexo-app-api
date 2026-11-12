@@ -124,7 +124,7 @@ func TestExecuteFinancialTool_DispatchesEveryTool(t *testing.T) {
 func TestToolGetFinancialOverview(t *testing.T) {
 	e := newToolEnv(t)
 	e.report.summaries["2026-08-01"] = &dto.SummaryReport{TotalIncome: 20_000_000, TotalExpense: 15_000_000, TotalInvestment: 2_000_000}
-	e.wallets.summary = &dto.WalletSummaryResponse{TotalBalance: 42_000_000}
+	e.wallets.wallets[0].Balance, e.wallets.wallets[0].IsIncludedInTotal = 42_000_000, true
 
 	res := e.call(t, "get_financial_overview", map[string]interface{}{"month": "2026-08"})
 	out := decodeTool(t, res)
@@ -139,7 +139,7 @@ func TestToolGetFinancialOverview(t *testing.T) {
 
 	// No income: savings rate is 0, not NaN/Inf; a wallet failure is not fatal.
 	e.report.summaries["2026-07-01"] = &dto.SummaryReport{TotalExpense: 100}
-	e.wallets.summaryErr = errInternalRepo
+	e.wallets.listErr = errInternalRepo
 	out = decodeTool(t, e.call(t, "get_financial_overview", map[string]interface{}{"month": "2026-07"}))
 	assert.Equal(t, 0.0, out["savings_rate_percent"])
 	assert.Equal(t, 0.0, out["total_wallet_balance"])
@@ -338,10 +338,10 @@ func TestToolTransferBetweenWallets(t *testing.T) {
 	msg = toolError(t, e.call(t, "transfer_between_wallets", map[string]interface{}{"amount": 1.0, "fromWalletName": "tiền mặt", "toWalletName": "ngân hàng"}))
 	assert.Equal(t, hiddenSystemError, msg)
 
-	// No wallets at all is an error.
+	// No wallets at all is a friendly tool error (it used to be a system error).
 	e.wallets.wallets = nil
-	_, err := e.svc.toolTransferBetweenWallets(context.Background(), e.userID, map[string]interface{}{"amount": 1.0, "fromWalletName": "a", "toWalletName": "b"})
-	require.Error(t, err)
+	msg = toolError(t, e.call(t, "transfer_between_wallets", map[string]interface{}{"amount": 1.0, "fromWalletName": "a", "toWalletName": "b"}))
+	assert.Equal(t, "Bạn chưa có ví nào để chuyển tiền.", msg)
 }
 
 func TestToolCreateDebt(t *testing.T) {
@@ -367,7 +367,7 @@ func TestToolCreateDebt(t *testing.T) {
 	assert.Len(t, e.debt.created, 2)
 
 	e.debt.createErr = errInternalRepo
-	_, err := e.svc.toolCreateDebt(context.Background(), e.userID, map[string]interface{}{"title": "x", "totalAmount": 1.0})
+	_, err := e.svc.previewThenExecute(context.Background(), e.userID, toolCall(t, "c", "create_debt", map[string]interface{}{"title": "x", "totalAmount": 1.0}))
 	require.ErrorIs(t, err, errInternalRepo)
 }
 
@@ -394,23 +394,24 @@ func TestToolRecordDebtRepayment(t *testing.T) {
 	assert.Contains(t, res.ActionCard.Description, "600.000")
 
 	e.debt.repayErr = ErrInvalidRepayment
-	_, err := e.svc.toolRecordDebtRepayment(context.Background(), e.userID, map[string]interface{}{"debtTitle": "Lan", "amount": 1.0})
+	_, err := e.svc.previewThenExecute(context.Background(), e.userID, toolCall(t, "c", "record_debt_repayment", map[string]interface{}{"debtTitle": "Lan", "amount": 1.0}))
 	require.ErrorIs(t, err, ErrInvalidRepayment)
 
+	// A failed debt lookup is a system error (hidden from the model by the stream).
 	e.debt.getErr = errInternalRepo
-	msg = toolError(t, e.call(t, "record_debt_repayment", map[string]interface{}{"debtTitle": "Lan", "amount": 1.0}))
-	assert.NotEmpty(t, msg)
+	_, err = e.svc.previewThenExecute(context.Background(), e.userID, toolCall(t, "c", "record_debt_repayment", map[string]interface{}{"debtTitle": "Lan", "amount": 1.0}))
+	require.ErrorIs(t, err, errInternalRepo)
 }
 
 func TestToolSetBudget(t *testing.T) {
 	e := newToolEnv(t)
-	_, err := e.svc.toolSetBudget(context.Background(), e.userID, map[string]interface{}{"categoryName": "Ăn uống", "amount": 1.0})
-	require.Error(t, err, "no categories at all")
+	msg := toolError(t, e.call(t, "set_budget", map[string]interface{}{"categoryName": "Ăn uống", "amount": 1.0}))
+	assert.Contains(t, msg, "Không tìm thấy danh mục 'Ăn uống'", "no categories at all is a friendly tool error")
 
 	food := e.addCategory("Ăn uống", model.CategoryTypeExpense)
 	e.addCategory("Du lịch", model.CategoryTypeExpense, uuid.New()) // another user's
 
-	msg := toolError(t, e.call(t, "set_budget", map[string]interface{}{"categoryName": "Du lịch", "amount": 1.0}))
+	msg = toolError(t, e.call(t, "set_budget", map[string]interface{}{"categoryName": "Du lịch", "amount": 1.0}))
 	assert.Contains(t, msg, "Du lịch", "another user's category is never used")
 	assert.Empty(t, e.budget.created)
 
@@ -419,15 +420,15 @@ func TestToolSetBudget(t *testing.T) {
 	req := e.budget.created[0]
 	assert.Equal(t, food.ID, req.CategoryID)
 	assert.Equal(t, 3_000_000.0, req.Amount)
-	wantStart, _ := util.MonthRange(util.Now())
-	assert.True(t, req.PeriodStart.Equal(wantStart), "default period is the current month in the app timezone")
+	wantStart, _ := util.MonthRange(*e.clock)
+	assert.Equal(t, wantStart.Format("2006-01-02"), req.PeriodStart.Format("2006-01-02"), "default period is the current month in the app timezone")
 	assert.Equal(t, "BUDGET_SET", res.ActionCard.ActionType)
 
 	e.call(t, "set_budget", map[string]interface{}{"categoryName": "Ăn uống", "amount": 1.0, "periodStart": "2026-12-01"})
 	assert.Equal(t, "2026-12-01", e.budget.created[1].PeriodStart.Format("2006-01-02"))
 
 	e.budget.createErr = errInternalRepo
-	_, err = e.svc.toolSetBudget(context.Background(), e.userID, map[string]interface{}{"categoryName": "Ăn uống", "amount": 1.0})
+	_, err := e.svc.previewThenExecute(context.Background(), e.userID, toolCall(t, "c", "set_budget", map[string]interface{}{"categoryName": "Ăn uống", "amount": 1.0}))
 	require.ErrorIs(t, err, errInternalRepo)
 }
 
@@ -506,15 +507,14 @@ func TestToolSetFinancialTarget(t *testing.T) {
 	}
 
 	e := newToolEnv(t)
-	now := util.Now()
+	now := *e.clock
 	e.call(t, "set_financial_target", map[string]interface{}{"targetType": "EXPENSE", "targetAmount": 1.0})
 	assert.Equal(t, int(now.Month()), e.target.upserts[0].Month)
 	assert.Equal(t, now.Year(), e.target.upserts[0].Year)
 
-	_, err := e.svc.toolSetFinancialTarget(context.Background(), e.userID, map[string]interface{}{"targetType": "LOTTERY", "targetAmount": 1.0})
-	require.ErrorIs(t, err, constant.ErrInvalidInput)
-	_, err = e.svc.toolSetFinancialTarget(context.Background(), e.userID, map[string]interface{}{"targetType": "EXPENSE", "targetAmount": 1.0, "month": 13.0})
-	require.ErrorIs(t, err, constant.ErrInvalidInput)
+	// Invalid targets are rejected by the preview with a tool error.
+	assert.NotEmpty(t, toolError(t, e.call(t, "set_financial_target", map[string]interface{}{"targetType": "LOTTERY", "targetAmount": 1.0})))
+	assert.NotEmpty(t, toolError(t, e.call(t, "set_financial_target", map[string]interface{}{"targetType": "EXPENSE", "targetAmount": 1.0, "month": 13.0})))
 	assert.NotEmpty(t, toolError(t, e.call(t, "set_financial_target", map[string]interface{}{"targetAmount": 1.0})))
 	assert.Len(t, e.target.upserts, 1)
 }
@@ -598,7 +598,7 @@ func TestToolCreateTransaction_ExecutesWithResolvedWalletAndCategory(t *testing.
 	assert.Equal(t, model.CategoryTypeIncome, e.cats.created[0].Type)
 	assert.Equal(t, e.userID, e.cats.created[0].UserID)
 	assert.Equal(t, "INCOME", e.txnSvc.created[1].Type)
-	assert.Equal(t, util.StartOfDay(util.Now()).Format("2006-01-02"), e.txnSvc.created[1].TransactionDate.Format("2006-01-02"), "invalid date falls back to today")
+	assert.Equal(t, util.StartOfDay(*e.clock).Format("2006-01-02"), e.txnSvc.created[1].TransactionDate.Format("2006-01-02"), "invalid date falls back to today")
 	assert.Contains(t, res.ActionCard.Description, "Tạo mới danh mục")
 
 	// No category given: first existing one of the type.

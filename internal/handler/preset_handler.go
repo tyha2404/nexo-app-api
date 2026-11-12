@@ -1,43 +1,41 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type PresetHandler struct {
 	svc          service.PresetService
-	validator    *validator.Validate
-	log          *zap.Logger
 	errorHandler *ErrorHandler
 }
 
 func NewPresetHandler(svc service.PresetService, log *zap.Logger) *PresetHandler {
 	return &PresetHandler{
 		svc:          svc,
-		validator:    newStructValidator(),
-		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
 }
 
+// Create handles POST /presets
+// @Summary Create a quick-add preset
+// @Tags Presets
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.CreatePresetRequest true "Preset"
+// @Success 201 {object} PresetEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload / Validation failed"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Category not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to create preset"
+// @Router /presets [post]
 func (h *PresetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreatePresetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "create_preset")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "create_preset")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "create_preset") {
 		return
 	}
 
@@ -57,17 +55,23 @@ func (h *PresetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.PresetResponse]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, *res)
 }
 
+// Get handles GET /presets/{id}
+// @Summary Get a preset
+// @Tags Presets
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Preset ID"
+// @Success 200 {object} PresetEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Preset not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to get preset"
+// @Router /presets/{id} [get]
 func (h *PresetHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "get_preset")
 		return
@@ -89,14 +93,19 @@ func (h *PresetHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.PresetResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
+// List handles GET /presets
+// @Summary List presets
+// @Description All quick-add presets of the caller (not paginated).
+// @Tags Presets
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} PresetListEnvelope
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Failed to list presets"
+// @Router /presets [get]
 func (h *PresetHandler) List(w http.ResponseWriter, r *http.Request) {
 	user, err := GetUserFromContext(r)
 	if err != nil {
@@ -110,29 +119,32 @@ func (h *PresetHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[[]dto.PresetResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    items,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, items)
 }
 
+// Update handles PUT /presets/{id}
+// @Summary Update a preset
+// @Tags Presets
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Preset ID"
+// @Param request body dto.UpdatePresetRequest true "Fields to update"
+// @Success 200 {object} PresetEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format / Invalid request payload / Validation failed"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Preset or category not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to update preset"
+// @Router /presets/{id} [put]
 func (h *PresetHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "update_preset")
 		return
 	}
 
 	var req dto.UpdatePresetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "update_preset")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "update_preset")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "update_preset") {
 		return
 	}
 
@@ -152,16 +164,23 @@ func (h *PresetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.PresetResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
+// Delete handles DELETE /presets/{id}
+// @Summary Delete a preset
+// @Tags Presets
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Preset ID"
+// @Success 200 {object} MessageResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Preset not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to delete preset"
+// @Router /presets/{id} [delete]
 func (h *PresetHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "delete_preset")
 		return
@@ -182,6 +201,5 @@ func (h *PresetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Preset deleted successfully"})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Preset deleted successfully")
 }

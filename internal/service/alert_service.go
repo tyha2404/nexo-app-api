@@ -2,10 +2,8 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
 )
@@ -40,12 +38,5 @@ func (s *alertService) ListAlerts(ctx context.Context, userID uuid.UUID, page, l
 }
 
 func (s *alertService) DeleteAlert(ctx context.Context, userID, id uuid.UUID) error {
-	alert, err := s.alertRepo.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if alert.UserID != userID {
-		return fmt.Errorf("alert %w", constant.ErrNotFound)
-	}
-	return s.alertRepo.Delete(ctx, id)
+	return s.alertRepo.Delete(ctx, userID, id)
 }

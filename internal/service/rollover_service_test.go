@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"testing"
 	"time"
 
@@ -82,9 +83,9 @@ func TestRolloverService_ProcessRolloverForUser_CopiesBothTargetsAndBudgets(t *t
 
 	// Target check: neither exists for 09/2026
 	mockRepo.On("GetTargetForMonth", mock.Anything, userID, model.TargetTypeExpense, targetMonth, targetYear).
-		Return(nil, nil)
+		Return(nil, repository.ErrTargetNotFound)
 	mockRepo.On("GetTargetForMonth", mock.Anything, userID, model.TargetTypeInvestment, targetMonth, targetYear).
-		Return(nil, nil)
+		Return(nil, repository.ErrTargetNotFound)
 
 	// Latest targets found from previous month (08/2026)
 	mockRepo.On("GetLatestTargetBefore", mock.Anything, userID, model.TargetTypeExpense, targetMonth, targetYear).
@@ -119,7 +120,7 @@ func TestRolloverService_ProcessRolloverForUser_CopiesBothTargetsAndBudgets(t *t
 		return budgets[0].Amount == 3000000 && budgets[1].Amount == 2000000 && budgets[0].PeriodStart.Equal(targetPeriodStart)
 	})).Return(nil)
 
-	err := svc.ProcessRolloverForUser(context.Background(), userID, targetMonth, targetYear)
+	err := service.ProcessRolloverForUser(context.Background(), svc, userID, targetMonth, targetYear)
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
 }
@@ -156,7 +157,7 @@ func TestRolloverService_ProcessRolloverForUser_SkipsExisting(t *testing.T) {
 	mockRepo.On("CreateMonthlyTargets", mock.Anything, []model.MonthlyTarget{}).Return(nil).Maybe()
 	mockRepo.On("CreateBudgets", mock.Anything, []model.Budget{}).Return(nil).Maybe()
 
-	err := svc.ProcessRolloverForUser(context.Background(), userID, targetMonth, targetYear)
+	err := service.ProcessRolloverForUser(context.Background(), svc, userID, targetMonth, targetYear)
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
 }
@@ -175,12 +176,12 @@ func TestRolloverService_ProcessRolloverForMonth_ProcessesAllUsers(t *testing.T)
 	mockRepo.On("GetAllActiveUserIDs", mock.Anything).Return([]uuid.UUID{user1, user2}, nil)
 
 	// For user1: has no targets/budgets in new month, has history
-	mockRepo.On("GetTargetForMonth", mock.Anything, user1, model.TargetTypeExpense, targetMonth, targetYear).Return(nil, nil)
-	mockRepo.On("GetTargetForMonth", mock.Anything, user1, model.TargetTypeInvestment, targetMonth, targetYear).Return(nil, nil)
+	mockRepo.On("GetTargetForMonth", mock.Anything, user1, model.TargetTypeExpense, targetMonth, targetYear).Return(nil, repository.ErrTargetNotFound)
+	mockRepo.On("GetTargetForMonth", mock.Anything, user1, model.TargetTypeInvestment, targetMonth, targetYear).Return(nil, repository.ErrTargetNotFound)
 	mockRepo.On("GetLatestTargetBefore", mock.Anything, user1, model.TargetTypeExpense, targetMonth, targetYear).
 		Return(&model.MonthlyTarget{TargetAmount: 10000000}, nil)
 	mockRepo.On("GetLatestTargetBefore", mock.Anything, user1, model.TargetTypeInvestment, targetMonth, targetYear).
-		Return(nil, nil) // no investment history
+		Return(nil, repository.ErrTargetNotFound) // no investment history
 	mockRepo.On("GetMonthlyBudgetsForPeriod", mock.Anything, user1, targetPeriodStart).Return([]model.Budget{}, nil)
 	mockRepo.On("GetLatestMonthlyBudgetsBefore", mock.Anything, user1, targetPeriodStart).Return([]model.Budget{}, nil)
 
@@ -189,10 +190,10 @@ func TestRolloverService_ProcessRolloverForMonth_ProcessesAllUsers(t *testing.T)
 	})).Return(nil)
 
 	// For user2: no history at all
-	mockRepo.On("GetTargetForMonth", mock.Anything, user2, model.TargetTypeExpense, targetMonth, targetYear).Return(nil, nil)
-	mockRepo.On("GetTargetForMonth", mock.Anything, user2, model.TargetTypeInvestment, targetMonth, targetYear).Return(nil, nil)
-	mockRepo.On("GetLatestTargetBefore", mock.Anything, user2, model.TargetTypeExpense, targetMonth, targetYear).Return(nil, nil)
-	mockRepo.On("GetLatestTargetBefore", mock.Anything, user2, model.TargetTypeInvestment, targetMonth, targetYear).Return(nil, nil)
+	mockRepo.On("GetTargetForMonth", mock.Anything, user2, model.TargetTypeExpense, targetMonth, targetYear).Return(nil, repository.ErrTargetNotFound)
+	mockRepo.On("GetTargetForMonth", mock.Anything, user2, model.TargetTypeInvestment, targetMonth, targetYear).Return(nil, repository.ErrTargetNotFound)
+	mockRepo.On("GetLatestTargetBefore", mock.Anything, user2, model.TargetTypeExpense, targetMonth, targetYear).Return(nil, repository.ErrTargetNotFound)
+	mockRepo.On("GetLatestTargetBefore", mock.Anything, user2, model.TargetTypeInvestment, targetMonth, targetYear).Return(nil, repository.ErrTargetNotFound)
 	mockRepo.On("GetMonthlyBudgetsForPeriod", mock.Anything, user2, targetPeriodStart).Return([]model.Budget{}, nil)
 	mockRepo.On("GetLatestMonthlyBudgetsBefore", mock.Anything, user2, targetPeriodStart).Return([]model.Budget{}, nil)
 
@@ -221,6 +222,6 @@ func TestRolloverService_ProcessRolloverForUser_DedupesHistoricalBudgetsPerCateg
 		return len(budgets) == 1 && budgets[0].Amount == 3000000
 	})).Return(nil)
 
-	assert.NoError(t, svc.ProcessRolloverForUser(context.Background(), userID, 9, 2026))
+	assert.NoError(t, service.ProcessRolloverForUser(context.Background(), svc, userID, 9, 2026))
 	mockRepo.AssertExpectations(t)
 }

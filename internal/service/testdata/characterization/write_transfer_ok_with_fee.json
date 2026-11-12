@@ -1,0 +1,72 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "transfer_between_wallets",
+    "actionCard": {
+      "actionType": "WALLET_TRANSFER",
+      "title": "Chuyển tiền thành công",
+      "description": "Đã chuyển 1.000.000 ₫ từ ví Tài khoản Ngân hàng sang ví Ví Tiền mặt",
+      "data": {
+        "id": "<id-2>",
+        "userId": "<id-3>",
+        "fromWalletId": "<id-4>",
+        "toWalletId": "<id-5>",
+        "amount": 1000000,
+        "fee": 3300,
+        "transferDate": "",
+        "createdAt": ""
+      }
+    },
+    "result": {
+      "amount": 1000000,
+      "createdAt": "",
+      "fee": 3300,
+      "fromWalletId": "<id-4>",
+      "id": "<id-2>",
+      "toWalletId": "<id-5>",
+      "transferDate": "",
+      "userId": "<id-3>"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Chuyển tiền giữa ví — Chuyển 1.000.000 ₫ từ ví Tài khoản Ngân hàng sang ví Ví Tiền mặt (phí 3.300 ₫)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Chuyển tiền giữa ví",
+      "description": "Chuyển 1.000.000 ₫ từ ví Tài khoản Ngân hàng sang ví Ví Tiền mặt (phí 3.300 ₫)",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1000000,
+        "description": "rút",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "fee": 3300,
+        "fromWalletName": "Tài khoản Ngân hàng",
+        "kind": "Chuyển tiền giữa ví",
+        "status": "PENDING",
+        "toWalletName": "Ví Tiền mặt",
+        "toolName": "transfer_between_wallets",
+        "walletName": "Tài khoản Ngân hàng"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": [
+      {
+        "fromWalletId": "<id-4>",
+        "toWalletId": "<id-5>",
+        "amount": 1000000,
+        "fee": 3300,
+        "note": "rút"
+      }
+    ]
+  }
+}

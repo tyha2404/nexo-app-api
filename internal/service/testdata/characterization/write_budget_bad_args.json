@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Lỗi đặt hạn mức ngân sách",
+    "ResultJSON": "{\"error\":\"Cần cung cấp tên danh mục và hạn mức ngân sách lớn hơn 0\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

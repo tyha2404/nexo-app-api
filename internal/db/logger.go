@@ -16,6 +16,9 @@ import (
 type GormLogger struct {
 	logger *zap.Logger
 	level  gormlogger.LogLevel
+	// parameterized logs SQL with its $n placeholders instead of the bound
+	// values (see ParamsFilter). Enabled in production.
+	parameterized bool
 }
 
 // NewGormLogger creates a new GORM logger with zap
@@ -31,6 +34,16 @@ func (l *GormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	newLogger := *l
 	newLogger.level = level
 	return &newLogger
+}
+
+// ParamsFilter implements gorm.ParamsFilter: GORM calls it before building
+// the SQL passed to Trace, so dropping the params keeps user data out of the
+// logs.
+func (l *GormLogger) ParamsFilter(ctx context.Context, sql string, params ...interface{}) (string, []interface{}) {
+	if l.parameterized {
+		return sql, nil
+	}
+	return sql, params
 }
 
 // Info logs info messages

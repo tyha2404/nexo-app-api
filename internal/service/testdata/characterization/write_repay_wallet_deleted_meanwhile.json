@@ -1,0 +1,37 @@
+{
+  "confirm": null,
+  "confirmErr": "pending action failed: Ví đã chọn không còn tồn tại. Hãy yêu cầu trợ lý tạo lại đề xuất trả nợ.",
+  "confirmErrIsFailed": true,
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi trả nợ — 1 ₫ cho 'Vay anh Nam' (còn lại hiện tại: 600.000 ₫), trừ từ ví Ví Tiền mặt\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi trả nợ",
+      "description": "1 ₫ cho 'Vay anh Nam' (còn lại hiện tại: 600.000 ₫), trừ từ ví Ví Tiền mặt",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "debtId": "<id-2>",
+        "description": "",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Ghi trả nợ",
+        "remaining": 600000,
+        "status": "PENDING",
+        "title": "Vay anh Nam",
+        "toolName": "record_debt_repayment",
+        "walletName": "Ví Tiền mặt"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

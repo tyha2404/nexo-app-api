@@ -1,0 +1,69 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "create_category",
+    "actionCard": {
+      "actionType": "CATEGORY_CREATED",
+      "title": "Đã tạo danh mục mới",
+      "description": "Danh mục: Thú cưng (Chi tiêu)",
+      "data": {
+        "description": "chó mèo",
+        "id": "<id-2>",
+        "name": "Thú cưng",
+        "type": "EXPENSE"
+      }
+    },
+    "result": {
+      "categoryId": "<id-2>",
+      "description": "chó mèo",
+      "message": "Đã tạo thành công danh mục \"Thú cưng\" (Chi tiêu).",
+      "name": "Thú cưng",
+      "success": true,
+      "type": "EXPENSE"
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Tạo danh mục — Danh mục: Thú cưng (Chi tiêu)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Tạo danh mục",
+      "description": "Danh mục: Thú cưng (Chi tiêu)",
+      "data": {
+        "actionId": "<id-1>",
+        "categoryName": "Thú cưng",
+        "description": "chó mèo",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Tạo danh mục",
+        "name": "Thú cưng",
+        "status": "PENDING",
+        "toolName": "create_category",
+        "type": "EXPENSE"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": [
+      {
+        "id": "<id-2>",
+        "userId": "<id-3>",
+        "name": "Thú cưng",
+        "type": "EXPENSE",
+        "description": "chó mèo",
+        "excludeFromAverageDaily": false,
+        "createdAt": "0001-01-01T00:00:00Z",
+        "updatedAt": "0001-01-01T00:00:00Z",
+        "deletedAt": null,
+        "User": null
+      }
+    ],
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

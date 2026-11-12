@@ -62,3 +62,46 @@ func TestLoadConfig_TokenTTLs(t *testing.T) {
 		}
 	}
 }
+
+func TestIsProductionEnv(t *testing.T) {
+	for env, want := range map[string]bool{
+		"production": true, "prod": true, "Production": true, " PROD ": true,
+		"dev": false, "": false, "staging": false, "preprod": false,
+	} {
+		if got := IsProductionEnv(env); got != want {
+			t.Errorf("IsProductionEnv(%q) = %v, want %v", env, got, want)
+		}
+		if got := (&Config{AppEnv: env}).IsProduction(); got != want {
+			t.Errorf("Config{AppEnv: %q}.IsProduction() = %v, want %v", env, got, want)
+		}
+	}
+}
+
+func TestLoadConfig_AutoMigrateIsOptIn(t *testing.T) {
+	t.Setenv("JWT_SECRET", "a_test_secret_that_is_at_least_32_characters")
+	for raw, want := range map[string]bool{"": false, "false": false, "1": false, "true": true, "TRUE": true} {
+		t.Setenv("AUTO_MIGRATE", raw)
+		cfg, err := LoadConfig()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AutoMigrate != want {
+			t.Errorf("AUTO_MIGRATE=%q: got %v, want %v", raw, cfg.AutoMigrate, want)
+		}
+	}
+}
+
+func TestLoadConfig_ProdDisablesLocalRegisterByDefault(t *testing.T) {
+	t.Setenv("JWT_SECRET", "a_test_secret_that_is_at_least_32_characters")
+	t.Setenv("LOCAL_REGISTER_ENABLED", "")
+	for env, want := range map[string]bool{"prod": false, "production": false, "dev": true} {
+		t.Setenv("APP_ENV", env)
+		cfg, err := LoadConfig()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.LocalRegisterEnabled != want {
+			t.Errorf("APP_ENV=%q: LocalRegisterEnabled=%v, want %v", env, cfg.LocalRegisterEnabled, want)
+		}
+	}
+}

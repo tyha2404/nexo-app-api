@@ -7,15 +7,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tyha2404/nexo-app-api/internal/logger"
 	"github.com/tyha2404/nexo-app-api/internal/middleware"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestLoggingMiddleware(t *testing.T) {
 	logg, err := logger.New("info", "dev")
 	assert.NoError(t, err)
 
-	mw := middleware.LoggingMiddleware(logg)
+	mw := middleware.LoggingMiddleware(logg, false)
 
 	t.Run("records 200 OK request", func(t *testing.T) {
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,4 +77,33 @@ func TestLoggingMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "data: test-chunk")
 	})
+}
+
+func TestLoggingMiddleware_ProductionLogsWithoutQueryOrColors(t *testing.T) {
+	core, logs := observer.New(zap.InfoLevel)
+	mw := middleware.LoggingMiddleware(zap.New(core), true)
+
+	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(status)
+		}))
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?keyword=secret", nil)
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	entries := logs.All()
+	require.Len(t, entries, 2)
+	assert.Equal(t, "HTTP request", entries[0].Message)
+	assert.Equal(t, zap.InfoLevel, entries[0].Level)
+	assert.Equal(t, "HTTP Server Error", entries[1].Message)
+	assert.Equal(t, zap.ErrorLevel, entries[1].Level)
+	for _, e := range entries {
+		fields := e.ContextMap()
+		assert.Equal(t, "/api/v1/transactions", fields["path"])
+		assert.NotContains(t, fields, "query")
+		for _, v := range fields {
+			assert.NotContains(t, fmt.Sprint(v), "secret")
+			assert.NotContains(t, fmt.Sprint(v), "\x1b[")
+		}
+	}
 }

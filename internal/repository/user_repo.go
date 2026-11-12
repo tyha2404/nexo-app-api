@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
@@ -12,7 +13,8 @@ import (
 type UserRepo interface {
 	Create(ctx context.Context, user *model.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
-	List(ctx context.Context, limit, offset int) ([]model.User, error)
+	// List returns one page of users (newest first) and the total count.
+	List(ctx context.Context, limit, offset int) ([]model.User, int64, error)
 	UpdateFields(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByEmail(ctx context.Context, email string) (*model.User, error)
@@ -35,7 +37,7 @@ func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, erro
 	var user model.User
 	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constant.ErrNotFound
 		}
 		return nil, err
@@ -43,10 +45,14 @@ func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, erro
 	return &user, nil
 }
 
-func (r *userRepo) List(ctx context.Context, limit, offset int) ([]model.User, error) {
+func (r *userRepo) List(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.User{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 	var users []model.User
 	err := r.db.WithContext(ctx).Order("created_at DESC").Limit(limit).Offset(offset).Find(&users).Error
-	return users, err
+	return users, total, err
 }
 
 // UpdateFields updates only the given columns. Callers are responsible for
@@ -80,7 +86,7 @@ func (r *userRepo) FindByEmail(ctx context.Context, email string) (*model.User, 
 	// accounts may not be.
 	err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", email).First(&user).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constant.ErrNotFound
 		}
 		return nil, err
@@ -92,7 +98,7 @@ func (r *userRepo) FindByUsername(ctx context.Context, username string) (*model.
 	var user model.User
 	err := r.db.WithContext(ctx).Where("username = ?", username).First(&user).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constant.ErrNotFound
 		}
 		return nil, err

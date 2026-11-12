@@ -13,7 +13,7 @@ import (
 // CostService backs the legacy /costs endpoints. Clients should use
 // /transactions; every method here is scoped to the owning user.
 type CostService interface {
-	Create(ctx context.Context, cost *model.Cost) (*model.Cost, error)
+	Create(ctx context.Context, userID uuid.UUID, req dto.CreateCostRequest) (*model.Cost, error)
 	Get(ctx context.Context, userID, id uuid.UUID) (*model.Cost, error)
 	Update(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCostRequest) (*model.Cost, error)
 	Delete(ctx context.Context, userID, id uuid.UUID) error
@@ -32,7 +32,15 @@ func NewCostService(repo repository.CostRepo, categoryRepo repository.CategoryRe
 	}
 }
 
-func (s *costService) Create(ctx context.Context, cost *model.Cost) (*model.Cost, error) {
+func (s *costService) Create(ctx context.Context, userID uuid.UUID, req dto.CreateCostRequest) (*model.Cost, error) {
+	cost := &model.Cost{
+		Title:      req.Title,
+		Amount:     req.Amount,
+		Currency:   req.Currency,
+		IncurredAt: req.IncurredAt.Time,
+		CategoryID: req.CategoryID,
+		UserID:     userID,
+	}
 	// The category must belong to the cost's owner (404 otherwise).
 	if _, err := s.categoryRepo.GetByIDForUser(ctx, cost.UserID, cost.CategoryID); err != nil {
 		return nil, categoryLookupError(err)

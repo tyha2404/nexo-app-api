@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -71,6 +72,7 @@ func TestMatchWalletByName(t *testing.T) {
 
 	_, err = matchWalletByName(wallets, "MoMo")
 	require.Error(t, err, "no match must not fall back to the first wallet")
+	assert.Contains(t, err.Error(), "Không tìm thấy ví 'MoMo'", "an unknown name is not reported as ambiguous")
 
 	_, err = matchWalletByName(wallets, "")
 	require.Error(t, err, "empty name with several wallets must ask the user")
@@ -104,78 +106,69 @@ func TestToolNumberArgs(t *testing.T) {
 }
 
 func newToolTestService(wallets []model.Wallet) *chatService {
-	return &chatService{walletRepo: &stubWalletRepo{wallets: wallets}, logger: zap.NewNop()}
+	return &chatService{walletRepo: &stubWalletRepo{wallets: wallets}, logger: zap.NewNop(), now: util.Now}
 }
 
-func TestToolCreateTransaction_RejectsBadAmounts(t *testing.T) {
+// previewRejects runs a write tool's preview and returns its error result
+// (the call must be rejected without a proposal).
+func previewRejects(t *testing.T, s *chatService, tool string, args map[string]interface{}) *FinancialToolResult {
+	t.Helper()
+	p, errRes, err := chatToolRegistry.lookup(tool).preview(s, context.Background(), uuid.New(), args)
+	require.NoError(t, err)
+	require.Nil(t, p, "%s %v must be rejected", tool, args)
+	return errRes
+}
+
+func TestPreviewCreateTransaction_RejectsBadAmounts(t *testing.T) {
 	s := newToolTestService(defaultWallets())
 	for _, amount := range []interface{}{-50000.0, 0.0, math.NaN(), "-1"} {
-		res, err := s.toolCreateTransaction(context.Background(), uuid.New(), map[string]interface{}{"amount": amount, "type": "EXPENSE"})
-		require.NoError(t, err)
+		res := previewRejects(t, s, "create_transaction", map[string]interface{}{"amount": amount, "type": "EXPENSE"})
 		assert.NotEmpty(t, toolError(t, res), "amount %v", amount)
 	}
 }
 
-func TestToolCreateTransaction_AmbiguousOrMissingWalletAsksUser(t *testing.T) {
+func TestPreviewCreateTransaction_AmbiguousOrMissingWalletAsksUser(t *testing.T) {
 	s := newToolTestService(defaultWallets())
 
 	// No wallet named: must not default to the first wallet.
-	res, err := s.toolCreateTransaction(context.Background(), uuid.New(), map[string]interface{}{"amount": 50000.0, "type": "EXPENSE"})
-	require.NoError(t, err)
+	res := previewRejects(t, s, "create_transaction", map[string]interface{}{"amount": 50000.0, "type": "EXPENSE"})
 	assert.Contains(t, toolError(t, res), "Ví Tiền mặt")
 
 	// Ambiguous: "techcom" matches two wallets partially.
-	res, err = s.toolCreateTransaction(context.Background(), uuid.New(), map[string]interface{}{"amount": 50000.0, "type": "EXPENSE", "walletName": "techcom"})
-	require.NoError(t, err)
+	res = previewRejects(t, s, "create_transaction", map[string]interface{}{"amount": 50000.0, "type": "EXPENSE", "walletName": "techcom"})
 	assert.Contains(t, toolError(t, res), "nhiều ví")
 
 	// Unknown wallet.
-	res, err = s.toolCreateTransaction(context.Background(), uuid.New(), map[string]interface{}{"amount": 50000.0, "type": "EXPENSE", "walletName": "MoMo"})
-	require.NoError(t, err)
+	res = previewRejects(t, s, "create_transaction", map[string]interface{}{"amount": 50000.0, "type": "EXPENSE", "walletName": "MoMo"})
 	assert.Contains(t, toolError(t, res), "MoMo")
 }
 
-func TestToolTransfer_Validation(t *testing.T) {
+func TestPreviewTransfer_Validation(t *testing.T) {
 	s := newToolTestService(defaultWallets())
-	ctx := context.Background()
 
-	res, err := s.toolTransferBetweenWallets(ctx, uuid.New(), map[string]interface{}{"amount": 100000.0, "fee": -1000.0, "fromWalletName": "Techcombank", "toWalletName": "Ví Tiền mặt"})
-	require.NoError(t, err)
+	res := previewRejects(t, s, "transfer_between_wallets", map[string]interface{}{"amount": 100000.0, "fee": -1000.0, "fromWalletName": "Techcombank", "toWalletName": "Ví Tiền mặt"})
 	assert.Contains(t, toolError(t, res), "fee")
 
-	res, err = s.toolTransferBetweenWallets(ctx, uuid.New(), map[string]interface{}{"amount": -100000.0, "fromWalletName": "Techcombank", "toWalletName": "Ví Tiền mặt"})
-	require.NoError(t, err)
+	res = previewRejects(t, s, "transfer_between_wallets", map[string]interface{}{"amount": -100000.0, "fromWalletName": "Techcombank", "toWalletName": "Ví Tiền mặt"})
 	assert.NotEmpty(t, toolError(t, res))
 
-	res, err = s.toolTransferBetweenWallets(ctx, uuid.New(), map[string]interface{}{"amount": 100000.0, "fromWalletName": "ví", "toWalletName": "Techcombank"})
-	require.NoError(t, err)
+	res = previewRejects(t, s, "transfer_between_wallets", map[string]interface{}{"amount": 100000.0, "fromWalletName": "ví", "toWalletName": "Techcombank"})
 	assert.True(t, strings.HasPrefix(toolError(t, res), "Ví nguồn"))
 
-	res, err = s.toolTransferBetweenWallets(ctx, uuid.New(), map[string]interface{}{"amount": 100000.0, "fromWalletName": "Techcombank", "toWalletName": "techcombank"})
-	require.NoError(t, err)
+	res = previewRejects(t, s, "transfer_between_wallets", map[string]interface{}{"amount": 100000.0, "fromWalletName": "Techcombank", "toWalletName": "techcombank"})
 	assert.Contains(t, toolError(t, res), "khác nhau")
 }
 
 func TestOtherWriteTools_RejectNegativeAmounts(t *testing.T) {
 	s := newToolTestService(nil)
-	ctx := context.Background()
-	uid := uuid.New()
-
-	res, err := s.toolCreateDebt(ctx, uid, map[string]interface{}{"title": "Nợ A", "totalAmount": -5.0})
-	require.NoError(t, err)
-	assert.NotEmpty(t, toolError(t, res))
-
-	res, err = s.toolRecordDebtRepayment(ctx, uid, map[string]interface{}{"debtTitle": "Nợ A", "amount": -5.0})
-	require.NoError(t, err)
-	assert.NotEmpty(t, toolError(t, res))
-
-	res, err = s.toolSetBudget(ctx, uid, map[string]interface{}{"categoryName": "Ăn uống", "amount": -5.0})
-	require.NoError(t, err)
-	assert.NotEmpty(t, toolError(t, res))
-
-	res, err = s.toolSetFinancialTarget(ctx, uid, map[string]interface{}{"targetType": "EXPENSE", "targetAmount": -5.0})
-	require.NoError(t, err)
-	assert.NotEmpty(t, toolError(t, res))
+	for tool, args := range map[string]map[string]interface{}{
+		"create_debt":           {"title": "Nợ A", "totalAmount": -5.0},
+		"record_debt_repayment": {"debtTitle": "Nợ A", "amount": -5.0},
+		"set_budget":            {"categoryName": "Ăn uống", "amount": -5.0},
+		"set_financial_target":  {"targetType": "EXPENSE", "targetAmount": -5.0},
+	} {
+		assert.NotEmpty(t, toolError(t, previewRejects(t, s, tool, args)), tool)
+	}
 }
 
 func TestBuildUpstreamMessages_CapsHistory(t *testing.T) {

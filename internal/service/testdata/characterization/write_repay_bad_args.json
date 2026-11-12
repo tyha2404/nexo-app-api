@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Lỗi tham số trả nợ",
+    "ResultJSON": "{\"error\":\"Cần cung cấp tên khoản nợ và số tiền trả nợ lớn hơn 0\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

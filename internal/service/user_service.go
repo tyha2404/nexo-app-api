@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -15,7 +16,8 @@ import (
 type UserService interface {
 	Create(ctx context.Context, req dto.CreateUserRequest) (*model.User, error)
 	Get(ctx context.Context, id uuid.UUID) (*model.User, error)
-	List(ctx context.Context, limit, offset int) ([]model.User, error)
+	// List returns one page of users and the total number of users.
+	List(ctx context.Context, limit, offset int) ([]model.User, int64, error)
 	// Update applies only the whitelisted fields of req (username, email).
 	// Role and password can never be changed through it.
 	Update(ctx context.Context, id uuid.UUID, req dto.UpdateUserRequest) (*model.User, error)
@@ -36,12 +38,12 @@ func (s *userService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 	email := strings.TrimSpace(req.Email)
 	username := strings.TrimSpace(req.Username)
 
-	if existing, err := s.repo.FindByEmail(ctx, email); err != nil && err != constant.ErrNotFound {
+	if existing, err := s.repo.FindByEmail(ctx, email); err != nil && !errors.Is(err, constant.ErrNotFound) {
 		return nil, err
 	} else if existing != nil {
 		return nil, constant.ErrEmailAlreadyExists
 	}
-	if existing, err := s.repo.FindByUsername(ctx, username); err != nil && err != constant.ErrNotFound {
+	if existing, err := s.repo.FindByUsername(ctx, username); err != nil && !errors.Is(err, constant.ErrNotFound) {
 		return nil, err
 	} else if existing != nil {
 		return nil, constant.ErrUsernameTaken
@@ -51,7 +53,7 @@ func (s *userService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 		Username: username,
 		Email:    email,
 		Password: req.Password,
-		Role:     "user",
+		Role:     model.RoleUser,
 	}
 	if err := user.HashPassword(); err != nil {
 		return nil, err
@@ -68,7 +70,7 @@ func (s *userService) Get(ctx context.Context, id uuid.UUID) (*model.User, error
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *userService) List(ctx context.Context, limit, offset int) ([]model.User, error) {
+func (s *userService) List(ctx context.Context, limit, offset int) ([]model.User, int64, error) {
 	return s.repo.List(ctx, limit, offset)
 }
 
@@ -77,7 +79,7 @@ func (s *userService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateUs
 	if req.Username != nil {
 		username := strings.TrimSpace(*req.Username)
 		existing, err := s.repo.FindByUsername(ctx, username)
-		if err != nil && err != constant.ErrNotFound {
+		if err != nil && !errors.Is(err, constant.ErrNotFound) {
 			return nil, err
 		}
 		if existing != nil && existing.ID != id {
@@ -88,7 +90,7 @@ func (s *userService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateUs
 	if req.Email != nil {
 		email := strings.TrimSpace(*req.Email)
 		existing, err := s.repo.FindByEmail(ctx, email)
-		if err != nil && err != constant.ErrNotFound {
+		if err != nil && !errors.Is(err, constant.ErrNotFound) {
 			return nil, err
 		}
 		if existing != nil && existing.ID != id {

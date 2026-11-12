@@ -24,12 +24,6 @@ import (
 
 const testSecret = "a_very_secure_secret_with_at_least_32_characters_long"
 
-func TestInitJWT_RejectsPlaceholderSecrets(t *testing.T) {
-	for _, secret := range []string{"", "replace_me"} {
-		assert.Panics(t, func() { InitJWT(&config.Config{JwtSecret: secret}) }, "secret %q", secret)
-	}
-}
-
 func TestGenerateToken_UsesConfiguredTTL(t *testing.T) {
 	InitJWT(&config.Config{JwtSecret: testSecret, JwtAccessTTL: 5 * time.Minute})
 	t.Cleanup(func() { InitJWT(&config.Config{JwtSecret: testSecret}) })

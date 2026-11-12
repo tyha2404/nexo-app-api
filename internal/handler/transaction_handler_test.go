@@ -363,8 +363,7 @@ func TestTransactionHandler_Delete(t *testing.T) {
 			require.Equal(t, http.StatusOK, rr.Code)
 			assert.Equal(t, userID, gotUser)
 			assert.Equal(t, txnID, gotID)
-			body := decodeJSON(t, rr)
-			assert.Equal(t, "Transaction deleted successfully", body["message"])
+			assert.JSONEq(t, `{"status":200,"success":true,"message":"Transaction deleted successfully","data":null}`, rr.Body.String())
 		})
 	}
 }

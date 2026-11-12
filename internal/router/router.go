@@ -44,8 +44,9 @@ func WithLocalRegisterDisabled(disabled bool) Option {
 	return func(o *Options) { o.DisableLocalRegister = disabled }
 }
 
-// New creates a new router with all routes configured
-func New(db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
+// New creates a new router with all routes configured. cfg is the
+// configuration loaded in cmd/server/main.go (see NewContainer).
+func New(cfg *config.Config, db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
 	options := Options{}
 	for _, opt := range opts {
 		opt(&options)
@@ -59,19 +60,21 @@ func New(db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
 
 	r := chi.NewRouter()
 
+	// Panic recovery first so it covers every other middleware and handler.
+	r.Use(middleware.Recoverer(logger))
 	// Add logging and CORS middleware
 	r.Use(middleware.NewCORSMiddleware(options.CORSAllowedOrigins))
-	r.Use(middleware.LoggingMiddleware(logger))
+	r.Use(middleware.LoggingMiddleware(logger, cfg.IsProduction()))
 	r.Use(middleware.MaxBodyBytes(options.MaxBodyBytes))
 
 	// Initialize dependency container
-	container := NewContainer(db, logger)
+	container := NewContainer(cfg, db, logger)
 
 	// Initialize routers using handlers from the container
 	healthRouter := NewHealthRouter(container.HealthHandler)
-	authRouter := NewAuthRouter(container.AuthHandler, logger)
+	authRouter := NewAuthRouter(container.AuthHandler)
 	authRouter.DisableRegister = options.DisableLocalRegister
-	userRouter := NewUserRouter(container.UserHandler, logger)
+	userRouter := NewUserRouter(container.UserHandler)
 	userRouter.RoleLookup = func(ctx context.Context, id uuid.UUID) (string, error) {
 		u, err := container.UserRepo.GetByID(ctx, id)
 		if err != nil {
@@ -79,10 +82,10 @@ func New(db *gorm.DB, logger *zap.Logger, opts ...Option) *chi.Mux {
 		}
 		return u.Role, nil
 	}
-	categoryRouter := NewCategoryRouter(container.CategoryHandler, logger)
-	costRouter := NewCostRouter(container.CostHandler, logger)
-	transactionRouter := NewTransactionRouter(container.TransactionHandler, middleware.AuthMiddleware)
-	tagRouter := NewTagRouter(container.TransactionHandler, middleware.AuthMiddleware)
+	categoryRouter := NewCategoryRouter(container.CategoryHandler)
+	costRouter := NewCostRouter(container.CostHandler)
+	transactionRouter := NewTransactionRouter(container.TransactionHandler)
+	tagRouter := NewTagRouter(container.TransactionHandler)
 	budgetRouter := NewBudgetRouter(container.BudgetHandler)
 	alertRouter := NewAlertRouter(container.AlertHandler)
 	reportRouter := NewReportRouter(container.ReportHandler)

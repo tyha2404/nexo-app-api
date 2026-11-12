@@ -9,26 +9,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/service"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
 )
 
 type MockKnowledgeRepo struct {
 	mock.Mock
-}
-
-func (m *MockKnowledgeRepo) Create(ctx context.Context, knowledge *model.FinancialKnowledge) error {
-	args := m.Called(ctx, knowledge)
-	return args.Error(0)
-}
-
-func (m *MockKnowledgeRepo) Update(ctx context.Context, knowledge *model.FinancialKnowledge) error {
-	args := m.Called(ctx, knowledge)
-	return args.Error(0)
-}
-
-func (m *MockKnowledgeRepo) DeleteByTopic(ctx context.Context, topic string) error {
-	args := m.Called(ctx, topic)
-	return args.Error(0)
 }
 
 func (m *MockKnowledgeRepo) ReplaceByTopic(ctx context.Context, topic string, docs []*model.FinancialKnowledge) error {
@@ -41,34 +27,16 @@ func (m *MockKnowledgeRepo) ListAll(ctx context.Context) ([]model.FinancialKnowl
 	return args.Get(0).([]model.FinancialKnowledge), args.Error(1)
 }
 
-func (m *MockKnowledgeRepo) Count(ctx context.Context) (int64, error) {
-	args := m.Called(ctx)
-	return args.Get(0).(int64), args.Error(1)
-}
-
-func (m *MockKnowledgeRepo) GetByTopic(ctx context.Context, topic string) ([]model.FinancialKnowledge, error) {
-	args := m.Called(ctx, topic)
-	return args.Get(0).([]model.FinancialKnowledge), args.Error(1)
-}
-
-func (m *MockKnowledgeRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.FinancialKnowledge, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.FinancialKnowledge), args.Error(1)
-}
-
-type MockRequestyService struct {
+type MockNineRouterService struct {
 	mock.Mock
 }
 
-func (m *MockRequestyService) IsConfigured() bool {
+func (m *MockNineRouterService) IsConfigured() bool {
 	args := m.Called()
 	return args.Bool(0)
 }
 
-func (m *MockRequestyService) ListModels(ctx context.Context) ([]string, error) {
+func (m *MockNineRouterService) ListModels(ctx context.Context) ([]string, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -76,33 +44,20 @@ func (m *MockRequestyService) ListModels(ctx context.Context) ([]string, error) 
 	return args.Get(0).([]string), args.Error(1)
 }
 
-func (m *MockRequestyService) ChatCompletion(ctx context.Context, messages []service.RequestyMessage, tools []service.ToolDefinition) (*service.RequestyChatResponse, error) {
-	args := m.Called(ctx, messages, tools)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*service.RequestyChatResponse), args.Error(1)
-}
-
-func (m *MockRequestyService) ChatCompletionWithModel(ctx context.Context, model string, messages []service.RequestyMessage, tools []service.ToolDefinition) (*service.RequestyChatResponse, error) {
+func (m *MockNineRouterService) ChatCompletionWithModel(ctx context.Context, model string, messages []service.NineRouterMessage, tools []service.ToolDefinition) (*service.NineRouterChatResponse, error) {
 	args := m.Called(ctx, model, messages, tools)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*service.RequestyChatResponse), args.Error(1)
+	return args.Get(0).(*service.NineRouterChatResponse), args.Error(1)
 }
 
-func (m *MockRequestyService) StreamChatCompletions(ctx context.Context, messages []service.RequestyMessage, onChunk func(delta string) error) error {
-	args := m.Called(ctx, messages, onChunk)
-	return args.Error(0)
-}
-
-func (m *MockRequestyService) StreamChatCompletionsWithModel(ctx context.Context, model string, messages []service.RequestyMessage, onChunk func(delta string) error) error {
+func (m *MockNineRouterService) StreamChatCompletionsWithModel(ctx context.Context, model string, messages []service.NineRouterMessage, onChunk func(delta string) error) error {
 	args := m.Called(ctx, model, messages, onChunk)
 	return args.Error(0)
 }
 
-func (m *MockRequestyService) EmbedText(ctx context.Context, text string) ([]float32, error) {
+func (m *MockNineRouterService) EmbedText(ctx context.Context, text string) ([]float32, error) {
 	args := m.Called(ctx, text)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -113,18 +68,18 @@ func (m *MockRequestyService) EmbedText(ctx context.Context, text string) ([]flo
 func TestComputeCosineSimilarity(t *testing.T) {
 	vecA := []float32{1.0, 0.0, 0.0}
 	vecB := []float32{1.0, 0.0, 0.0}
-	assert.InDelta(t, 1.0, service.ComputeCosineSimilarity(vecA, vecB), 0.001)
+	assert.InDelta(t, 1.0, util.CosineSimilarity(vecA, vecB), 0.001)
 
 	vecC := []float32{0.0, 1.0, 0.0}
-	assert.InDelta(t, 0.0, service.ComputeCosineSimilarity(vecA, vecC), 0.001)
+	assert.InDelta(t, 0.0, util.CosineSimilarity(vecA, vecC), 0.001)
 
 	vecD := []float32{-1.0, 0.0, 0.0}
-	assert.InDelta(t, -1.0, service.ComputeCosineSimilarity(vecA, vecD), 0.001)
+	assert.InDelta(t, -1.0, util.CosineSimilarity(vecA, vecD), 0.001)
 }
 
 func TestRAGService_SearchKnowledge(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockAI := new(MockRequestyService)
+	mockAI := new(MockNineRouterService)
 	logger := zap.NewNop()
 
 	docList := []model.FinancialKnowledge{
@@ -140,7 +95,6 @@ func TestRAGService_SearchKnowledge(t *testing.T) {
 	mockRepo.On("ListAll", mock.Anything).Return(docList, nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
 	// Background seeding goroutine may upsert any embedded knowledge topic
 	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockAI.On("IsConfigured").Return(true)
@@ -157,7 +111,7 @@ func TestRAGService_SearchKnowledge(t *testing.T) {
 
 func TestRAGService_BackfillEmptyEmbedding(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockAI := new(MockRequestyService)
+	mockAI := new(MockNineRouterService)
 	logger := zap.NewNop()
 
 	docWithEmptyEmb := []model.FinancialKnowledge{
@@ -173,7 +127,6 @@ func TestRAGService_BackfillEmptyEmbedding(t *testing.T) {
 	mockRepo.On("ListAll", mock.Anything).Return(docWithEmptyEmb, nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockAI.On("IsConfigured").Return(false)
 
@@ -184,7 +137,7 @@ func TestRAGService_BackfillEmptyEmbedding(t *testing.T) {
 
 func TestRAGService_SearchKnowledge_FallbackFlaggedNotFaked(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockAI := new(MockRequestyService)
+	mockAI := new(MockNineRouterService)
 	logger := zap.NewNop()
 
 	// Doc with an empty embedding can never match semantically, and the query
@@ -202,7 +155,6 @@ func TestRAGService_SearchKnowledge_FallbackFlaggedNotFaked(t *testing.T) {
 	mockRepo.On("ListAll", mock.Anything).Return(docList, nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("ReplaceByTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockAI.On("IsConfigured").Return(true)
 	mockAI.On("EmbedText", mock.Anything, mock.Anything).Return([]float32{0.1, 0.2, 0.3}, nil)
@@ -218,13 +170,12 @@ func TestRAGService_SearchKnowledge_FallbackFlaggedNotFaked(t *testing.T) {
 
 func TestRAGService_AddKnowledge_Chunking(t *testing.T) {
 	mockRepo := new(MockKnowledgeRepo)
-	mockAI := new(MockRequestyService)
+	mockAI := new(MockNineRouterService)
 	logger := zap.NewNop()
 
 	mockRepo.On("ListAll", mock.Anything).Return([]model.FinancialKnowledge{}, nil).Maybe()
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
-	mockRepo.On("DeleteByTopic", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.On("ReplaceByTopic", mock.Anything, "long_topic", mock.Anything).
 		Run(func(args mock.Arguments) {
 			docs := args.Get(2).([]*model.FinancialKnowledge)

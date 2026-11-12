@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"gorm.io/gorm"
 )
 
@@ -55,6 +56,8 @@ type MonthlyTotal struct {
 	Income      float64
 	Expense     float64
 	RealizedPnL float64
+	// ActiveInvestment: INVESTMENT rows still HOLDING (as TransactionTotals).
+	ActiveInvestment float64
 }
 
 // DailyTotal is income/expense/investment and the transaction count for one
@@ -91,24 +94,15 @@ func NewReportRepository(db *gorm.DB) ReportRepository {
 	return &reportRepository{db: db}
 }
 
-// AsReportRepository returns a ReportRepository backed by the same database
-// as repo when repo is one of this package's DB-backed repositories (e.g. the
-// TargetRepository from NewTargetRepository). It lets services build one
-// without changing their constructors.
-func AsReportRepository(repo interface{}) (ReportRepository, bool) {
-	rr, ok := repo.(ReportRepository)
-	return rr, ok && rr != nil
-}
-
 // transactionsInRange scopes a query on transactions to one user and an
 // inclusive date range. Soft-deleted rows are excluded by GORM via Model.
 func transactionsInRange(db *gorm.DB, userID uuid.UUID, startDate, endDate string) *gorm.DB {
 	q := db.Model(&model.Transaction{}).Where("transactions.user_id = ?", userID)
-	if t, err := time.Parse("2006-01-02", startDate); err == nil {
-		q = q.Where("transactions.transaction_date >= ?", t.Format("2006-01-02"))
+	if t, err := util.ParseDate(startDate); err == nil {
+		q = q.Where("transactions.transaction_date >= ?", util.DateString(t))
 	}
-	if t, err := time.Parse("2006-01-02", endDate); err == nil {
-		q = q.Where("transactions.transaction_date <= ?", t.Format("2006-01-02"))
+	if t, err := util.ParseDate(endDate); err == nil {
+		q = q.Where("transactions.transaction_date <= ?", util.DateString(t))
 	}
 	return q
 }
@@ -168,16 +162,17 @@ func (r *reportRepository) GetExpenseByCategory(ctx context.Context, userID uuid
 
 func (r *reportRepository) GetMonthlyIncomeExpense(ctx context.Context, userID uuid.UUID, startDate, endDate string) ([]MonthlyTotal, error) {
 	var rows []struct {
-		Month       string
-		Income      float64
-		Expense     float64
-		RealizedPnL float64 `gorm:"column:realized_pnl"`
+		Month            string
+		Income           float64
+		Expense          float64
+		RealizedPnL      float64 `gorm:"column:realized_pnl"`
+		ActiveInvestment float64
 	}
 	// transaction_date is a DATE, so month grouping is timezone-independent.
 	err := transactionsInRange(r.db.WithContext(ctx), userID, startDate, endDate).
 		Select("to_char(transactions.transaction_date, 'YYYY-MM') AS month, " +
 			sqlSumIncome + " AS income, " + sqlSumExpense + " AS expense, " +
-			sqlSumRealizedPnL + " AS realized_pnl").
+			sqlSumRealizedPnL + " AS realized_pnl, " + sqlSumActiveInvestment + " AS active_investment").
 		Group("to_char(transactions.transaction_date, 'YYYY-MM')").
 		Order("month").
 		Scan(&rows).Error
@@ -186,7 +181,7 @@ func (r *reportRepository) GetMonthlyIncomeExpense(ctx context.Context, userID u
 	}
 	out := make([]MonthlyTotal, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, MonthlyTotal{Month: row.Month, Income: row.Income, Expense: row.Expense, RealizedPnL: row.RealizedPnL})
+		out = append(out, MonthlyTotal{Month: row.Month, Income: row.Income, Expense: row.Expense, RealizedPnL: row.RealizedPnL, ActiveInvestment: row.ActiveInvestment})
 	}
 	return out, nil
 }

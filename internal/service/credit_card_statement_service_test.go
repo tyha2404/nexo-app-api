@@ -23,7 +23,8 @@ func (m *MockStatementRepo) Create(ctx context.Context, s *model.CreditCardState
 	return args.Error(0)
 }
 
-func (m *MockStatementRepo) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.CreditCardStatement, error) {
+func (m *MockStatementRepo) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.CreditCardStatement, error) {
+	// Expectations keep the (ctx, id, userID) argument order.
 	args := m.Called(ctx, id, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -31,22 +32,27 @@ func (m *MockStatementRepo) GetByID(ctx context.Context, id uuid.UUID, userID uu
 	return args.Get(0).(*model.CreditCardStatement), args.Error(1)
 }
 
-func (m *MockStatementRepo) GetByWalletID(ctx context.Context, walletID uuid.UUID, userID uuid.UUID) ([]model.CreditCardStatement, error) {
-	args := m.Called(ctx, walletID, userID)
-	return args.Get(0).([]model.CreditCardStatement), args.Error(1)
-}
-
 func (m *MockStatementRepo) List(ctx context.Context, userID uuid.UUID, walletID *uuid.UUID, year *int, month *int) ([]model.CreditCardStatement, error) {
 	args := m.Called(ctx, userID, walletID, year, month)
 	return args.Get(0).([]model.CreditCardStatement), args.Error(1)
 }
 
-func (m *MockStatementRepo) Update(ctx context.Context, s *model.CreditCardStatement) error {
-	args := m.Called(ctx, s)
-	return args.Error(0)
+// Update mimics the repository: the stored row (first return value) is
+// "locked", mutated and returned.
+func (m *MockStatementRepo) Update(ctx context.Context, userID, id uuid.UUID, mutate func(s *model.CreditCardStatement) error) (*model.CreditCardStatement, error) {
+	args := m.Called(ctx, userID, id)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	stored := args.Get(0).(*model.CreditCardStatement)
+	if err := mutate(stored); err != nil {
+		return nil, err
+	}
+	return stored, nil
 }
 
-func (m *MockStatementRepo) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+func (m *MockStatementRepo) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	// Expectations keep the (ctx, id, userID) argument order.
 	args := m.Called(ctx, id, userID)
 	return args.Error(0)
 }
@@ -76,7 +82,7 @@ func TestCreditCardStatementService_CreateAndPayStatement(t *testing.T) {
 		Currency: "VND",
 	}
 
-	walletRepo.On("GetByID", mock.Anything, walletID, userID).Return(wallet, nil)
+	walletRepo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(wallet, nil)
 	walletRepo.On("UpdateStatementSnapshot", mock.Anything, walletID, userID, 5000000.0, 250000.0, 0.0).Return(nil)
 	stmtRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
@@ -140,7 +146,7 @@ func TestCreditCardStatementService_PayStatement_PropagatesErrors(t *testing.T) 
 		repoErr error
 		want    error
 	}{
-		{"not found", nil, nil, service.ErrStatementNotFound},
+		{"not found", nil, service.ErrStatementNotFound, service.ErrStatementNotFound},
 		{"already paid", nil, service.ErrStatementAlreadyPaid, service.ErrStatementAlreadyPaid},
 		{"overpayment", nil, service.ErrStatementInvalidPayment, service.ErrStatementInvalidPayment},
 		{"source wallet missing", nil, errors.New("source wallet not found"), nil},

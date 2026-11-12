@@ -1,45 +1,45 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
 )
 
 type BudgetHandler struct {
 	svc          service.BudgetService
-	validator    *validator.Validate
-	log          *zap.Logger
 	errorHandler *ErrorHandler
 }
 
 func NewBudgetHandler(svc service.BudgetService, log *zap.Logger) *BudgetHandler {
 	return &BudgetHandler{
 		svc:          svc,
-		validator:    newStructValidator(),
-		log:          log,
 		errorHandler: NewErrorHandler(log),
 	}
 }
 
+// Create handles POST /budgets
+// @Summary Create a budget
+// @Description Creates a budget for one of the caller's categories and period.
+// @Tags Budgets
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.CreateBudgetRequest true "Budget"
+// @Success 201 {object} BudgetEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload / Validation failed"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Category not found"
+// @Failure 409 {object} response.ErrorResponse "A budget for this category and period already exists"
+// @Failure 500 {object} response.ErrorResponse "Failed to create budget"
+// @Router /budgets [post]
 func (h *BudgetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateBudgetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "create_budget")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "create_budget")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "create_budget") {
 		return
 	}
 
@@ -63,17 +63,23 @@ func (h *BudgetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.BudgetResponse]{
-		Status:  http.StatusCreated,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusCreated, *res)
 }
 
+// Get handles GET /budgets/{id}
+// @Summary Get a budget
+// @Tags Budgets
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Budget ID"
+// @Success 200 {object} BudgetEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Budget not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to get budget"
+// @Router /budgets/{id} [get]
 func (h *BudgetHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "get_budget")
 		return
@@ -95,14 +101,20 @@ func (h *BudgetHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.BudgetResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
+// List handles GET /budgets
+// @Summary List budgets
+// @Tags Budgets
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page (default 1)"
+// @Param limit query int false "Page size (default 10, max 100)"
+// @Success 200 {object} BudgetPage
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Failed to list budgets"
+// @Router /budgets [get]
 func (h *BudgetHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, limit := ParsePagination(r)
 
@@ -118,32 +130,33 @@ func (h *BudgetHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.PaginationResponse[dto.BudgetResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Items:   items,
-		Total:   int(total),
-		Page:    page,
-		Limit:   limit,
-	})
+	h.errorHandler.HandlePaginated(w, http.StatusOK, items, int(total), page, limit, nil)
 }
 
+// Update handles PUT /budgets/{id}
+// @Summary Update a budget
+// @Tags Budgets
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Budget ID"
+// @Param request body dto.UpdateBudgetRequest true "Fields to update"
+// @Success 200 {object} BudgetEnvelope
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format / Invalid request payload / Validation failed"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Budget not found"
+// @Failure 409 {object} response.ErrorResponse "A budget for this category and period already exists"
+// @Failure 500 {object} response.ErrorResponse "Failed to update budget"
+// @Router /budgets/{id} [put]
 func (h *BudgetHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "update_budget")
 		return
 	}
 
 	var req dto.UpdateBudgetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.errorHandler.HandleDecodeError(w, err, "update_budget")
-		return
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		h.errorHandler.HandleValidationError(w, err, "update_budget")
+	if !h.errorHandler.decodeAndValidate(w, r, &req, "update_budget") {
 		return
 	}
 
@@ -167,16 +180,23 @@ func (h *BudgetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.BudgetResponse]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
+// Delete handles DELETE /budgets/{id}
+// @Summary Delete a budget
+// @Tags Budgets
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Budget ID"
+// @Success 200 {object} MessageResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid ID format"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Budget not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to delete budget"
+// @Router /budgets/{id} [delete]
 func (h *BudgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	id, err := ParseUUIDFromPath(r, "id")
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusBadRequest, "Invalid ID format", "delete_budget")
 		return
@@ -197,6 +217,5 @@ func (h *BudgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Budget deleted successfully"})
+	h.errorHandler.HandleSuccessWithMessage(w, http.StatusOK, nil, "Budget deleted successfully")
 }

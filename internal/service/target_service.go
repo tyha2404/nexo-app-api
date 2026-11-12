@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -61,10 +62,17 @@ func (s *targetService) UpsertTarget(ctx context.Context, userID uuid.UUID, req 
 
 func (s *targetService) GetSummary(ctx context.Context, userID uuid.UUID, month, year int) (*dto.TargetSummaryResponse, error) {
 	// "Today" is evaluated in the app timezone (Vietnam), not the host's.
+	// A missing month/year is the current one; an invalid month means the
+	// current month of the current year.
 	now := util.Now()
-	if month <= 0 || year <= 0 || month > 12 {
+	if month <= 0 {
 		month = int(now.Month())
+	}
+	if year <= 0 {
 		year = now.Year()
+	}
+	if month > 12 {
+		month, year = int(now.Month()), now.Year()
 	}
 
 	// Dynamic Days calculation
@@ -88,22 +96,13 @@ func (s *targetService) GetSummary(ctx context.Context, userID uuid.UUID, month,
 	endOfMonth := lastDay
 
 	// Fetch targets
-	expenseTargetModel, err := s.repo.GetTarget(ctx, userID, model.TargetTypeExpense, month, year)
+	expenseTargetAmount, err := s.targetAmount(ctx, userID, model.TargetTypeExpense, month, year)
 	if err != nil {
 		return nil, err
 	}
-	expenseTargetAmount := 0.0
-	if expenseTargetModel != nil {
-		expenseTargetAmount = expenseTargetModel.TargetAmount
-	}
-
-	investmentTargetModel, err := s.repo.GetTarget(ctx, userID, model.TargetTypeInvestment, month, year)
+	investmentTargetAmount, err := s.targetAmount(ctx, userID, model.TargetTypeInvestment, month, year)
 	if err != nil {
 		return nil, err
-	}
-	investmentTargetAmount := 0.0
-	if investmentTargetModel != nil {
-		investmentTargetAmount = investmentTargetModel.TargetAmount
 	}
 
 	// Fetch actual spent & invested totals
@@ -163,4 +162,16 @@ func (s *targetService) GetSummary(ctx context.Context, userID uuid.UUID, month,
 			SurplusAmount:   surplusAmount,
 		},
 	}, nil
+}
+
+// targetAmount is the user's target of that type for the month, 0 when none is set.
+func (s *targetService) targetAmount(ctx context.Context, userID uuid.UUID, targetType model.TargetType, month, year int) (float64, error) {
+	target, err := s.repo.GetTarget(ctx, userID, targetType, month, year)
+	if errors.Is(err, constant.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return target.TargetAmount, nil
 }

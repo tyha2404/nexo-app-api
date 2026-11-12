@@ -31,18 +31,14 @@ type BudgetResponse struct {
 }
 
 func ToBudgetResponse(b *model.Budget) *BudgetResponse {
-	var catName string
-	if b.Category.Name != "" {
-		catName = b.Category.Name
-	}
 	return &BudgetResponse{
 		ID:           b.ID,
 		UserID:       b.UserID,
 		CategoryID:   b.CategoryID,
-		CategoryName: catName,
+		CategoryName: b.Category.Name,
 		Amount:       b.Amount,
 		PeriodType:   b.PeriodType,
-		PeriodStart:  b.PeriodStart.Format("2006-01-02"),
+		PeriodStart:  b.PeriodStart.Format(time.DateOnly),
 		CreatedAt:    b.CreatedAt.Format(time.RFC3339),
 	}
 }

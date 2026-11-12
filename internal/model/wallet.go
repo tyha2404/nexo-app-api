@@ -26,6 +26,10 @@ const (
 	AllocationPresetCustom AllocationPreset = "CUSTOM"
 )
 
+// BaseCurrency is the user's base currency: wallet summaries' TotalBalance is
+// expressed in it and it is the default currency of a new wallet.
+const BaseCurrency = "VND"
+
 type Wallet struct {
 	ID                uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID            uuid.UUID  `gorm:"type:uuid;not null;index" json:"userId"`

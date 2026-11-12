@@ -57,20 +57,6 @@ func TestDebtDeletionWalletReversals(t *testing.T) {
 	require.Empty(t, DebtDeletionWalletReversals(&model.Debt{Type: model.DebtTypePayable, TotalAmount: 10}, nil))
 }
 
-func TestSummarizeWalletsSeparatesCurrencies(t *testing.T) {
-	s := SummarizeWallets([]model.Wallet{
-		{Balance: 1000000, Currency: "VND", IsIncludedInTotal: true},
-		{Balance: 500000, Currency: "", IsIncludedInTotal: true}, // legacy default VND
-		{Balance: 200, Currency: "USD", IsIncludedInTotal: true},
-		{Balance: 9999999, Currency: "VND", IsIncludedInTotal: false},
-	})
-	require.Equal(t, 1500000.0, s.TotalBalance)
-	require.Equal(t, "VND", s.BaseCurrency)
-	require.Equal(t, map[string]float64{"VND": 1500000, "USD": 200}, s.TotalsByCurrency)
-	require.Equal(t, 4, s.TotalWallets)
-	require.Len(t, s.Wallets, 4)
-}
-
 func TestSameWallet(t *testing.T) {
 	a, b := uuid.New(), uuid.New()
 	a2 := a
@@ -123,7 +109,7 @@ func TestTransactionWalletBalanceLifecycle(t *testing.T) {
 	require.Equal(t, 1000.0, walletBalance(t, db, foreign))
 
 	// Delete reverses (soft delete).
-	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, repo.Delete(ctx, tx.UserID, tx.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, walletB))
 	var deleted int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM transactions WHERE id = ? AND deleted_at IS NOT NULL", tx.ID).Scan(&deleted).Error)
@@ -149,9 +135,9 @@ func TestDebtDeleteReversesWalletEffects(t *testing.T) {
 	require.NoError(t, repo.AddRepaymentWithWallet(ctx, debt, &model.Repayment{DebtID: debt.ID, Amount: 200, PaidAt: time.Now(), WalletID: &wallet}, &wallet, model.DebtRepaymentWalletDelta(debt.Type, 200)))
 	require.Equal(t, 1300.0, walletBalance(t, db, wallet))
 
-	require.NoError(t, repo.Delete(ctx, debt.ID, user))
+	require.NoError(t, repo.Delete(ctx, user, debt.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
-	require.ErrorIs(t, repo.Delete(ctx, debt.ID, user), ErrDebtNotFound)
+	require.ErrorIs(t, repo.Delete(ctx, user, debt.ID), ErrDebtNotFound)
 }
 
 func TestRepaymentRejectedOnCompletedDebtAndOverdueSummary(t *testing.T) {
@@ -165,7 +151,7 @@ func TestRepaymentRejectedOnCompletedDebtAndOverdueSummary(t *testing.T) {
 	require.NoError(t, db.Create(&done).Error)
 	require.NoError(t, db.Create(&stale).Error)
 
-	require.ErrorIs(t, repo.AddRepayment(ctx, &done, &model.Repayment{DebtID: done.ID, Amount: 1, PaidAt: time.Now()}), ErrInvalidRepayment)
+	require.ErrorIs(t, repo.AddRepaymentWithWallet(ctx, &done, &model.Repayment{DebtID: done.ID, Amount: 1, PaidAt: time.Now()}, nil, 0), ErrInvalidRepayment)
 
 	summary, err := repo.GetSummaryByUserID(ctx, user)
 	require.NoError(t, err)
@@ -276,7 +262,7 @@ func TestLegacyTransactionDeleteDoesNotReverse(t *testing.T) {
 	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
 	legacy := insertLegacyTransaction(t, db, user, wallet, 200)
 
-	require.NoError(t, repo.Delete(context.Background(), legacy.ID))
+	require.NoError(t, repo.Delete(context.Background(), user, legacy.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 }
 
@@ -295,7 +281,7 @@ func TestNewTransactionEditAndDeleteReverse(t *testing.T) {
 	require.NoError(t, repo.Update(ctx, tx))
 	require.Equal(t, 950.0, walletBalance(t, db, wallet))
 
-	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, repo.Delete(ctx, tx.UserID, tx.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 }
 
@@ -307,7 +293,7 @@ func TestTransactionPreloadsSoftDeletedCategoryName(t *testing.T) {
 	tx := &model.Transaction{UserID: user, CategoryID: cat, Amount: 1, Type: model.TransactionTypeExpense, TransactionDate: time.Now()}
 	require.NoError(t, repo.Create(context.Background(), tx))
 
-	got, err := repo.GetByID(context.Background(), tx.ID)
+	got, err := repo.GetByIDForUser(context.Background(), tx.UserID, tx.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got.Category)
 	require.Equal(t, "Old", got.Category.Name)
@@ -336,7 +322,7 @@ func TestTransactionWalletDetachInvestmentAndOwnership(t *testing.T) {
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 
 	// Deleting a row with no wallet touches nothing.
-	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, repo.Delete(ctx, tx.UserID, tx.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 
 	// Holding investment debits the amount; realizing it applies only the PnL.
@@ -367,13 +353,13 @@ func TestTransactionRestoreReappliesWalletEffect(t *testing.T) {
 
 	// A live row and another user's row cannot be restored.
 	require.ErrorIs(t, repo.Restore(ctx, user, tx.ID), constant.ErrNotFound)
-	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, repo.Delete(ctx, tx.UserID, tx.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 	require.ErrorIs(t, repo.Restore(ctx, uuid.New(), tx.ID), constant.ErrNotFound)
 
 	require.NoError(t, repo.Restore(ctx, user, tx.ID))
 	require.Equal(t, 800.0, walletBalance(t, db, wallet))
-	got, err := repo.GetByID(ctx, tx.ID)
+	got, err := repo.GetByIDForUser(ctx, tx.UserID, tx.ID)
 	require.NoError(t, err)
 	require.True(t, got.BalanceApplied)
 
@@ -382,7 +368,7 @@ func TestTransactionRestoreReappliesWalletEffect(t *testing.T) {
 	require.Equal(t, 800.0, walletBalance(t, db, wallet))
 
 	// Delete again reverses again.
-	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, repo.Delete(ctx, tx.UserID, tx.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 }
 
@@ -394,11 +380,11 @@ func TestTransactionRestoreAfterWalletDeletedClearsFlag(t *testing.T) {
 	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
 	tx := &model.Transaction{UserID: user, CategoryID: uuid.New(), WalletID: &wallet, Amount: 200, Type: model.TransactionTypeExpense, TransactionDate: time.Now()}
 	require.NoError(t, repo.Create(ctx, tx))
-	require.NoError(t, repo.Delete(ctx, tx.ID))
+	require.NoError(t, repo.Delete(ctx, tx.UserID, tx.ID))
 	require.NoError(t, db.Exec("UPDATE wallets SET deleted_at = now() WHERE id = ?", wallet).Error)
 
 	require.NoError(t, repo.Restore(ctx, user, tx.ID))
-	got, err := repo.GetByID(ctx, tx.ID)
+	got, err := repo.GetByIDForUser(ctx, tx.UserID, tx.ID)
 	require.NoError(t, err)
 	require.False(t, got.BalanceApplied, "effect not applied, so a later delete must not reverse it")
 }
@@ -411,7 +397,7 @@ func TestLegacyTransactionRestoreDoesNotApply(t *testing.T) {
 	require.NoError(t, db.Exec("INSERT INTO wallets (id,user_id,balance) VALUES (?,?,1000)", wallet, user).Error)
 	legacy := insertLegacyTransaction(t, db, user, wallet, 200)
 
-	require.NoError(t, repo.Delete(ctx, legacy.ID))
+	require.NoError(t, repo.Delete(ctx, legacy.UserID, legacy.ID))
 	require.NoError(t, repo.Restore(ctx, user, legacy.ID))
 	require.Equal(t, 1000.0, walletBalance(t, db, wallet))
 }
@@ -433,7 +419,7 @@ func TestDailyIncomeExpenseGroupsByDayAndSkipsDeleted(t *testing.T) {
 	add(2, model.TransactionTypeIncome, 1000)
 	add(9, model.TransactionTypeInvestment, 500)
 	deleted := add(9, model.TransactionTypeExpense, 999)
-	require.NoError(t, txRepo.Delete(ctx, deleted.ID))
+	require.NoError(t, txRepo.Delete(ctx, deleted.UserID, deleted.ID))
 	add(31, model.TransactionTypeExpense, 70) // outside the range below
 
 	rows, err := reports.GetDailyIncomeExpense(ctx, user, "2026-03-01", "2026-03-30")
@@ -459,9 +445,9 @@ func TestTransactionTagsRoundTripFilterAndList(t *testing.T) {
 	add(3, model.TransactionTypeIncome, 70, "Công tác")
 	untagged := add(4, model.TransactionTypeExpense, 9)
 	gone := add(5, model.TransactionTypeExpense, 999, "Đà Lạt")
-	require.NoError(t, repo.Delete(ctx, gone.ID))
+	require.NoError(t, repo.Delete(ctx, gone.UserID, gone.ID))
 
-	got, err := repo.GetByID(ctx, untagged.ID)
+	got, err := repo.GetByIDForUser(ctx, untagged.UserID, untagged.ID)
 	require.NoError(t, err)
 	require.Equal(t, model.StringArray{}, got.Tags, "default '{}' scans as empty, not nil")
 
@@ -470,10 +456,10 @@ func TestTransactionTagsRoundTripFilterAndList(t *testing.T) {
 	require.EqualValues(t, 2, total)
 	require.Contains(t, list[1].Tags, `quote "x"`)
 
-	sum, _, count, _, _, _, err := repo.GetSummaryByUserID(ctx, user, map[string]interface{}{"tag": "Đà Lạt"})
+	sum, err := repo.GetSummaryByUserID(ctx, user, map[string]interface{}{"tag": "Đà Lạt"})
 	require.NoError(t, err)
-	require.EqualValues(t, 2, count)
-	require.Equal(t, 150.0, sum)
+	require.EqualValues(t, 2, sum.Total)
+	require.Equal(t, 150.0, sum.SumAmount)
 
 	tags, err := repo.ListTags(ctx, user)
 	require.NoError(t, err)

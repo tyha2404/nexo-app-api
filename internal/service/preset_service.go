@@ -2,10 +2,8 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"github.com/tyha2404/nexo-app-api/internal/repository"
@@ -57,12 +55,9 @@ func (s *presetService) CreatePreset(ctx context.Context, userID uuid.UUID, req 
 }
 
 func (s *presetService) GetPreset(ctx context.Context, userID, id uuid.UUID) (*dto.PresetResponse, error) {
-	preset, err := s.presetRepo.GetByID(ctx, id)
+	preset, err := s.presetRepo.GetByIDForUser(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-	if preset.UserID != userID {
-		return nil, fmt.Errorf("preset %w", constant.ErrNotFound)
 	}
 	return dto.ToPresetResponse(preset), nil
 }
@@ -81,12 +76,9 @@ func (s *presetService) ListPresets(ctx context.Context, userID uuid.UUID) ([]dt
 }
 
 func (s *presetService) UpdatePreset(ctx context.Context, userID, id uuid.UUID, req dto.UpdatePresetRequest) (*dto.PresetResponse, error) {
-	preset, err := s.presetRepo.GetByID(ctx, id)
+	preset, err := s.presetRepo.GetByIDForUser(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-	if preset.UserID != userID {
-		return nil, fmt.Errorf("preset %w", constant.ErrNotFound)
 	}
 
 	if req.CategoryID != nil {
@@ -125,12 +117,5 @@ func (s *presetService) UpdatePreset(ctx context.Context, userID, id uuid.UUID, 
 }
 
 func (s *presetService) DeletePreset(ctx context.Context, userID, id uuid.UUID) error {
-	preset, err := s.presetRepo.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if preset.UserID != userID {
-		return fmt.Errorf("preset %w", constant.ErrNotFound)
-	}
-	return s.presetRepo.Delete(ctx, id)
+	return s.presetRepo.Delete(ctx, userID, id)
 }

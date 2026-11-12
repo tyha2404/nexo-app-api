@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -36,6 +37,10 @@ func (m *mockBudgetService) GetBudget(ctx context.Context, userID, id uuid.UUID)
 
 func (m *mockBudgetService) ListBudgets(ctx context.Context, userID uuid.UUID, page, limit int) ([]dto.BudgetResponse, int64, error) {
 	return m.listFn(ctx, userID, page, limit)
+}
+
+func (m *mockBudgetService) ListActiveBudgets(ctx context.Context, userID uuid.UUID, at time.Time) ([]dto.BudgetResponse, error) {
+	return nil, nil
 }
 
 func (m *mockBudgetService) UpdateBudget(ctx context.Context, userID, id uuid.UUID, req dto.UpdateBudgetRequest) (*dto.BudgetResponse, error) {
@@ -172,6 +177,10 @@ func (s *stubBudgetService2) CreateBudget(ctx context.Context, userID uuid.UUID,
 		return nil, s.err
 	}
 	return &dto.BudgetResponse{ID: uuid.New(), UserID: userID, CategoryID: req.CategoryID, Amount: req.Amount, PeriodType: req.PeriodType}, nil
+}
+
+func (s *stubBudgetService2) ListActiveBudgets(ctx context.Context, userID uuid.UUID, at time.Time) ([]dto.BudgetResponse, error) {
+	return nil, nil
 }
 
 func (s *stubBudgetService2) ListBudgets(ctx context.Context, userID uuid.UUID, page, limit int) ([]dto.BudgetResponse, int64, error) {
@@ -381,6 +390,7 @@ func TestBudgetHandler_Delete(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 		body := decodeJSON(t, rr)
 		assert.Equal(t, "Budget deleted successfully", body["message"])
+		assert.JSONEq(t, `{"status":200,"success":true,"message":"Budget deleted successfully","data":null}`, rr.Body.String())
 		assert.Equal(t, userID, svc.gotUser)
 		assert.Equal(t, id, svc.gotID)
 	})

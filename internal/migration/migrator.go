@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/tyha2404/nexo-app-api/internal/config"
 	"github.com/tyha2404/nexo-app-api/internal/model"
 	"gorm.io/gorm"
 )
@@ -17,7 +18,7 @@ func NewMigrator(db *gorm.DB) *Migrator {
 }
 
 func (m *Migrator) AutoMigrate() error {
-	if os.Getenv("APP_ENV") == "production" {
+	if config.IsProductionEnv(os.Getenv("APP_ENV")) {
 		return fmt.Errorf("auto-migration is disabled in production")
 	}
 
@@ -31,7 +32,6 @@ func (m *Migrator) AutoMigrate() error {
 		&model.Category{},
 		&model.Cost{},
 		&model.Alert{},
-		&model.Expense{},
 		&model.Budget{},
 		&model.Transaction{},
 		&model.MonthlyTarget{},
@@ -46,14 +46,4 @@ func (m *Migrator) AutoMigrate() error {
 		&model.FinancialKnowledge{},
 		&model.RefreshToken{},
 	)
-}
-
-func (m *Migrator) CreateMigrationsTable() error {
-	return m.db.Exec(`
-		CREATE TABLE IF NOT EXISTS migrations (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(255) NOT NULL UNIQUE,
-			executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)
-	`).Error
 }

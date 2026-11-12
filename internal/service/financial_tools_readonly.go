@@ -3,10 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
-	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
@@ -15,205 +14,189 @@ import (
 	"go.uber.org/zap"
 )
 
-// getReadOnlyToolDefinitions returns schemas for generic read-only tools that
-// cover every domain of the project without any write capability.
-func getReadOnlyToolDefinitions() []ToolDefinition {
-	return []ToolDefinition{
+// readOnlyToolSpecs are generic read-only tools that cover every domain of
+// the project without any write capability.
+func readOnlyToolSpecs() []chatTool {
+	return []chatTool{
 		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "search_transactions",
-				Description: "Tìm kiếm và lọc nâng cao các giao dịch thu/chi/đầu tư: theo tên danh mục, tên ví tiền, khoảng thời gian (ngày bắt đầu, ngày kết thúc, tháng), khoảng số tiền (tối thiểu, tối đa), từ khóa mô tả và sắp xếp. Hãy gọi tool này khi người dùng yêu cầu: 'tìm các khoản chi trên 500k', 'tìm giao dịch có chữ Grab', 'lọc chi tiêu ăn uống từ ngày A đến ngày B'.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"type": map[string]interface{}{
-							"type":        "string",
-							"enum":        []string{"INCOME", "EXPENSE", "INVESTMENT", "ALL"},
-							"description": "Loại giao dịch cần lọc ('INCOME', 'EXPENSE', 'INVESTMENT', 'ALL'). Mặc định ALL.",
-						},
-						"categoryName": map[string]interface{}{
-							"type":        "string",
-							"description": "Tên danh mục cần lọc (ví dụ: 'Ăn uống', 'Di chuyển', 'Mua sắm').",
-						},
-						"walletName": map[string]interface{}{
-							"type":        "string",
-							"description": "Tên ví/tài khoản cần lọc (ví dụ: 'Techcombank', 'Tiền mặt', 'MoMo').",
-						},
-						"month": map[string]interface{}{
-							"type":        "string",
-							"description": "Tháng cần lọc theo định dạng YYYY-MM (ví dụ: '2026-08').",
-						},
-						"startDate": map[string]interface{}{
-							"type":        "string",
-							"description": "Ngày bắt đầu (YYYY-MM-DD).",
-						},
-						"endDate": map[string]interface{}{
-							"type":        "string",
-							"description": "Ngày kết thúc (YYYY-MM-DD).",
-						},
-						"minAmount": map[string]interface{}{
-							"type":        "number",
-							"description": "Số tiền tối thiểu (VND).",
-						},
-						"maxAmount": map[string]interface{}{
-							"type":        "number",
-							"description": "Số tiền tối đa (VND).",
-						},
-						"keyword": map[string]interface{}{
-							"type":        "string",
-							"description": "Từ khóa tìm trong ghi chú/mô tả giao dịch (ví dụ: 'phở', 'grab', 'tiền điện').",
-						},
-						"sortBy": map[string]interface{}{
-							"type":        "string",
-							"enum":        []string{"date_desc", "date_asc", "amount_desc", "amount_asc"},
-							"description": "Cách sắp xếp: 'date_desc' (mới nhất trước), 'date_asc' (cũ nhất trước), 'amount_desc' (tiền nhiều nhất), 'amount_asc' (tiền ít nhất). Mặc định date_desc.",
-						},
-						"limit": map[string]interface{}{
-							"type":        "integer",
-							"description": "Số kết quả trả về (mặc định 10, tối đa 50).",
+			run: (*chatService).toolSearchTransactions,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "search_transactions",
+					Description: "Tìm kiếm và lọc nâng cao các giao dịch thu/chi/đầu tư: theo tên danh mục, tên ví tiền, khoảng thời gian (ngày bắt đầu, ngày kết thúc, tháng), khoảng số tiền (tối thiểu, tối đa), từ khóa mô tả và sắp xếp. Hãy gọi tool này khi người dùng yêu cầu: 'tìm các khoản chi trên 500k', 'tìm giao dịch có chữ Grab', 'lọc chi tiêu ăn uống từ ngày A đến ngày B'.",
+					Parameters: map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"type": map[string]interface{}{
+								"type":        "string",
+								"enum":        []string{"INCOME", "EXPENSE", "INVESTMENT", "ALL"},
+								"description": "Loại giao dịch cần lọc ('INCOME', 'EXPENSE', 'INVESTMENT', 'ALL'). Mặc định ALL.",
+							},
+							"categoryName": map[string]interface{}{
+								"type":        "string",
+								"description": "Tên danh mục cần lọc (ví dụ: 'Ăn uống', 'Di chuyển', 'Mua sắm').",
+							},
+							"walletName": map[string]interface{}{
+								"type":        "string",
+								"description": "Tên ví/tài khoản cần lọc (ví dụ: 'Techcombank', 'Tiền mặt', 'MoMo').",
+							},
+							"month": map[string]interface{}{
+								"type":        "string",
+								"description": "Tháng cần lọc theo định dạng YYYY-MM (ví dụ: '2026-08').",
+							},
+							"startDate": map[string]interface{}{
+								"type":        "string",
+								"description": "Ngày bắt đầu (YYYY-MM-DD).",
+							},
+							"endDate": map[string]interface{}{
+								"type":        "string",
+								"description": "Ngày kết thúc (YYYY-MM-DD).",
+							},
+							"minAmount": map[string]interface{}{
+								"type":        "number",
+								"description": "Số tiền tối thiểu (VND).",
+							},
+							"maxAmount": map[string]interface{}{
+								"type":        "number",
+								"description": "Số tiền tối đa (VND).",
+							},
+							"keyword": map[string]interface{}{
+								"type":        "string",
+								"description": "Từ khóa tìm trong ghi chú/mô tả giao dịch (ví dụ: 'phở', 'grab', 'tiền điện').",
+							},
+							"sortBy": map[string]interface{}{
+								"type":        "string",
+								"enum":        []string{"date_desc", "date_asc", "amount_desc", "amount_asc"},
+								"description": "Cách sắp xếp: 'date_desc' (mới nhất trước), 'date_asc' (cũ nhất trước), 'amount_desc' (tiền nhiều nhất), 'amount_asc' (tiền ít nhất). Mặc định date_desc.",
+							},
+							"limit": map[string]interface{}{
+								"type":        "integer",
+								"description": "Số kết quả trả về (mặc định 10, tối đa 50).",
+							},
 						},
 					},
 				},
 			},
 		},
 		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "list_categories",
-				Description: "Liệt kê toàn bộ danh mục thu/chi hiện có của người dùng, kèm số tiền đã chi tiêu trong tháng hiện tại và ngân sách của từng danh mục. Hãy gọi tool này khi người dùng hỏi: 'tôi có những danh mục chi tiêu nào?', 'liệt kê các nhóm danh mục'.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"type": map[string]interface{}{
-							"type":        "string",
-							"enum":        []string{"INCOME", "EXPENSE", "ALL"},
-							"description": "Lọc theo loại danh mục: 'INCOME', 'EXPENSE', 'ALL'. Mặc định ALL.",
+			run: (*chatService).toolListCategories,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "list_categories",
+					Description: "Liệt kê toàn bộ danh mục thu/chi hiện có của người dùng, kèm số tiền đã chi tiêu trong tháng hiện tại và ngân sách của từng danh mục. Hãy gọi tool này khi người dùng hỏi: 'tôi có những danh mục chi tiêu nào?', 'liệt kê các nhóm danh mục'.",
+					Parameters: map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"type": map[string]interface{}{
+								"type":        "string",
+								"enum":        []string{"INCOME", "EXPENSE", "ALL"},
+								"description": "Lọc theo loại danh mục: 'INCOME', 'EXPENSE', 'ALL'. Mặc định ALL.",
+							},
 						},
 					},
 				},
 			},
 		},
 		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "get_monthly_trend",
-				Description: "Phân tích xu hướng tài chính (tổng thu, tổng chi, tiết kiệm và mức chi trung bình mỗi tháng) qua N tháng liên tiếp gần đây. Hãy gọi tool này khi người dùng hỏi: 'xu hướng chi tiêu mấy tháng gần đây thế nào?', 'trung bình mỗi tháng tôi tiêu bao nhiêu?'.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"months": map[string]interface{}{
-							"type":        "integer",
-							"description": "Số tháng liên tiếp cần phân tích lùi từ tháng hiện tại (mặc định 6, tối đa 12).",
+			run: (*chatService).toolGetMonthlyTrend,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "get_monthly_trend",
+					Description: "Phân tích xu hướng tài chính (tổng thu, tổng chi, tiết kiệm và mức chi trung bình mỗi tháng) qua N tháng liên tiếp gần đây. Hãy gọi tool này khi người dùng hỏi: 'xu hướng chi tiêu mấy tháng gần đây thế nào?', 'trung bình mỗi tháng tôi tiêu bao nhiêu?'.",
+					Parameters: map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"months": map[string]interface{}{
+								"type":        "integer",
+								"description": "Số tháng liên tiếp cần phân tích lùi từ tháng hiện tại (mặc định 6, tối đa 12).",
+							},
 						},
 					},
 				},
 			},
 		},
 		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "get_wallet_detail",
-				Description: "Xem chi tiết một ví/tài khoản cụ thể: số dư hiện tại và lịch sử các giao dịch gần nhất trên ví đó. Hãy gọi tool này khi người dùng hỏi: 'ví Techcombank còn bao nhiêu và gần đây có giao dịch gì?', 'chi tiết ví MoMo'.",
-				Parameters: map[string]interface{}{
-					"type":     "object",
-					"required": []string{"walletName"},
-					"properties": map[string]interface{}{
-						"walletName": map[string]interface{}{
-							"type":        "string",
-							"description": "Tên ví cần tra cứu chi tiết (ví dụ: 'Techcombank', 'MoMo', 'Tiền mặt').",
-						},
-						"limit": map[string]interface{}{
-							"type":        "integer",
-							"description": "Số giao dịch gần nhất trên ví cần lấy (mặc định 10, tối đa 20).",
-						},
-					},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "get_debt_detail",
-				Description: "Xem chi tiết một khoản nợ hoặc cho vay cụ thể: tổng số tiền, số tiền đã trả, số tiền còn lại, ngày đến hạn và toàn bộ lịch sử thanh toán. Hãy gọi tool này khi người dùng hỏi: 'chi tiết khoản nợ của Nam', 'khoản vay anh Tuấn đã trả được bao nhiêu rồi?'.",
-				Parameters: map[string]interface{}{
-					"type":     "object",
-					"required": []string{"debtTitle"},
-					"properties": map[string]interface{}{
-						"debtTitle": map[string]interface{}{
-							"type":        "string",
-							"description": "Tên khoản nợ hoặc tên người liên quan (ví dụ: 'Cho Nam mượn tiền', 'Vay anh Tuấn').",
+			run: (*chatService).toolGetWalletDetail,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "get_wallet_detail",
+					Description: "Xem chi tiết một ví/tài khoản cụ thể: số dư hiện tại và lịch sử các giao dịch gần nhất trên ví đó. Hãy gọi tool này khi người dùng hỏi: 'ví Techcombank còn bao nhiêu và gần đây có giao dịch gì?', 'chi tiết ví MoMo'.",
+					Parameters: map[string]interface{}{
+						"type":     "object",
+						"required": []string{"walletName"},
+						"properties": map[string]interface{}{
+							"walletName": map[string]interface{}{
+								"type":        "string",
+								"description": "Tên ví cần tra cứu chi tiết (ví dụ: 'Techcombank', 'MoMo', 'Tiền mặt').",
+							},
+							"limit": map[string]interface{}{
+								"type":        "integer",
+								"description": "Số giao dịch gần nhất trên ví cần lấy (mặc định 10, tối đa 20).",
+							},
 						},
 					},
 				},
 			},
 		},
 		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "get_investment_summary",
-				Description: "Xem tổng quan danh mục đầu tư tài chính của người dùng: tổng giá trị tài sản đang nắm giữ, số vị thế holding, lãi/lỗ đã hiện thực (realized PnL) và các giao dịch đầu tư mới nhất. Hãy gọi tool này khi người dùng hỏi: 'tình hình đầu tư của tôi', 'danh mục đầu tư lãi lỗ ra sao?'.",
-				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
+			run: (*chatService).toolGetDebtDetail,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "get_debt_detail",
+					Description: "Xem chi tiết một khoản nợ hoặc cho vay cụ thể: tổng số tiền, số tiền đã trả, số tiền còn lại, ngày đến hạn và toàn bộ lịch sử thanh toán. Hãy gọi tool này khi người dùng hỏi: 'chi tiết khoản nợ của Nam', 'khoản vay anh Tuấn đã trả được bao nhiêu rồi?'.",
+					Parameters: map[string]interface{}{
+						"type":     "object",
+						"required": []string{"debtTitle"},
+						"properties": map[string]interface{}{
+							"debtTitle": map[string]interface{}{
+								"type":        "string",
+								"description": "Tên khoản nợ hoặc tên người liên quan (ví dụ: 'Cho Nam mượn tiền', 'Vay anh Tuấn').",
+							},
+						},
+					},
 				},
 			},
 		},
 		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "search_financial_knowledge",
-				Description: "Tra cứu kiến thức và nguyên tắc tài chính trong kho tri thức nội bộ (ví dụ: quy tắc 50/30/20, xây dựng quỹ dự phòng khẩn cấp, phương pháp quản lý nợ snowball/avalanche, chiến lược tiết kiệm). Hãy gọi tool này khi người dùng xin lời khuyên tài chính chung.",
-				Parameters: map[string]interface{}{
-					"type":     "object",
-					"required": []string{"query"},
-					"properties": map[string]interface{}{
-						"query": map[string]interface{}{
-							"type":        "string",
-							"description": "Chủ đề hoặc câu hỏi tài chính cần tra cứu (ví dụ: 'quy tắc 50 30 20', 'quỹ khẩn cấp bao nhiêu là đủ', 'cách trả nợ nhanh').",
+			run: (*chatService).toolGetInvestmentSummary,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "get_investment_summary",
+					Description: "Xem tổng quan danh mục đầu tư tài chính của người dùng: tổng giá trị tài sản đang nắm giữ, số vị thế holding, lãi/lỗ đã hiện thực (realized PnL) và các giao dịch đầu tư mới nhất. Hãy gọi tool này khi người dùng hỏi: 'tình hình đầu tư của tôi', 'danh mục đầu tư lãi lỗ ra sao?'.",
+					Parameters: map[string]interface{}{
+						"type":       "object",
+						"properties": map[string]interface{}{},
+					},
+				},
+			},
+		},
+		{
+			run: (*chatService).toolSearchFinancialKnowledge,
+			def: ToolDefinition{
+				Type: "function",
+				Function: ToolFunction{
+					Name:        "search_financial_knowledge",
+					Description: "Tra cứu kiến thức và nguyên tắc tài chính trong kho tri thức nội bộ (ví dụ: quy tắc 50/30/20, xây dựng quỹ dự phòng khẩn cấp, phương pháp quản lý nợ snowball/avalanche, chiến lược tiết kiệm). Hãy gọi tool này khi người dùng xin lời khuyên tài chính chung.",
+					Parameters: map[string]interface{}{
+						"type":     "object",
+						"required": []string{"query"},
+						"properties": map[string]interface{}{
+							"query": map[string]interface{}{
+								"type":        "string",
+								"description": "Chủ đề hoặc câu hỏi tài chính cần tra cứu (ví dụ: 'quy tắc 50 30 20', 'quỹ khẩn cấp bao nhiêu là đủ', 'cách trả nợ nhanh').",
+							},
 						},
 					},
 				},
 			},
 		},
 	}
-}
-
-// executeReadOnlyFinancialTool dispatches read-only tool calls. Returns
-// (nil, false) when the tool name is not handled so the caller can fall back.
-func (s *chatService) executeReadOnlyFinancialTool(ctx context.Context, userID uuid.UUID, name string, args map[string]interface{}) (*FinancialToolResult, bool) {
-	switch name {
-	case "search_transactions":
-		return s.runTool(s.toolSearchTransactions(ctx, userID, args)), true
-	case "list_categories":
-		return s.runTool(s.toolListCategories(ctx, userID, args)), true
-	case "get_monthly_trend":
-		return s.runTool(s.toolGetMonthlyTrend(ctx, userID, args)), true
-	case "get_wallet_detail":
-		return s.runTool(s.toolGetWalletDetail(ctx, userID, args)), true
-	case "get_debt_detail":
-		return s.runTool(s.toolGetDebtDetail(ctx, userID, args)), true
-	case "get_investment_summary":
-		return s.runTool(s.toolGetInvestmentSummary(ctx, userID, args)), true
-	case "search_financial_knowledge":
-		return s.runTool(s.toolSearchFinancialKnowledge(ctx, userID, args)), true
-	default:
-		return nil, false
-	}
-}
-
-// runTool converts a tool handler result/error into a FinancialToolResult.
-func (s *chatService) runTool(res *FinancialToolResult, err error) *FinancialToolResult {
-	if err != nil {
-		if !isBusinessError(err) {
-			s.logger.Error("read-only AI tool failed", zap.Error(err))
-		}
-		return &FinancialToolResult{
-			ToolTitle:  "Lỗi thực thi công cụ",
-			ResultJSON: toolErrorJSON(toolErrorMessage(err)),
-		}
-	}
-	return res
 }
 
 func (s *chatService) toolSearchTransactions(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
@@ -249,25 +232,14 @@ func (s *chatService) toolSearchTransactions(ctx context.Context, userID uuid.UU
 
 	// Resolve category name -> category ID
 	if catName, ok := args["categoryName"].(string); ok && catName != "" {
-		categories, err := s.categoryRepo.List(ctx, userID, "", 200, 0)
+		categories, err := s.categoryRepo.List(ctx, userID, "", toolCategoryListLimit, 0)
 		if err != nil {
 			return nil, err
 		}
-		var matched *model.Category
-		for i := range categories {
-			if strings.EqualFold(categories[i].Name, catName) || strings.Contains(strings.ToLower(categories[i].Name), strings.ToLower(catName)) {
-				matched = &categories[i]
-				break
-			}
-		}
+		matched := matchCategoryByName(categories, catName)
 		if matched == nil {
-			resMap := map[string]interface{}{
-				"error":   fmt.Sprintf("Không tìm thấy danh mục '%s'", catName),
-				"hints":   categoryNames(categories),
-				"message": "Hãy thử lại với tên danh mục chính xác hơn.",
-			}
-			resBytes, _ := json.Marshal(resMap)
-			return &FinancialToolResult{ToolTitle: "Đang tìm kiếm giao dịch...", ResultJSON: string(resBytes)}, nil
+			return toolHintsResult("Đang tìm kiếm giao dịch...", fmt.Sprintf("Không tìm thấy danh mục '%s'", catName),
+				categoryNames(categories), "Hãy thử lại với tên danh mục chính xác hơn."), nil
 		}
 		filters["categoryId"] = matched.ID.String()
 	}
@@ -286,18 +258,8 @@ func (s *chatService) toolSearchTransactions(ctx context.Context, userID uuid.UU
 		// reported instead of silently using one of the matches.
 		matched, matchErr := matchWalletByName(wallets, walletName)
 		if matchErr != nil {
-			hints := walletNames(wallets)
-			var wmErr *walletMatchError
-			if errors.As(matchErr, &wmErr) {
-				hints = wmErr.candidates
-			}
-			resMap := map[string]interface{}{
-				"error":   matchErr.Error(),
-				"hints":   hints,
-				"message": "Hãy thử lại với tên ví chính xác hơn.",
-			}
-			resBytes, _ := json.Marshal(resMap)
-			return &FinancialToolResult{ToolTitle: "Đang tìm kiếm giao dịch...", ResultJSON: string(resBytes)}, nil
+			return toolHintsResult("Đang tìm kiếm giao dịch...", matchErr.Error(),
+				walletMatchHints(matchErr, wallets), "Hãy thử lại với tên ví chính xác hơn."), nil
 		}
 		filters["walletId"] = matched.ID.String()
 	} else if wallets, err := s.walletRepo.ListByUserID(ctx, userID); err == nil {
@@ -336,7 +298,7 @@ func (s *chatService) toolSearchTransactions(ctx context.Context, userID uuid.UU
 			walletName = walletNamesByID[*tx.WalletID]
 		}
 		items = append(items, SearchTxnItem{
-			Date:        tx.TransactionDate.Format("2006-01-02"),
+			Date:        tx.TransactionDate.Format(time.DateOnly),
 			Type:        string(tx.Type),
 			Amount:      tx.Amount,
 			Category:    catName,
@@ -365,7 +327,7 @@ func (s *chatService) toolSearchTransactions(ctx context.Context, userID uuid.UU
 func (s *chatService) toolListCategories(ctx context.Context, userID uuid.UUID, args map[string]interface{}) (*FinancialToolResult, error) {
 	typeFilter, _ := args["type"].(string)
 
-	categories, err := s.categoryRepo.List(ctx, userID, "", 200, 0)
+	categories, err := s.categoryRepo.List(ctx, userID, "", toolCategoryListLimit, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -376,8 +338,8 @@ func (s *chatService) toolListCategories(ctx context.Context, userID uuid.UUID, 
 	monthStart, _ := util.MonthRange(now)
 	breakdown, err := s.reportService.GetCategoryBreakdown(
 		ctx, userID,
-		monthStart.Format("2006-01-02"),
-		now.Format("2006-01-02"),
+		monthStart.Format(time.DateOnly),
+		now.Format(time.DateOnly),
 	)
 	if err == nil {
 		for _, item := range breakdown.Items {
@@ -387,9 +349,9 @@ func (s *chatService) toolListCategories(ctx context.Context, userID uuid.UUID, 
 		}
 	}
 
-	// Active budgets per category
+	// Budget limit in force this month per category (one per category)
 	budgetLimitByCategory := map[uuid.UUID]float64{}
-	budgets, _, err := s.budgetService.ListBudgets(ctx, userID, 1, 100)
+	budgets, err := s.budgetService.ListActiveBudgets(ctx, userID, now)
 	if err == nil {
 		for _, b := range budgets {
 			budgetLimitByCategory[b.CategoryID] = b.Amount
@@ -438,7 +400,12 @@ func (s *chatService) toolGetMonthlyTrend(ctx context.Context, userID uuid.UUID,
 		monthsBack = 12
 	}
 
-	currentMonthStart, _ := util.MonthRange(util.Now())
+	// One grouped query for the whole window (oldest month first), with the
+	// same income/expense/active-investment definitions as GetSummary.
+	trend, err := s.reportService.GetMonthlyTrend(ctx, userID, monthsBack)
+	if err != nil {
+		return nil, err
+	}
 	type MonthPoint struct {
 		Month       string  `json:"month"`
 		Income      float64 `json:"income"`
@@ -450,32 +417,22 @@ func (s *chatService) toolGetMonthlyTrend(ctx context.Context, userID uuid.UUID,
 
 	points := make([]MonthPoint, 0, monthsBack)
 	totalIncome, totalExpense := 0.0, 0.0
-	for i := monthsBack - 1; i >= 0; i-- {
-		// Step back from the 1st of the month: AddDate on e.g. the 31st
-		// would overflow into the next month and repeat months.
-		start := currentMonthStart.AddDate(0, -i, 0)
-		end := start.AddDate(0, 1, -1)
-
-		summary, err := s.reportService.GetSummary(ctx, userID, start.Format("2006-01-02"), end.Format("2006-01-02"))
-		if err != nil {
-			return nil, err
-		}
-
-		net := summary.TotalIncome - summary.TotalExpense
+	for _, m := range trend.Items {
+		net := m.Income - m.Expense
 		rate := 0.0
-		if summary.TotalIncome > 0 {
-			rate = (net / summary.TotalIncome) * 100.0
+		if m.Income > 0 {
+			rate = (net / m.Income) * 100.0
 		}
 		points = append(points, MonthPoint{
-			Month:       start.Format("2006-01"),
-			Income:      summary.TotalIncome,
-			Expense:     summary.TotalExpense,
-			Investment:  summary.TotalInvestment,
+			Month:       m.Month,
+			Income:      m.Income,
+			Expense:     m.Expense,
+			Investment:  m.Investment,
 			NetSavings:  net,
 			SavingsRate: math.Round(rate*10) / 10,
 		})
-		totalIncome += summary.TotalIncome
-		totalExpense += summary.TotalExpense
+		totalIncome += m.Income
+		totalExpense += m.Expense
 	}
 
 	resultMap := map[string]interface{}{
@@ -508,33 +465,33 @@ func (s *chatService) toolGetWalletDetail(ctx context.Context, userID uuid.UUID,
 		return nil, err
 	}
 
+	// Exact name first, then a unique partial match; an ambiguous name is
+	// reported instead of silently using one of the matches. A query that
+	// contains one wallet's name ("số dư ví tiền mặt") also resolves it.
+	candidates := make([]model.Wallet, len(walletSummary.Wallets))
+	for i, w := range walletSummary.Wallets {
+		candidates[i] = model.Wallet{ID: w.ID, Name: w.Name}
+	}
+	found, matchErr := matchWalletByName(candidates, walletName)
+	if matchErr != nil {
+		found = walletNamedInQuery(candidates, walletName)
+	}
+	if found == nil {
+		return toolHintsResult("Đang xem chi tiết ví...", matchErr.Error(),
+			walletMatchHints(matchErr, candidates), "Hãy thử lại với tên ví chính xác hơn."), nil
+	}
 	var matched *dto.WalletResponse
 	for i := range walletSummary.Wallets {
-		w := &walletSummary.Wallets[i]
-		if strings.EqualFold(w.Name, walletName) || strings.Contains(strings.ToLower(w.Name), strings.ToLower(walletName)) || strings.Contains(strings.ToLower(walletName), strings.ToLower(w.Name)) {
-			matched = w
+		if walletSummary.Wallets[i].ID == found.ID {
+			matched = &walletSummary.Wallets[i]
 			break
 		}
-	}
-
-	if matched == nil {
-		names := make([]string, 0, len(walletSummary.Wallets))
-		for _, w := range walletSummary.Wallets {
-			names = append(names, w.Name)
-		}
-		resMap := map[string]interface{}{
-			"error":   fmt.Sprintf("Không tìm thấy ví '%s'", walletName),
-			"hints":   names,
-			"message": "Hãy thử lại với tên ví chính xác hơn.",
-		}
-		resBytes, _ := json.Marshal(resMap)
-		return &FinancialToolResult{ToolTitle: "Đang xem chi tiết ví...", ResultJSON: string(resBytes)}, nil
 	}
 
 	txns, total, err := s.transactionRepo.SearchByUserID(ctx, userID, limit, 0, map[string]interface{}{
 		"walletId":  matched.ID.String(),
 		"startDate": "1970-01-01",
-		"endDate":   util.Now().Format("2006-01-02"),
+		"endDate":   util.Now().Format(time.DateOnly),
 	})
 	if err != nil {
 		return nil, err
@@ -558,7 +515,7 @@ func (s *chatService) toolGetWalletDetail(ctx context.Context, userID uuid.UUID,
 			catName = tx.Category.Name
 		}
 		items = append(items, WalletTxn{
-			Date:        tx.TransactionDate.Format("2006-01-02"),
+			Date:        tx.TransactionDate.Format(time.DateOnly),
 			Type:        string(tx.Type),
 			Amount:      tx.Amount,
 			Category:    catName,
@@ -584,7 +541,7 @@ func (s *chatService) toolGetDebtDetail(ctx context.Context, userID uuid.UUID, a
 	if debtTitle == "" {
 		return &FinancialToolResult{
 			ToolTitle:  "Tra cứu chi tiết khoản nợ",
-			ResultJSON: `{"error": "Cần cung cấp tên khoản nợ hoặc tên người vay"}`,
+			ResultJSON: toolErrorJSON("Cần cung cấp tên khoản nợ hoặc tên người vay"),
 		}, nil
 	}
 
@@ -600,13 +557,8 @@ func (s *chatService) toolGetDebtDetail(ctx context.Context, userID uuid.UUID, a
 		for _, d := range debts {
 			titles = append(titles, d.Title)
 		}
-		resMap := map[string]interface{}{
-			"error":   fmt.Sprintf("Không tìm thấy khoản nợ khớp với '%s'", debtTitle),
-			"hints":   titles,
-			"message": "Bạn có thể dùng get_debt_summary để xem toàn bộ danh sách.",
-		}
-		resBytes, _ := json.Marshal(resMap)
-		return &FinancialToolResult{ToolTitle: "Đang tra cứu khoản nợ...", ResultJSON: string(resBytes)}, nil
+		return toolHintsResult("Đang tra cứu khoản nợ...", fmt.Sprintf("Không tìm thấy khoản nợ khớp với '%s'", debtTitle),
+			titles, "Bạn có thể dùng get_debt_summary để xem toàn bộ danh sách."), nil
 	}
 
 	resultBytes, _ := json.Marshal(matched)
@@ -674,7 +626,7 @@ func (s *chatService) toolSearchFinancialKnowledge(ctx context.Context, userID u
 	if query == "" {
 		return &FinancialToolResult{
 			ToolTitle:  "Tra cứu kiến thức tài chính",
-			ResultJSON: `{"error": "Cần cung cấp câu hỏi hoặc chủ đề cần tra cứu"}`,
+			ResultJSON: toolErrorJSON("Cần cung cấp câu hỏi hoặc chủ đề cần tra cứu"),
 		}, nil
 	}
 

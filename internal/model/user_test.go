@@ -65,7 +65,7 @@ func TestBeforeCreateAssignsUUIDv7(t *testing.T) {
 		"ChatSession": func() idHook { return &ChatSession{} }, "ChatMessage": func() idHook { return &ChatMessage{} },
 		"FinancialKnowledge": func() idHook { return &FinancialKnowledge{} }, "Budget": func() idHook { return &Budget{} },
 		"Alert": func() idHook { return &Alert{} }, "Debt": func() idHook { return &Debt{} },
-		"Repayment": func() idHook { return &Repayment{} }, "Expense": func() idHook { return &Expense{} },
+		"Repayment": func() idHook { return &Repayment{} }, "CreditCardStatement": func() idHook { return &CreditCardStatement{} },
 		"RefreshToken": func() idHook { return &RefreshToken{} }, "Cost": func() idHook { return &Cost{} },
 		"PushSubscription": func() idHook { return &PushSubscription{} }, "Transaction": func() idHook { return &Transaction{} },
 		"Preset": func() idHook { return &Preset{} }, "MonthlyTarget": func() idHook { return &MonthlyTarget{} },

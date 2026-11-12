@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"net/http"
 	"slices"
@@ -49,9 +49,6 @@ type NineRouterMessage struct {
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
-// RequestyMessage alias for backward compatibility
-type RequestyMessage = NineRouterMessage
-
 type NineRouterChatRequest struct {
 	Model       string              `json:"model"`
 	Messages    []NineRouterMessage `json:"messages"`
@@ -71,9 +68,6 @@ type NineRouterChatResponse struct {
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 }
-
-// RequestyChatResponse alias for backward compatibility
-type RequestyChatResponse = NineRouterChatResponse
 
 type NineRouterStreamChunk struct {
 	Choices []struct {
@@ -116,15 +110,10 @@ type NineRouterModelsResponse struct {
 type NineRouterService interface {
 	IsConfigured() bool
 	ListModels(ctx context.Context) ([]string, error)
-	ChatCompletion(ctx context.Context, messages []NineRouterMessage, tools []ToolDefinition) (*NineRouterChatResponse, error)
 	ChatCompletionWithModel(ctx context.Context, model string, messages []NineRouterMessage, tools []ToolDefinition) (*NineRouterChatResponse, error)
-	StreamChatCompletions(ctx context.Context, messages []NineRouterMessage, onChunk func(delta string) error) error
 	StreamChatCompletionsWithModel(ctx context.Context, model string, messages []NineRouterMessage, onChunk func(delta string) error) error
 	EmbedText(ctx context.Context, text string) ([]float32, error)
 }
-
-// RequestyService alias for backward compatibility
-type RequestyService = NineRouterService
 
 type nineRouterService struct {
 	apiKey         string
@@ -218,11 +207,6 @@ func newLoggingTransport(logger *zap.Logger) http.RoundTripper {
 	return lt
 }
 
-// NewRequestyService constructor alias
-func NewRequestyService(cfg *config.Config, logger *zap.Logger) NineRouterService {
-	return NewNineRouterService(cfg, logger)
-}
-
 func (s *nineRouterService) IsConfigured() bool {
 	return s.baseURL != ""
 }
@@ -240,30 +224,16 @@ func (s *nineRouterService) ListModels(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, nineRouterListModelsTimeout)
 	defer cancel()
 
-	url := s.baseURL + "models"
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	httpReq, err := s.newRequest(ctx, http.MethodGet, "models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create models request: %w", err)
+		return nil, err
 	}
-
-	if s.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
-	}
-
-	resp, err := s.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models from 9Router: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("9Router returned status %d: %s", resp.StatusCode, string(respBody))
-	}
-
 	var modelsResp NineRouterModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode models response: %w", err)
+	err = s.doJSON(httpReq, "failed to fetch models from 9Router", func(status int, body []byte) error {
+		return fmt.Errorf("9Router returned status %d: %s", status, string(body))
+	}, &modelsResp, "failed to decode models response")
+	if err != nil {
+		return nil, err
 	}
 
 	result := make([]string, 0, len(modelsResp.Data))
@@ -348,19 +318,78 @@ func formatNineRouterError(statusCode int, body []byte) string {
 	return fmt.Sprintf("HTTP %d: %s", statusCode, string(body))
 }
 
-func (s *nineRouterService) ChatCompletion(ctx context.Context, messages []NineRouterMessage, tools []ToolDefinition) (*NineRouterChatResponse, error) {
-	return s.ChatCompletionWithModel(ctx, "", messages, tools)
+// newRequest builds a request to path under the 9Router base URL with the
+// bearer key. A non-nil payload is sent as a JSON body.
+func (s *nineRouterService) newRequest(ctx context.Context, method, path string, payload interface{}) (*http.Request, error) {
+	var body io.Reader
+	if payload != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal 9Router request: %w", err)
+		}
+		body = bytes.NewReader(b)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, method, s.baseURL+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request: %w", err)
+	}
+	if payload != nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+	}
+	if s.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
+	}
+	return httpReq, nil
+}
+
+// do sends httpReq. A transport error is returned as "<failMsg>: err"; a
+// non-200 answer is read, closed and turned into an error by onStatus. On
+// success the caller must close resp.Body.
+func (s *nineRouterService) do(httpReq *http.Request, failMsg string, onStatus func(status int, body []byte) error) (*http.Response, error) {
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", failMsg, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, onStatus(resp.StatusCode, respBody)
+	}
+	return resp, nil
+}
+
+// doJSON is do followed by decoding the JSON body into out; a decode failure
+// is returned as "<decodeMsg>: err".
+func (s *nineRouterService) doJSON(httpReq *http.Request, failMsg string, onStatus func(status int, body []byte) error, out interface{}, decodeMsg string) error {
+	resp, err := s.do(httpReq, failMsg, onStatus)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("%s: %w", decodeMsg, err)
+	}
+	return nil
+}
+
+// upstreamError logs a non-200 chat answer and returns its readable message
+// (see formatNineRouterError).
+func (s *nineRouterService) upstreamError(status int, body []byte) error {
+	formattedErr := formatNineRouterError(status, body)
+	s.logger.Error("9Router API error response",
+		zap.Int("status", status),
+		zap.String("body", string(body)),
+		zap.String("detail", formattedErr),
+	)
+	return errors.New(formattedErr)
 }
 
 func (s *nineRouterService) ChatCompletionWithModel(ctx context.Context, model string, messages []NineRouterMessage, tools []ToolDefinition) (*NineRouterChatResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, nineRouterCompletionTimeout)
 	defer cancel()
 
-	url := s.baseURL + "chat/completions"
-	effectiveModel := s.resolveModel(ctx, model)
-
 	chatReq := NineRouterChatRequest{
-		Model:       effectiveModel,
+		Model:       s.resolveModel(ctx, model),
 		Messages:    messages,
 		Tools:       tools,
 		Temperature: 0.2,
@@ -370,96 +399,39 @@ func (s *nineRouterService) ChatCompletionWithModel(ctx context.Context, model s
 		chatReq.ToolChoice = "auto"
 	}
 
-	bodyBytes, err := json.Marshal(chatReq)
+	httpReq, err := s.newRequest(ctx, http.MethodPost, "chat/completions", chatReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal 9Router chat request: %w", err)
+		return nil, err
 	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	if s.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
-	}
-
-	resp, err := s.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("9Router API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		formattedErr := formatNineRouterError(resp.StatusCode, respBody)
-		s.logger.Error("9Router API error response",
-			zap.Int("status", resp.StatusCode),
-			zap.String("body", string(respBody)),
-			zap.String("detail", formattedErr),
-		)
-		return nil, fmt.Errorf("%s", formattedErr)
-	}
-
 	var chatResp NineRouterChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return nil, fmt.Errorf("failed to decode 9Router chat response: %w", err)
+	if err := s.doJSON(httpReq, "9Router API request failed", s.upstreamError, &chatResp, "failed to decode 9Router chat response"); err != nil {
+		return nil, err
 	}
-
 	return &chatResp, nil
-}
-
-func (s *nineRouterService) StreamChatCompletions(ctx context.Context, messages []NineRouterMessage, onChunk func(delta string) error) error {
-	return s.StreamChatCompletionsWithModel(ctx, "", messages, onChunk)
 }
 
 func (s *nineRouterService) StreamChatCompletionsWithModel(ctx context.Context, model string, messages []NineRouterMessage, onChunk func(delta string) error) error {
 	ctx, cancel := context.WithTimeout(ctx, nineRouterStreamTimeout)
 	defer cancel()
 
-	url := s.baseURL + "chat/completions"
-	effectiveModel := s.resolveModel(ctx, model)
-
 	chatReq := NineRouterChatRequest{
-		Model:       effectiveModel,
+		Model:       s.resolveModel(ctx, model),
 		Messages:    messages,
 		Temperature: 0.4,
 		Stream:      true,
 	}
 
-	bodyBytes, err := json.Marshal(chatReq)
+	httpReq, err := s.newRequest(ctx, http.MethodPost, "chat/completions", chatReq)
 	if err != nil {
-		return fmt.Errorf("failed to marshal 9Router chat request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	if s.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
+		return err
 	}
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	resp, err := s.httpClient.Do(httpReq)
+	resp, err := s.do(httpReq, "9Router API request failed", s.upstreamError)
 	if err != nil {
-		return fmt.Errorf("9Router API request failed: %w", err)
+		return err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		formattedErr := formatNineRouterError(resp.StatusCode, respBody)
-		s.logger.Error("9Router API error response",
-			zap.Int("status", resp.StatusCode),
-			zap.String("body", string(respBody)),
-			zap.String("detail", formattedErr),
-		)
-		return fmt.Errorf("%s", formattedErr)
-	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -495,42 +467,19 @@ func (s *nineRouterService) EmbedText(ctx context.Context, text string) ([]float
 	ctx, cancel := context.WithTimeout(ctx, nineRouterEmbedTimeout)
 	defer cancel()
 
-	url := s.baseURL + "embeddings"
-	embedReq := NineRouterEmbedRequest{
+	httpReq, err := s.newRequest(ctx, http.MethodPost, "embeddings", NineRouterEmbedRequest{
 		Model: s.embeddingModel,
 		Input: text,
-	}
-
-	bodyBytes, err := json.Marshal(embedReq)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal 9Router embedding request: %w", err)
+		return nil, err
 	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	if s.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
-	}
-
-	resp, err := s.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("9Router embedding request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		formattedErr := formatNineRouterError(resp.StatusCode, respBody)
-		return nil, fmt.Errorf("9Router embedding error: %s", formattedErr)
-	}
-
 	var embedResp NineRouterEmbedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&embedResp); err != nil {
-		return nil, fmt.Errorf("failed to decode 9Router embedding response: %w", err)
+	err = s.doJSON(httpReq, "9Router embedding request failed", func(status int, body []byte) error {
+		return fmt.Errorf("9Router embedding error: %s", formatNineRouterError(status, body))
+	}, &embedResp, "failed to decode 9Router embedding response")
+	if err != nil {
+		return nil, err
 	}
 
 	if len(embedResp.Data) == 0 {
@@ -538,27 +487,4 @@ func (s *nineRouterService) EmbedText(ctx context.Context, text string) ([]float
 	}
 
 	return embedResp.Data[0].Embedding, nil
-}
-
-// ComputeCosineSimilarity calculates cosine similarity between two float vectors
-func ComputeCosineSimilarity(a, b []float32) float32 {
-	if len(a) != len(b) || len(a) == 0 {
-		return 0
-	}
-
-	var dotProduct float32
-	var normA float32
-	var normB float32
-
-	for i := range a {
-		dotProduct += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-
-	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
 }

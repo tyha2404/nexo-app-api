@@ -4,29 +4,35 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type TransactionRepository interface {
 	Create(ctx context.Context, transaction *model.Transaction) error
-	GetByID(ctx context.Context, id uuid.UUID) (*model.Transaction, error)
+	// GetByIDForUser returns the user's transaction; "transaction not found"
+	// (constant.ErrNotFound) when it is missing or belongs to someone else.
+	GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Transaction, error)
 	ListByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
-	GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, sumAmountForAverage float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error)
+	GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (TransactionSummary, error)
 	SearchByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error)
 	Update(ctx context.Context, transaction *model.Transaction) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	// Delete soft-deletes the user's transaction and reverses its wallet
+	// effect; "transaction not found" (constant.ErrNotFound) when no live
+	// transaction with that id belongs to the user.
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 	// Restore undoes the soft delete of one of the user's transactions and
 	// re-applies its wallet effect. Returns ErrNotFound when no deleted
 	// transaction with that id belongs to the user.
 	Restore(ctx context.Context, userID, id uuid.UUID) error
-	CountTransactionsInRange(ctx context.Context, userID uuid.UUID, start, end time.Time) (int64, error)
 	// ListTags returns every tag on the user's live transactions with usage
 	// totals, most recently used first.
 	ListTags(ctx context.Context, userID uuid.UUID) ([]TagUsage, error)
@@ -105,19 +111,14 @@ func applyWalletEffect(tx *gorm.DB, walletID *uuid.UUID, userID uuid.UUID, delta
 // soft-deleted / foreign) wallet is an ErrNotFound; when false it is tolerated,
 // which is used to reverse effects on wallets that were deleted afterwards.
 func adjustWalletBalance(tx *gorm.DB, walletID *uuid.UUID, userID uuid.UUID, delta float64, required bool) error {
-	if walletID == nil || *walletID == uuid.Nil {
+	if !hasWallet(walletID) || (delta == 0 && !required) {
 		return nil
 	}
-	if delta == 0 && !required {
-		return nil
+	found, err := applyWalletEffect(tx, walletID, userID, delta)
+	if err != nil {
+		return err
 	}
-	res := tx.Model(&model.Wallet{}).
-		Where("id = ? AND user_id = ?", *walletID, userID).
-		Update("balance", gorm.Expr("balance + ?", delta))
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 && required {
+	if !found && required {
 		return fmt.Errorf("wallet %w", constant.ErrNotFound)
 	}
 	return nil
@@ -130,13 +131,14 @@ func sameWallet(a, b *uuid.UUID) bool {
 	return *a == *b
 }
 
-func (r *transactionRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Transaction, error) {
+func (r *transactionRepository) GetByIDForUser(ctx context.Context, userID, id uuid.UUID) (*model.Transaction, error) {
 	var transaction model.Transaction
 	err := r.db.WithContext(ctx).
 		Preload("Category", withDeleted).
-		First(&transaction, "id = ?", id).Error
+		Where("id = ? AND user_id = ?", id, userID).
+		First(&transaction).Error
 	if err != nil {
-		return nil, err
+		return nil, notFoundAs("transaction", err)
 	}
 	return &transaction, nil
 }
@@ -145,47 +147,10 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 	var transactions []model.Transaction
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
-
-	// Search before counting/pagination so all matching rows are visible.
-	if keyword, ok := filters["keyword"].(string); ok && strings.TrimSpace(keyword) != "" {
-		query = query.Where("description ILIKE ?", "%"+escapeLike(strings.TrimSpace(keyword))+"%")
-	}
-	query = withTagFilter(query, "tags", filters)
-
-	// Filter by Type
-	if t, ok := filters["type"].(string); ok && t != "" {
-		query = query.Where("type = ?", t)
-	}
-
-	// Filter by Status
-	if st, ok := filters["status"].(string); ok && st != "" {
-		if st == string(model.InvestmentStatusHolding) {
-			query = query.Where("status IS NULL OR status = ?", st)
-		} else {
-			query = query.Where("status = ?", st)
-		}
-	}
-
-	// Filter by CategoryID
-	if c, ok := filters["categoryId"].(string); ok && c != "" {
-		if catID, err := uuid.Parse(c); err == nil {
-			query = query.Where("category_id = ?", catID)
-		}
-	}
-
-	// Filter by StartDate
-	if s, ok := filters["startDate"].(string); ok && s != "" {
-		if t, err := time.Parse("2006-01-02", s); err == nil {
-			query = query.Where("transaction_date >= ?", t)
-		}
-	}
-
-	// Filter by EndDate
-	if e, ok := filters["endDate"].(string); ok && e != "" {
-		if t, err := time.Parse("2006-01-02", e); err == nil {
-			query = query.Where("transaction_date <= ?", t)
-		}
+	// Filter before counting/pagination so all matching rows are visible.
+	query := applyTransactionFilters(r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID), filters)
+	if st, ok := filters["status"].(string); ok {
+		query = withStatusFilter(query, st)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -202,53 +167,35 @@ func (r *transactionRepository) ListByUserID(ctx context.Context, userID uuid.UU
 	return transactions, total, err
 }
 
-func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (sumAmount float64, sumAmountForAverage float64, total int64, holdingAmount float64, holdingCount int64, realizedPnL float64, err error) {
+// TransactionSummary aggregates the transactions matching a list's filters.
+type TransactionSummary struct {
+	SumAmount float64
+	// SumAmountForAverage excludes categories flagged exclude_from_average_daily.
+	SumAmountForAverage float64
+	Total               int64
+	HoldingAmount       float64
+	HoldingCount        int64
+	RealizedPnL         float64
+}
+
+func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID uuid.UUID, filters map[string]interface{}) (TransactionSummary, error) {
+	var sum TransactionSummary
 	buildBaseQuery := func() *gorm.DB {
-		q := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("transactions.user_id = ?", userID)
-		if keyword, ok := filters["keyword"].(string); ok && strings.TrimSpace(keyword) != "" {
-			q = q.Where("transactions.description ILIKE ?", "%"+escapeLike(strings.TrimSpace(keyword))+"%")
-		}
-		q = withTagFilter(q, "transactions.tags", filters)
-		if t, ok := filters["type"].(string); ok && t != "" {
-			q = q.Where("transactions.type = ?", t)
-		}
-		if c, ok := filters["categoryId"].(string); ok && c != "" {
-			if catID, err := uuid.Parse(c); err == nil {
-				q = q.Where("transactions.category_id = ?", catID)
-			}
-		}
-		if s, ok := filters["startDate"].(string); ok && s != "" {
-			if t, err := time.Parse("2006-01-02", s); err == nil {
-				q = q.Where("transactions.transaction_date >= ?", t)
-			}
-		}
-		if e, ok := filters["endDate"].(string); ok && e != "" {
-			if t, err := time.Parse("2006-01-02", e); err == nil {
-				q = q.Where("transactions.transaction_date <= ?", t)
-			}
-		}
-		return q
+		return applyTransactionFilters(r.db.WithContext(ctx).Model(&model.Transaction{}).Where("transactions.user_id = ?", userID), filters)
 	}
 
 	st, filterStatus := filters["status"].(string)
 
 	// 1. Calculate filtered total and sumAmount
-	listQuery := buildBaseQuery()
-	if filterStatus && st != "" {
-		if st == string(model.InvestmentStatusHolding) {
-			listQuery = listQuery.Where("status IS NULL OR status = ?", st)
-		} else {
-			listQuery = listQuery.Where("status = ?", st)
-		}
-	}
+	listQuery := withStatusFilter(buildBaseQuery(), st)
 
-	if err := listQuery.Count(&total).Error; err != nil {
-		return 0, 0, 0, 0, 0, 0, err
+	if err := listQuery.Count(&sum.Total).Error; err != nil {
+		return TransactionSummary{}, err
 	}
 
 	row := listQuery.Select("COALESCE(SUM(amount), 0)").Row()
-	if err := row.Scan(&sumAmount); err != nil {
-		return 0, 0, 0, 0, 0, 0, err
+	if err := row.Scan(&sum.SumAmount); err != nil {
+		return TransactionSummary{}, err
 	}
 
 	// 1b. Calculate sum excluding categories flagged as "exclude from average daily spending".
@@ -256,33 +203,33 @@ func (r *transactionRepository) GetSummaryByUserID(ctx context.Context, userID u
 	// spending in a since-deleted category still counts (transactions are kept).
 	avgQuery := buildBaseQuery().Joins("JOIN categories c ON c.id = transactions.category_id AND c.user_id = transactions.user_id AND c.exclude_from_average_daily = false")
 	avgRow := avgQuery.Select("COALESCE(SUM(transactions.amount), 0)").Row()
-	if err := avgRow.Scan(&sumAmountForAverage); err != nil {
-		return 0, 0, 0, 0, 0, 0, err
+	if err := avgRow.Scan(&sum.SumAmountForAverage); err != nil {
+		return TransactionSummary{}, err
 	}
 
 	// 2. Calculate Holding metrics:
 	if filterStatus && st != "" && st != string(model.InvestmentStatusHolding) {
-		holdingAmount = 0
-		holdingCount = 0
+		sum.HoldingAmount = 0
+		sum.HoldingCount = 0
 	} else {
 		holdingQuery := buildBaseQuery().Where("status IS NULL OR status = ?", model.InvestmentStatusHolding)
-		if err := holdingQuery.Count(&holdingCount).Error; err != nil {
-			return 0, 0, 0, 0, 0, 0, err
+		if err := holdingQuery.Count(&sum.HoldingCount).Error; err != nil {
+			return TransactionSummary{}, err
 		}
 		holdingRow := holdingQuery.Select("COALESCE(SUM(amount), 0)").Row()
-		if err := holdingRow.Scan(&holdingAmount); err != nil {
-			return 0, 0, 0, 0, 0, 0, err
+		if err := holdingRow.Scan(&sum.HoldingAmount); err != nil {
+			return TransactionSummary{}, err
 		}
 	}
 
 	// 3. Calculate Realized PnL:
 	// Sum realized_pnl for all transactions (including SOLD, MATURED, CANCELLED, or any status with realized_pnl)
 	pnlRow := buildBaseQuery().Where("(status IS NOT NULL AND status != ?) OR realized_pnl != 0", model.InvestmentStatusHolding).Select("COALESCE(SUM(realized_pnl), 0)").Row()
-	if err := pnlRow.Scan(&realizedPnL); err != nil {
-		return 0, 0, 0, 0, 0, 0, err
+	if err := pnlRow.Scan(&sum.RealizedPnL); err != nil {
+		return TransactionSummary{}, err
 	}
 
-	return sumAmount, sumAmountForAverage, total, holdingAmount, holdingCount, realizedPnL, nil
+	return sum, nil
 }
 
 // Update saves the transaction and re-balances wallets in one DB transaction:
@@ -321,41 +268,22 @@ func (r *transactionRepository) Update(ctx context.Context, transaction *model.T
 	})
 }
 
-// SearchByUserID is a read-only search with extended filters (wallet, amount range,
-// keyword in description) used by the AI financial tools. All conditions are ANDed
-// and always scoped to userID.
+// SearchByUserID is a read-only search used by the AI financial tools: the
+// shared filters of applyTransactionFilters (type "ALL" means any type) plus
+// wallet and amount range. All conditions are ANDed and always scoped to userID.
 func (r *transactionRepository) SearchByUserID(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}) ([]model.Transaction, int64, error) {
 	var transactions []model.Transaction
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID)
-
-	if t, ok := filters["type"].(string); ok && t != "" && t != "ALL" {
-		query = query.Where("type = ?", t)
+	if t, _ := filters["type"].(string); t == "ALL" {
+		filters = maps.Clone(filters)
+		delete(filters, "type")
 	}
-	query = withTagFilter(query, "tags", filters)
-
-	if c, ok := filters["categoryId"].(string); ok && c != "" {
-		if catID, err := uuid.Parse(c); err == nil {
-			query = query.Where("category_id = ?", catID)
-		}
-	}
+	query := applyTransactionFilters(r.db.WithContext(ctx).Model(&model.Transaction{}).Where("user_id = ?", userID), filters)
 
 	if w, ok := filters["walletId"].(string); ok && w != "" {
 		if walletID, err := uuid.Parse(w); err == nil {
 			query = query.Where("wallet_id = ?", walletID)
-		}
-	}
-
-	if s, ok := filters["startDate"].(string); ok && s != "" {
-		if t, err := time.Parse("2006-01-02", s); err == nil {
-			query = query.Where("transaction_date >= ?", t)
-		}
-	}
-
-	if e, ok := filters["endDate"].(string); ok && e != "" {
-		if t, err := time.Parse("2006-01-02", e); err == nil {
-			query = query.Where("transaction_date <= ?", t)
 		}
 	}
 
@@ -365,11 +293,6 @@ func (r *transactionRepository) SearchByUserID(ctx context.Context, userID uuid.
 
 	if maxA, ok := filters["maxAmount"].(float64); ok && maxA > 0 {
 		query = query.Where("amount <= ?", maxA)
-	}
-
-	if kw, ok := filters["keyword"].(string); ok && kw != "" {
-		pattern := "%" + strings.ToLower(kw) + "%"
-		query = query.Where("LOWER(description) LIKE ?", pattern)
 	}
 
 	sortBy := "transaction_date desc, created_at desc"
@@ -397,11 +320,11 @@ func (r *transactionRepository) SearchByUserID(ctx context.Context, userID uuid.
 }
 
 // Delete (soft) removes the transaction and reverses its wallet effect atomically.
-func (r *transactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *transactionRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var old model.Transaction
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&old).Error; err != nil {
-			return err
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", id, userID).First(&old).Error; err != nil {
+			return notFoundAs("transaction", err)
 		}
 		if err := tx.Delete(&model.Transaction{}, "id = ?", id).Error; err != nil {
 			return err
@@ -442,15 +365,6 @@ func (r *transactionRepository) Restore(ctx context.Context, userID, id uuid.UUI
 	})
 }
 
-func (r *transactionRepository) CountTransactionsInRange(ctx context.Context, userID uuid.UUID, start, end time.Time) (int64, error) {
-	var count int64
-	err := r.db.WithContext(ctx).
-		Model(&model.Transaction{}).
-		Where("user_id = ? AND transaction_date >= ? AND transaction_date <= ?", userID, start, end).
-		Count(&count).Error
-	return count, err
-}
-
 func (r *transactionRepository) ListTags(ctx context.Context, userID uuid.UUID) ([]TagUsage, error) {
 	var rows []struct {
 		Name         string
@@ -477,6 +391,72 @@ func (r *transactionRepository) ListTags(ctx context.Context, userID uuid.UUID) 
 		out = append(out, TagUsage(row))
 	}
 	return out, nil
+}
+
+// applyTransactionFilters adds the filters shared by list, summary and search:
+// keyword (case-insensitive substring of the description, LIKE wildcards
+// escaped), tag, type, categoryId and the inclusive startDate/endDate
+// (YYYY-MM-DD). Malformed ids and dates are ignored. Columns are qualified so
+// the query may join other tables.
+func applyTransactionFilters(q *gorm.DB, filters map[string]interface{}) *gorm.DB {
+	if keyword, ok := filters["keyword"].(string); ok && strings.TrimSpace(keyword) != "" {
+		q = q.Where("transactions.description ILIKE ?", "%"+escapeLike(strings.TrimSpace(keyword))+"%")
+	}
+	q = withTagFilter(q, "transactions.tags", filters)
+	if t, ok := filters["type"].(string); ok && t != "" {
+		q = q.Where("transactions.type = ?", t)
+	}
+	if c, ok := filters["categoryId"].(string); ok && c != "" {
+		if catID, err := uuid.Parse(c); err == nil {
+			q = q.Where("transactions.category_id = ?", catID)
+		}
+	}
+	if s, ok := filters["startDate"].(string); ok && s != "" {
+		if t, err := util.ParseDate(s); err == nil {
+			q = q.Where("transactions.transaction_date >= ?", t)
+		}
+	}
+	if e, ok := filters["endDate"].(string); ok && e != "" {
+		if t, err := util.ParseDate(e); err == nil {
+			q = q.Where("transactions.transaction_date <= ?", t)
+		}
+	}
+	return q
+}
+
+// withStatusFilter keeps rows with the given investment status; HOLDING also
+// matches rows without a status. An empty status adds no condition.
+func withStatusFilter(q *gorm.DB, status string) *gorm.DB {
+	switch status {
+	case "":
+		return q
+	case string(model.InvestmentStatusHolding):
+		return q.Where("status IS NULL OR status = ?", status)
+	default:
+		return q.Where("status = ?", status)
+	}
+}
+
+// notFoundAs turns gorm.ErrRecordNotFound into "<entity> not found" wrapping
+// constant.ErrNotFound; other errors are returned unchanged.
+func notFoundAs(entity string, err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("%s %w", entity, constant.ErrNotFound)
+	}
+	return err
+}
+
+// deleteForUser soft-deletes the row (a model pointer) with that id when it belongs
+// to userID; "<entity> not found" (constant.ErrNotFound) when nothing matched.
+func deleteForUser(db *gorm.DB, row interface{}, entity string, userID, id uuid.UUID) error {
+	res := db.Where("id = ? AND user_id = ?", id, userID).Delete(row)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("%s %w", entity, constant.ErrNotFound)
+	}
+	return nil
 }
 
 // Escape SQL LIKE wildcards so the search field matches literal text.

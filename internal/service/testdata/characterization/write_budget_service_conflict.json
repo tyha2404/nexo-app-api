@@ -1,0 +1,34 @@
+{
+  "confirm": null,
+  "confirmErr": "pending action failed: budget already exists",
+  "confirmErrIsFailed": true,
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Đặt ngân sách — Hạn mức danh mục Ăn uống: 1 ₫/tháng từ 2026-11-01\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Đặt ngân sách",
+      "description": "Hạn mức danh mục Ăn uống: 1 ₫/tháng từ 2026-11-01",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 1,
+        "categoryName": "Ăn uống",
+        "date": "2026-11-01",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Đặt ngân sách",
+        "status": "PENDING",
+        "toolName": "set_budget"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

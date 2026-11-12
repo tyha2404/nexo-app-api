@@ -18,11 +18,44 @@ type MonthlyRolloverWorker struct {
 }
 
 func NewMonthlyRolloverWorker(service service.RolloverService, logger *zap.Logger) *MonthlyRolloverWorker {
+	cronLog := cronLogger{logger: logger}
 	return &MonthlyRolloverWorker{
 		// Run the schedule in the business timezone, not the server's (often UTC).
-		cron:    cron.New(cron.WithLocation(util.AppLocation())),
+		// cron.Recover logs a panicking job (with stack) instead of crashing
+		// the whole API process.
+		cron: cron.New(
+			cron.WithLocation(util.AppLocation()),
+			cron.WithLogger(cronLog),
+			cron.WithChain(cron.Recover(cronLog)),
+		),
 		service: service,
 		logger:  logger,
+	}
+}
+
+// cronLogger adapts zap to cron.Logger. cron's routine Info messages
+// (schedule, wake, run) go to Debug; errors and recovered panics to Error.
+type cronLogger struct {
+	logger *zap.Logger
+}
+
+func (l cronLogger) Info(msg string, keysAndValues ...interface{}) {
+	l.logger.Sugar().Debugw("cron: "+msg, keysAndValues...)
+}
+
+func (l cronLogger) Error(err error, msg string, keysAndValues ...interface{}) {
+	l.logger.Sugar().Errorw("cron: "+msg, append([]interface{}{"error", err}, keysAndValues...)...)
+}
+
+// recoverPanic logs a panic of a background task (with stack) so it does not
+// crash the API process. Use it as `defer w.recoverPanic("...")`.
+func (w *MonthlyRolloverWorker) recoverPanic(task string) {
+	if rec := recover(); rec != nil {
+		w.logger.Error("panic recovered in background task",
+			zap.String("task", task),
+			zap.Any("panic", rec),
+			zap.Stack("stack"),
+		)
 	}
 }
 
@@ -46,6 +79,7 @@ func IsEndOfMonthTransition(t time.Time) (bool, int, int) {
 func (w *MonthlyRolloverWorker) Start(ctx context.Context) {
 	// 1. Startup Backfill for current month
 	go func() {
+		defer w.recoverPanic("startup rollover sync")
 		w.logger.Info("running startup sync for monthly targets and budgets...")
 		now := util.Now()
 		if err := w.service.ProcessRolloverForMonth(ctx, int(now.Month()), now.Year()); err != nil {

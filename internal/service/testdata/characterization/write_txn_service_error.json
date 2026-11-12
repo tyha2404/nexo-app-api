@@ -1,0 +1,38 @@
+{
+  "confirm": null,
+  "confirmErr": "pending action failed: invalid input: danh mục không hợp lệ",
+  "confirmErrIsFailed": true,
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Ghi chi tiêu — 5 ₫ - Ăn uống (Ăn uống)\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Ghi chi tiêu",
+      "description": "5 ₫ - Ăn uống (Ăn uống)",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 5,
+        "categoryName": "Ăn uống",
+        "date": "2026-11-08",
+        "description": "Ăn uống",
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "isNewCategoryCreated": false,
+        "kind": "Ghi chi tiêu",
+        "status": "PENDING",
+        "toolName": "create_transaction",
+        "type": "EXPENSE",
+        "walletName": "Ví Tiền mặt"
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "EXPENSE",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

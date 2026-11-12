@@ -10,17 +10,18 @@ import (
 
 type ChatRepository interface {
 	CreateSession(ctx context.Context, session *model.ChatSession) error
-	GetSessionByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.ChatSession, error)
+	GetSessionByID(ctx context.Context, userID, id uuid.UUID) (*model.ChatSession, error)
 	ListSessionsByUserID(ctx context.Context, userID uuid.UUID, limit int) ([]model.ChatSession, error)
-	UpdateSessionTitle(ctx context.Context, id uuid.UUID, userID uuid.UUID, title string) error
-	DeleteSession(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	UpdateSessionTitle(ctx context.Context, userID, id uuid.UUID, title string) error
+	DeleteSession(ctx context.Context, userID, id uuid.UUID) error
 	ClearUserSessions(ctx context.Context, userID uuid.UUID) error
 
 	CreateMessage(ctx context.Context, message *model.ChatMessage) error
-	UpdateMessage(ctx context.Context, id uuid.UUID, content string, status model.ChatMessageStatus) error
+	// The message methods below only touch messages of userID's sessions.
+	UpdateMessage(ctx context.Context, userID, id uuid.UUID, content string, status model.ChatMessageStatus) error
 	// UpdateMessageToolResults stores the message's action cards (JSON array).
-	UpdateMessageToolResults(ctx context.Context, id uuid.UUID, toolResults *string) error
-	GetMessageByID(ctx context.Context, id uuid.UUID) (*model.ChatMessage, error)
+	UpdateMessageToolResults(ctx context.Context, userID, id uuid.UUID, toolResults *string) error
+	GetMessageByID(ctx context.Context, userID, id uuid.UUID) (*model.ChatMessage, error)
 	ListMessagesBySessionID(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.ChatMessage, error)
 	// ListRecentMessagesBySessionID returns the newest `limit` messages of a
 	// session in chronological (oldest → newest) order.
@@ -39,13 +40,13 @@ func (r *chatRepository) CreateSession(ctx context.Context, session *model.ChatS
 	return r.db.WithContext(ctx).Create(session).Error
 }
 
-func (r *chatRepository) GetSessionByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*model.ChatSession, error) {
+func (r *chatRepository) GetSessionByID(ctx context.Context, userID, id uuid.UUID) (*model.ChatSession, error) {
 	var session model.ChatSession
 	err := r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&session).Error
 	if err != nil {
-		return nil, err
+		return nil, notFoundAs("chat session", err)
 	}
 	return &session, nil
 }
@@ -62,14 +63,14 @@ func (r *chatRepository) ListSessionsByUserID(ctx context.Context, userID uuid.U
 	return sessions, err
 }
 
-func (r *chatRepository) UpdateSessionTitle(ctx context.Context, id uuid.UUID, userID uuid.UUID, title string) error {
+func (r *chatRepository) UpdateSessionTitle(ctx context.Context, userID, id uuid.UUID, title string) error {
 	return r.db.WithContext(ctx).
 		Model(&model.ChatSession{}).
 		Where("id = ? AND user_id = ?", id, userID).
 		Update("title", title).Error
 }
 
-func (r *chatRepository) DeleteSession(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+func (r *chatRepository) DeleteSession(ctx context.Context, userID, id uuid.UUID) error {
 	return r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", id, userID).
 		Delete(&model.ChatSession{}).Error
@@ -85,25 +86,28 @@ func (r *chatRepository) CreateMessage(ctx context.Context, message *model.ChatM
 	return r.db.WithContext(ctx).Create(message).Error
 }
 
-func (r *chatRepository) UpdateMessage(ctx context.Context, id uuid.UUID, content string, status model.ChatMessageStatus) error {
-	return r.db.WithContext(ctx).Model(&model.ChatMessage{}).
-		Where("id = ?", id).
+// userMessage scopes a chat_messages query to one message of userID's sessions.
+func userMessage(db *gorm.DB, userID, id uuid.UUID) *gorm.DB {
+	return db.Where("id = ? AND session_id IN (SELECT id FROM chat_sessions WHERE user_id = ?)", id, userID)
+}
+
+func (r *chatRepository) UpdateMessage(ctx context.Context, userID, id uuid.UUID, content string, status model.ChatMessageStatus) error {
+	return userMessage(r.db.WithContext(ctx).Model(&model.ChatMessage{}), userID, id).
 		Updates(map[string]interface{}{
 			"content": content,
 			"status":  status,
 		}).Error
 }
 
-func (r *chatRepository) UpdateMessageToolResults(ctx context.Context, id uuid.UUID, toolResults *string) error {
-	return r.db.WithContext(ctx).Model(&model.ChatMessage{}).
-		Where("id = ?", id).
+func (r *chatRepository) UpdateMessageToolResults(ctx context.Context, userID, id uuid.UUID, toolResults *string) error {
+	return userMessage(r.db.WithContext(ctx).Model(&model.ChatMessage{}), userID, id).
 		Update("tool_results", toolResults).Error
 }
 
-func (r *chatRepository) GetMessageByID(ctx context.Context, id uuid.UUID) (*model.ChatMessage, error) {
+func (r *chatRepository) GetMessageByID(ctx context.Context, userID, id uuid.UUID) (*model.ChatMessage, error) {
 	var msg model.ChatMessage
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&msg).Error; err != nil {
-		return nil, err
+	if err := userMessage(r.db.WithContext(ctx), userID, id).First(&msg).Error; err != nil {
+		return nil, notFoundAs("chat message", err)
 	}
 	return &msg, nil
 }

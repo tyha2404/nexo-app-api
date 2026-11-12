@@ -1,15 +1,12 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
-	"github.com/tyha2404/nexo-app-api/internal/response"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"github.com/tyha2404/nexo-app-api/internal/util"
 	"go.uber.org/zap"
@@ -24,6 +21,20 @@ func NewReportHandler(svc service.ReportService, log *zap.Logger) *ReportHandler
 	return &ReportHandler{svc: svc, errorHandler: NewErrorHandler(log)}
 }
 
+// GetSummary handles GET /reports/summary
+// @Summary Get the income/expense summary
+// @Description Totals for [startDate, endDate]. Without both dates the period comes from range (weekly, monthly — the default — or yearly) in the app timezone; range=all or allTime=true sums all time.
+// @Tags Reports
+// @Produce json
+// @Security BearerAuth
+// @Param startDate query string false "YYYY-MM-DD"
+// @Param endDate query string false "YYYY-MM-DD"
+// @Param range query string false "weekly, monthly (default), yearly or all"
+// @Param allTime query bool false "true to sum all time"
+// @Success 200 {object} SummaryReportEnvelope
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Failed to get summary"
+// @Router /reports/summary [get]
 func (h *ReportHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	user, err := GetUserFromContext(r)
 	if err != nil {
@@ -47,14 +58,22 @@ func (h *ReportHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.SummaryReport]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
+// GetCategoryBreakdown handles GET /reports/category-breakdown
+// @Summary Get spending by category
+// @Description Expense per category for [startDate, endDate]; without both dates the period comes from range (weekly, monthly — the default — or yearly) in the app timezone.
+// @Tags Reports
+// @Produce json
+// @Security BearerAuth
+// @Param startDate query string false "YYYY-MM-DD"
+// @Param endDate query string false "YYYY-MM-DD"
+// @Param range query string false "weekly, monthly (default) or yearly"
+// @Success 200 {object} CategoryBreakdownEnvelope
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Failed to get category breakdown"
+// @Router /reports/category-breakdown [get]
 func (h *ReportHandler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Request) {
 	user, err := GetUserFromContext(r)
 	if err != nil {
@@ -77,21 +96,15 @@ func (h *ReportHandler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.CategoryBreakdownReport]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
 // GetMonthlyTrend handles GET /reports/monthly-trend
 // @Summary Get monthly financial trend
-// @Description Get 12-month expense, income, target and average trend
+// @Description Monthly expense, income, expense target and average expense for the last `months` calendar months (default 12, max 36; values outside 1–36 use 12), ending with the current month in the app timezone.
 // @Tags Reports
-// @Accept json
 // @Produce json
-// @Param months query int false "Number of months (default: 12)"
+// @Param months query int false "Number of months (default: 12, max 36)"
 // @Security BearerAuth
 // @Success 200 {object} MonthlyTrendResponse
 // @Failure 401 {object} response.ErrorResponse
@@ -105,26 +118,14 @@ func (h *ReportHandler) GetMonthlyTrend(w http.ResponseWriter, r *http.Request) 
 	}
 	userID := user.ID
 
-	monthsStr := r.URL.Query().Get("months")
-	months := 12
-	if monthsStr != "" {
-		if parsed, err := strconv.Atoi(monthsStr); err == nil && parsed > 0 {
-			months = parsed
-		}
-	}
-
-	res, err := h.svc.GetMonthlyTrend(r.Context(), userID, months)
+	// The service defaults a missing/invalid months to 12.
+	res, err := h.svc.GetMonthlyTrend(r.Context(), userID, QueryInt(r, "months"))
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get monthly trend", "get_monthly_trend")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.MonthlyTrendReport]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
 // GetNetWorthTrend handles GET /reports/net-worth
@@ -145,23 +146,13 @@ func (h *ReportHandler) GetNetWorthTrend(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	months := 12
-	if parsed, err := strconv.Atoi(r.URL.Query().Get("months")); err == nil && parsed > 0 {
-		months = parsed
-	}
-
-	res, err := h.svc.GetNetWorthTrend(r.Context(), user.ID, months)
+	res, err := h.svc.GetNetWorthTrend(r.Context(), user.ID, QueryInt(r, "months"))
 	if err != nil {
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to get net worth trend", "get_net_worth")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.NetWorthReport]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
 // GetDailyReport handles GET /reports/daily
@@ -193,12 +184,7 @@ func (h *ReportHandler) GetDailyReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.BaseResponse[dto.DailyReport]{
-		Status:  http.StatusOK,
-		Success: true,
-		Data:    *res,
-	})
+	h.errorHandler.HandleSuccess(w, http.StatusOK, *res)
 }
 
 func parseRange(rangeParam string) (string, string) {
@@ -224,13 +210,14 @@ func parseRange(rangeParam string) (string, string) {
 		end = start.AddDate(0, 1, 0).Add(-time.Nanosecond)
 	}
 
-	return start.Format("2006-01-02"), end.Format("2006-01-02")
+	return start.Format(time.DateOnly), end.Format(time.DateOnly)
 }
 
 // MonthlyTrendResponse describes the report envelope for Swagger.
 type MonthlyTrendResponse struct {
 	Status  int                    `json:"status"`
 	Success bool                   `json:"success"`
+	Message string                 `json:"message"`
 	Data    dto.MonthlyTrendReport `json:"data"`
 }
 
@@ -238,6 +225,7 @@ type MonthlyTrendResponse struct {
 type NetWorthResponse struct {
 	Status  int                `json:"status"`
 	Success bool               `json:"success"`
+	Message string             `json:"message"`
 	Data    dto.NetWorthReport `json:"data"`
 }
 
@@ -245,5 +233,6 @@ type NetWorthResponse struct {
 type DailyReportResponse struct {
 	Status  int             `json:"status"`
 	Success bool            `json:"success"`
+	Message string          `json:"message"`
 	Data    dto.DailyReport `json:"data"`
 }

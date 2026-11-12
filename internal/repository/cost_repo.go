@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/model"
+	"github.com/tyha2404/nexo-app-api/internal/util"
 	"gorm.io/gorm"
 )
 
@@ -80,14 +81,14 @@ func (r *costRepo) ListWithCategory(
 
 	// Filter by startDate
 	if s, ok := filters["startDate"].(string); ok && s != "" {
-		if t, err := time.Parse("2006-01-02", s); err == nil {
+		if t, err := util.ParseDate(s); err == nil {
 			query = query.Where("incurred_at >= ?", t)
 		}
 	}
 
 	// Filter by endDate (add +1 day to include full endDate)
 	if e, ok := filters["endDate"].(string); ok && e != "" {
-		if t, err := time.Parse("2006-01-02", e); err == nil {
+		if t, err := util.ParseDate(e); err == nil {
 			query = query.Where("incurred_at < ?", t.Add(24*time.Hour))
 		}
 	}

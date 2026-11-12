@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Chuyển tiền nội bộ",
+    "ResultJSON": "{\"error\":\"Ví đích: Không tìm thấy ví 'MoMo'. Hãy hỏi lại người dùng muốn dùng ví nào trong các ví: Ví Tiền mặt, Tài khoản Ngân hàng, Ví Điện tử, Techcombank, Techcombank Visa.\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

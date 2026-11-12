@@ -4,23 +4,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tyha2404/nexo-app-api/internal/handler"
 	"github.com/tyha2404/nexo-app-api/internal/middleware"
-	"go.uber.org/zap"
+	"github.com/tyha2404/nexo-app-api/internal/model"
 )
 
 type UserRouter struct {
 	handler *handler.UserHandler
-	logger  *zap.Logger
 	// RoleLookup, when set, re-checks the admin role in the database on
 	// every request instead of trusting the role baked into the token.
 	RoleLookup middleware.RoleLookup
 }
 
 // NewUserRouter creates a new instance of UserRouter
-func NewUserRouter(handler *handler.UserHandler, logger *zap.Logger) *UserRouter {
-	return &UserRouter{
-		handler: handler,
-		logger:  logger,
-	}
+func NewUserRouter(handler *handler.UserHandler) *UserRouter {
+	return &UserRouter{handler: handler}
 }
 
 // RegisterRoutes registers the user-management routes. They manage arbitrary
@@ -31,7 +27,7 @@ func (r *UserRouter) RegisterRoutes(router chi.Router) {
 		usersRoute.Use(middleware.AuthMiddleware)
 		usersRoute.Use(middleware.AdminOnly)
 		if r.RoleLookup != nil {
-			usersRoute.Use(middleware.RequireCurrentRole("admin", r.RoleLookup))
+			usersRoute.Use(middleware.RequireCurrentRole(model.RoleAdmin, r.RoleLookup))
 		}
 		usersRoute.Post("/", r.handler.Create)
 		usersRoute.Get("/", r.handler.List)

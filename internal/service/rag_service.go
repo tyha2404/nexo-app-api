@@ -33,29 +33,40 @@ type RAGService interface {
 }
 
 type cachedDocEmbedding struct {
+	topic   string // evicted when the topic is replaced
 	embJSON string
 	vec     []float32
 }
 
 type ragService struct {
-	knowledgeRepo   repository.KnowledgeRepository
-	requestyService RequestyService
-	logger          *zap.Logger
-	mu              sync.RWMutex
-	cacheMu         sync.RWMutex
-	localEmbCache   map[uuid.UUID]cachedDocEmbedding
+	knowledgeRepo     repository.KnowledgeRepository
+	nineRouterService NineRouterService
+	logger            *zap.Logger
+	// writeMu serializes writers (seeding, AddKnowledge), including their
+	// slow embedding calls. mu is only held around the knowledge table reads
+	// (ListAll) and the topic swaps (ReplaceByTopic), so a seed never blocks
+	// chat searches while it waits for the embedding gateway.
+	writeMu       sync.Mutex
+	mu            sync.RWMutex
+	cacheMu       sync.RWMutex
+	localEmbCache map[uuid.UUID]cachedDocEmbedding
 }
 
-func NewRAGService(knowledgeRepo repository.KnowledgeRepository, requestyService RequestyService, logger *zap.Logger) RAGService {
+func NewRAGService(knowledgeRepo repository.KnowledgeRepository, nineRouterService NineRouterService, logger *zap.Logger) RAGService {
 	s := &ragService{
-		knowledgeRepo:   knowledgeRepo,
-		requestyService: requestyService,
-		logger:          logger,
-		localEmbCache:   make(map[uuid.UUID]cachedDocEmbedding),
+		knowledgeRepo:     knowledgeRepo,
+		nineRouterService: nineRouterService,
+		logger:            logger,
+		localEmbCache:     make(map[uuid.UUID]cachedDocEmbedding),
 	}
 
 	// Seed knowledge asynchronously in background
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Error("panic recovered while seeding financial knowledge", zap.Any("panic", rec), zap.Stack("stack"))
+			}
+		}()
 		ctx := context.Background()
 		if err := s.SeedDefaultKnowledge(ctx); err != nil {
 			logger.Warn("failed to auto-seed default financial knowledge", zap.Error(err))
@@ -71,19 +82,19 @@ func hashKnowledgeContent(content string) string {
 }
 
 func (s *ragService) generateEmbedding(ctx context.Context, text string) []float32 {
-	if s.requestyService != nil && s.requestyService.IsConfigured() {
-		emb, err := s.requestyService.EmbedText(ctx, text)
+	if s.nineRouterService != nil && s.nineRouterService.IsConfigured() {
+		emb, err := s.nineRouterService.EmbedText(ctx, text)
 		if err == nil && len(emb) > 0 {
 			return emb
 		}
-		s.logger.Warn("Requesty embed failed or unavailable, falling back to local semantic vectorizer", zap.Error(err))
+		s.logger.Warn("9Router embed failed or unavailable, falling back to local semantic vectorizer", zap.Error(err))
 	}
-	return util.GenerateLocalEmbedding(text, 256)
+	return util.GenerateLocalEmbedding(text, util.LocalEmbeddingDim)
 }
 
 func (s *ragService) SeedDefaultKnowledge(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
 	fileDocs, err := data.LoadEmbeddedKnowledgeDocs()
 	if err != nil {
@@ -91,7 +102,9 @@ func (s *ragService) SeedDefaultKnowledge(ctx context.Context) error {
 		return err
 	}
 
+	s.mu.RLock()
 	allDocs, err := s.knowledgeRepo.ListAll(ctx)
+	s.mu.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -107,7 +120,7 @@ func (s *ragService) SeedDefaultKnowledge(ctx context.Context) error {
 		if !found || len(existingChunks) == 0 {
 			// New doc added in data/knowledge -> chunk, embed, and insert
 			s.logger.Info("seeding new knowledge doc with chunking", zap.String("topic", doc.Topic), zap.String("title", doc.Title))
-			if err := s.addKnowledgeLocked(ctx, doc.Topic, doc.Title, doc.Content); err != nil {
+			if err := s.addKnowledge(ctx, doc.Topic, doc.Title, doc.Content); err != nil {
 				s.logger.Warn("failed to seed knowledge doc", zap.String("topic", doc.Topic), zap.Error(err))
 			}
 			continue
@@ -136,7 +149,7 @@ func (s *ragService) SeedDefaultKnowledge(ctx context.Context) error {
 
 		if needsResync {
 			s.logger.Info("re-chunking and syncing knowledge doc", zap.String("topic", doc.Topic), zap.String("title", doc.Title))
-			if err := s.addKnowledgeLocked(ctx, doc.Topic, doc.Title, doc.Content); err != nil {
+			if err := s.addKnowledge(ctx, doc.Topic, doc.Title, doc.Content); err != nil {
 				s.logger.Warn("failed to update chunked knowledge doc", zap.String("topic", doc.Topic), zap.Error(err))
 			}
 		}
@@ -146,12 +159,14 @@ func (s *ragService) SeedDefaultKnowledge(ctx context.Context) error {
 }
 
 func (s *ragService) AddKnowledge(ctx context.Context, topic, title, content string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.addKnowledgeLocked(ctx, topic, title, content)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return s.addKnowledge(ctx, topic, title, content)
 }
 
-func (s *ragService) addKnowledgeLocked(ctx context.Context, topic, title, content string) error {
+// addKnowledge chunks and embeds content (no lock held during the embedding
+// calls), then swaps the topic's rows. The caller holds writeMu.
+func (s *ragService) addKnowledge(ctx context.Context, topic, title, content string) error {
 	chunks := util.ChunkText(content, util.DefaultChunkOptions)
 	if len(chunks) == 0 {
 		return nil
@@ -182,7 +197,26 @@ func (s *ragService) addKnowledgeLocked(ctx context.Context, topic, title, conte
 
 	// Atomically swap the whole topic so a crash or failed insert never leaves
 	// the topic partially written (old chunks are only removed on success).
-	return s.knowledgeRepo.ReplaceByTopic(ctx, topic, docs)
+	s.mu.Lock()
+	err := s.knowledgeRepo.ReplaceByTopic(ctx, topic, docs)
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.evictTopicCache(topic)
+	return nil
+}
+
+// evictTopicCache drops the cached local embeddings of a replaced topic (its
+// old rows' ids never come back).
+func (s *ragService) evictTopicCache(topic string) {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	for id, c := range s.localEmbCache {
+		if c.topic == topic {
+			delete(s.localEmbCache, id)
+		}
+	}
 }
 
 func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit int) ([]KnowledgeSearchResult, error) {
@@ -212,7 +246,7 @@ func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit in
 	var queryLocal []float32
 	getQueryLocal := func() []float32 {
 		if queryLocal == nil {
-			queryLocal = util.GenerateLocalEmbedding(query, 256)
+			queryLocal = util.GenerateLocalEmbedding(query, util.LocalEmbeddingDim)
 		}
 		return queryLocal
 	}
@@ -227,9 +261,9 @@ func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit in
 		if ok && cached.embJSON == doc.Embedding {
 			return cached.vec
 		}
-		vec := util.GenerateLocalEmbedding(doc.Title+"\n"+doc.Content, 256)
+		vec := util.GenerateLocalEmbedding(doc.Title+"\n"+doc.Content, util.LocalEmbeddingDim)
 		s.cacheMu.Lock()
-		s.localEmbCache[doc.ID] = cachedDocEmbedding{embJSON: doc.Embedding, vec: vec}
+		s.localEmbCache[doc.ID] = cachedDocEmbedding{topic: doc.Topic, embJSON: doc.Embedding, vec: vec}
 		s.cacheMu.Unlock()
 		return vec
 	}
@@ -241,9 +275,9 @@ func (s *ragService) SearchKnowledge(ctx context.Context, query string, limit in
 
 		if err := json.Unmarshal([]byte(doc.Embedding), &docEmb); err == nil && len(docEmb) > 0 {
 			if len(queryEmb) == len(docEmb) {
-				score = ComputeCosineSimilarity(queryEmb, docEmb)
+				score = util.CosineSimilarity(queryEmb, docEmb)
 			} else {
-				score = ComputeCosineSimilarity(getQueryLocal(), getDocLocal(doc))
+				score = util.CosineSimilarity(getQueryLocal(), getDocLocal(doc))
 			}
 		}
 

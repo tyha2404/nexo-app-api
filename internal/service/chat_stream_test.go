@@ -47,7 +47,7 @@ func (r *streamChatRepo) CreateSession(_ context.Context, s *model.ChatSession) 
 	return nil
 }
 
-func (r *streamChatRepo) GetSessionByID(_ context.Context, id, userID uuid.UUID) (*model.ChatSession, error) {
+func (r *streamChatRepo) GetSessionByID(_ context.Context, userID, id uuid.UUID) (*model.ChatSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	s, ok := r.sessions[id]
@@ -71,7 +71,7 @@ func (r *streamChatRepo) ListSessionsByUserID(_ context.Context, userID uuid.UUI
 	return out, nil
 }
 
-func (r *streamChatRepo) DeleteSession(_ context.Context, id, userID uuid.UUID) error {
+func (r *streamChatRepo) DeleteSession(_ context.Context, userID, id uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	s, ok := r.sessions[id]
@@ -105,7 +105,7 @@ func (r *streamChatRepo) CreateMessage(_ context.Context, m *model.ChatMessage) 
 	return nil
 }
 
-func (r *streamChatRepo) UpdateMessage(_ context.Context, id uuid.UUID, content string, status model.ChatMessageStatus) error {
+func (r *streamChatRepo) UpdateMessage(_ context.Context, _, id uuid.UUID, content string, status model.ChatMessageStatus) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, ok := r.messages[id]
@@ -116,7 +116,7 @@ func (r *streamChatRepo) UpdateMessage(_ context.Context, id uuid.UUID, content 
 	return nil
 }
 
-func (r *streamChatRepo) UpdateMessageToolResults(_ context.Context, id uuid.UUID, toolResults *string) error {
+func (r *streamChatRepo) UpdateMessageToolResults(_ context.Context, _, id uuid.UUID, toolResults *string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, ok := r.messages[id]
@@ -127,7 +127,7 @@ func (r *streamChatRepo) UpdateMessageToolResults(_ context.Context, id uuid.UUI
 	return nil
 }
 
-func (r *streamChatRepo) GetMessageByID(_ context.Context, id uuid.UUID) (*model.ChatMessage, error) {
+func (r *streamChatRepo) GetMessageByID(_ context.Context, _, id uuid.UUID) (*model.ChatMessage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, ok := r.messages[id]
@@ -158,42 +158,36 @@ func (r *streamChatRepo) sessionMessages(sessionID uuid.UUID) []model.ChatMessag
 	return msgs
 }
 
-// fakeRequesty is a scripted model gateway; it never touches the network.
-type fakeRequesty struct {
+// fakeNineRouter is a scripted model gateway; it never touches the network.
+type fakeNineRouter struct {
 	mu             sync.Mutex
 	configured     bool
-	chatResp       *RequestyChatResponse
+	chatResp       *NineRouterChatResponse
 	chatErr        error
 	streamChunks   []string
 	streamErr      error
 	models         []string
 	chatModel      string
-	chatMessages   []RequestyMessage
+	chatMessages   []NineRouterMessage
 	chatTools      []ToolDefinition
 	streamModel    string
-	streamMessages []RequestyMessage
+	streamMessages []NineRouterMessage
 	streamCalls    int
 }
 
-func (f *fakeRequesty) IsConfigured() bool { return f.configured }
-func (f *fakeRequesty) ListModels(context.Context) ([]string, error) {
+func (f *fakeNineRouter) IsConfigured() bool { return f.configured }
+func (f *fakeNineRouter) ListModels(context.Context) ([]string, error) {
 	return f.models, nil
 }
-func (f *fakeRequesty) ChatCompletion(ctx context.Context, msgs []RequestyMessage, tools []ToolDefinition) (*RequestyChatResponse, error) {
-	return f.ChatCompletionWithModel(ctx, "", msgs, tools)
-}
-func (f *fakeRequesty) ChatCompletionWithModel(_ context.Context, model string, msgs []RequestyMessage, tools []ToolDefinition) (*RequestyChatResponse, error) {
+func (f *fakeNineRouter) ChatCompletionWithModel(_ context.Context, model string, msgs []NineRouterMessage, tools []ToolDefinition) (*NineRouterChatResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.chatModel, f.chatMessages, f.chatTools = model, append([]RequestyMessage(nil), msgs...), tools
+	f.chatModel, f.chatMessages, f.chatTools = model, append([]NineRouterMessage(nil), msgs...), tools
 	return f.chatResp, f.chatErr
 }
-func (f *fakeRequesty) StreamChatCompletions(ctx context.Context, msgs []RequestyMessage, onChunk func(string) error) error {
-	return f.StreamChatCompletionsWithModel(ctx, "", msgs, onChunk)
-}
-func (f *fakeRequesty) StreamChatCompletionsWithModel(_ context.Context, model string, msgs []RequestyMessage, onChunk func(string) error) error {
+func (f *fakeNineRouter) StreamChatCompletionsWithModel(_ context.Context, model string, msgs []NineRouterMessage, onChunk func(string) error) error {
 	f.mu.Lock()
-	f.streamModel, f.streamMessages = model, append([]RequestyMessage(nil), msgs...)
+	f.streamModel, f.streamMessages = model, append([]NineRouterMessage(nil), msgs...)
 	f.streamCalls++
 	chunks, err := f.streamChunks, f.streamErr
 	f.mu.Unlock()
@@ -204,18 +198,18 @@ func (f *fakeRequesty) StreamChatCompletionsWithModel(_ context.Context, model s
 	}
 	return err
 }
-func (f *fakeRequesty) EmbedText(context.Context, string) ([]float32, error) {
+func (f *fakeNineRouter) EmbedText(context.Context, string) ([]float32, error) {
 	return nil, errors.New("not used")
 }
 
 // chatResponse builds a gateway response (the type has anonymous structs).
-func chatResponse(t *testing.T, content string, calls ...ToolCall) *RequestyChatResponse {
+func chatResponse(t *testing.T, content string, calls ...ToolCall) *NineRouterChatResponse {
 	t.Helper()
 	payload := map[string]interface{}{"choices": []interface{}{map[string]interface{}{
 		"message":       map[string]interface{}{"role": "assistant", "content": content, "tool_calls": calls},
 		"finish_reason": "stop",
 	}}}
-	var resp RequestyChatResponse
+	var resp NineRouterChatResponse
 	require.NoError(t, json.Unmarshal([]byte(mustJSON(t, payload)), &resp))
 	return &resp
 }
@@ -227,13 +221,13 @@ func toolCall(t *testing.T, id, name string, args map[string]interface{}) ToolCa
 type streamEnv struct {
 	*toolEnv
 	repo *streamChatRepo
-	ai   *fakeRequesty
+	ai   *fakeNineRouter
 }
 
 func newStreamEnv(t *testing.T) *streamEnv {
-	e := &streamEnv{toolEnv: newToolEnv(t), repo: newStreamChatRepo(), ai: &fakeRequesty{configured: true}}
+	e := &streamEnv{toolEnv: newToolEnv(t), repo: newStreamChatRepo(), ai: &fakeNineRouter{configured: true}}
 	e.svc.chatRepo = e.repo
-	e.svc.requestyService = e.ai
+	e.svc.nineRouterService = e.ai
 	return e
 }
 
@@ -280,7 +274,7 @@ func TestProcessMessageStream_NotConfiguredFallsBack(t *testing.T) {
 	assert.Equal(t, "done", events[2].Type)
 
 	sessionID := *events[0].SessionID
-	sess, err := e.repo.GetSessionByID(context.Background(), sessionID, e.userID)
+	sess, err := e.repo.GetSessionByID(context.Background(), e.userID, sessionID)
 	require.NoError(t, err)
 	assert.Equal(t, string([]rune(strings.TrimSpace(long))[:40])+"...", sess.Title, "title is the first 40 runes")
 
@@ -304,7 +298,7 @@ func TestProcessMessageStream_OtherUsersSessionIsNotReused(t *testing.T) {
 	got := *events[0].SessionID
 	assert.NotEqual(t, foreign.ID, got, "a session of another user must never be written to")
 	assert.Empty(t, e.repo.sessionMessages(foreign.ID))
-	sess, err := e.repo.GetSessionByID(context.Background(), got, e.userID)
+	sess, err := e.repo.GetSessionByID(context.Background(), e.userID, got)
 	require.NoError(t, err)
 	assert.Equal(t, "Xin chào", sess.Title)
 
@@ -365,7 +359,7 @@ func TestProcessMessageStream_WriteToolIsOnlyProposed(t *testing.T) {
 	last := events[len(events)-1]
 	assert.Equal(t, "done", last.Type)
 
-	ai, err := e.repo.GetMessageByID(context.Background(), *last.MessageID)
+	ai, err := e.repo.GetMessageByID(context.Background(), e.userID, *last.MessageID)
 	require.NoError(t, err)
 	assert.Equal(t, model.MessageStatusSuccess, ai.Status)
 	assert.Equal(t, text, ai.Content)
@@ -392,7 +386,7 @@ func TestProcessMessageStream_StreamsAnswerWithoutThinking(t *testing.T) {
 	assert.Equal(t, "Bạn có 5 ví.", joinedDeltas(events))
 	assert.NotContains(t, joinedDeltas(events), "nội bộ")
 	last := events[len(events)-1]
-	ai, _ := e.repo.GetMessageByID(context.Background(), *last.MessageID)
+	ai, _ := e.repo.GetMessageByID(context.Background(), e.userID, *last.MessageID)
 	assert.Equal(t, "Bạn có 5 ví.", ai.Content)
 	assert.Nil(t, ai.ToolResults, "no cards, nothing stored")
 }
@@ -431,7 +425,7 @@ func TestProcessMessageStream_UpstreamErrorsAreNotLeaked(t *testing.T) {
 	assert.NotContains(t, last.ErrorMessage, "10.0.0.5")
 	assert.NotContains(t, last.ErrorMessage, "sk-secret")
 
-	ai, err := e.repo.GetMessageByID(context.Background(), *last.MessageID)
+	ai, err := e.repo.GetMessageByID(context.Background(), e.userID, *last.MessageID)
 	require.NoError(t, err)
 	assert.Equal(t, model.MessageStatusError, ai.Status)
 	assert.True(t, strings.HasPrefix(ai.Content, "Một phần"), "partial answer is kept: %q", ai.Content)
@@ -452,7 +446,7 @@ func TestProcessMessageStream_CapsToolCallsAndHidesToolErrors(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, eventsOfType(events, "tool_start"), maxToolCallsPerTurn)
 
-	var toolMsgs []RequestyMessage
+	var toolMsgs []NineRouterMessage
 	for _, m := range e.ai.streamMessages {
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
 			assert.Len(t, m.ToolCalls, maxToolCallsPerTurn, "every tool_call sent upstream gets an answer")

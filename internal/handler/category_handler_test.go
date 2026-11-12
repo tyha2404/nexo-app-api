@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,16 +21,16 @@ import (
 
 type stubCategoryService struct {
 	service.CategoryService
-	createFn        func(ctx context.Context, c *model.Category) (*model.Category, error)
+	createFn        func(ctx context.Context, userID uuid.UUID, req dto.CreateCategoryRequest) (*model.Category, error)
 	getFn           func(ctx context.Context, userID, id uuid.UUID) (*model.Category, error)
 	listFn          func(ctx context.Context, userID uuid.UUID, categoryType string, limit, offset int) ([]model.Category, error)
 	listWithTotalFn func(ctx context.Context, userID uuid.UUID, categoryType string, page, limit int) ([]model.Category, int64, error)
-	updateFieldsFn  func(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error
+	updateFn        func(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCategoryRequest) (*model.Category, error)
 	deleteFn        func(ctx context.Context, userID, id uuid.UUID) error
 }
 
-func (s *stubCategoryService) Create(ctx context.Context, c *model.Category) (*model.Category, error) {
-	return s.createFn(ctx, c)
+func (s *stubCategoryService) Create(ctx context.Context, userID uuid.UUID, req dto.CreateCategoryRequest) (*model.Category, error) {
+	return s.createFn(ctx, userID, req)
 }
 func (s *stubCategoryService) Get(ctx context.Context, userID, id uuid.UUID) (*model.Category, error) {
 	return s.getFn(ctx, userID, id)
@@ -40,8 +41,8 @@ func (s *stubCategoryService) List(ctx context.Context, userID uuid.UUID, catego
 func (s *stubCategoryService) ListWithTotal(ctx context.Context, userID uuid.UUID, categoryType string, page, limit int) ([]model.Category, int64, error) {
 	return s.listWithTotalFn(ctx, userID, categoryType, page, limit)
 }
-func (s *stubCategoryService) UpdateFields(ctx context.Context, userID, id uuid.UUID, updates map[string]interface{}) error {
-	return s.updateFieldsFn(ctx, userID, id, updates)
+func (s *stubCategoryService) Update(ctx context.Context, userID, id uuid.UUID, req dto.UpdateCategoryRequest) (*model.Category, error) {
+	return s.updateFn(ctx, userID, id, req)
 }
 func (s *stubCategoryService) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	return s.deleteFn(ctx, userID, id)
@@ -90,17 +91,18 @@ func TestCategoryHandler_Create(t *testing.T) {
 		{"missing name", userID, `{"type":"EXPENSE"}`, nil, http.StatusBadRequest, "Validation failed"},
 		{"invalid type", userID, `{"name":"Food","type":"GIFT"}`, nil, http.StatusBadRequest, "Validation failed"},
 		{"service error", userID, `{"name":"Food","type":"INCOME"}`, errors.New("db down"), http.StatusInternalServerError, "Failed to create category"},
+		{"duplicate name", userID, `{"name":"Food","type":"EXPENSE"}`, fmt.Errorf("%w: category with this name", constant.ErrAlreadyExists), http.StatusConflict, "Danh mục với tên này đã tồn tại"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got *model.Category
-			svc := &stubCategoryService{createFn: func(ctx context.Context, c *model.Category) (*model.Category, error) {
-				got = c
+			var got *dto.CreateCategoryRequest
+			var gotUser uuid.UUID
+			svc := &stubCategoryService{createFn: func(ctx context.Context, uid uuid.UUID, req dto.CreateCategoryRequest) (*model.Category, error) {
+				got, gotUser = &req, uid
 				if tt.svcErr != nil {
 					return nil, tt.svcErr
 				}
-				c.ID = uuid.New()
-				return c, nil
+				return &model.Category{ID: uuid.New(), UserID: uid, Name: req.Name, Type: model.CategoryType(req.Type)}, nil
 			}}
 			h := NewCategoryHandler(svc, zap.NewNop())
 			rr := httptest.NewRecorder()
@@ -112,10 +114,11 @@ func TestCategoryHandler_Create(t *testing.T) {
 			}
 			require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
 			require.NotNil(t, got)
-			assert.Equal(t, userID, got.UserID, "category must be owned by the caller")
+			assert.Equal(t, userID, gotUser, "category must be owned by the caller")
 			assert.Equal(t, "Food", got.Name)
-			assert.Equal(t, model.CategoryType("EXPENSE"), got.Type)
-			assert.True(t, got.ExcludeFromAverageDaily)
+			assert.Equal(t, "EXPENSE", got.Type)
+			require.NotNil(t, got.ExcludeFromAverageDaily)
+			assert.True(t, *got.ExcludeFromAverageDaily)
 			body := decodeJSON(t, rr)
 			assert.Equal(t, true, body["success"])
 			assert.Equal(t, float64(http.StatusCreated), body["status"])
@@ -238,42 +241,35 @@ func TestCategoryHandler_Update(t *testing.T) {
 	userID := uuid.New()
 	catID := uuid.New()
 	tests := []struct {
-		name        string
-		user        uuid.UUID
-		id          string
-		body        string
-		updateErr   error
-		getErr      error
-		wantStatus  int
-		wantMsg     string
-		wantUpdates map[string]interface{}
+		name       string
+		user       uuid.UUID
+		id         string
+		body       string
+		updateErr  error
+		wantStatus int
+		wantMsg    string
 	}{
-		{"success all fields", userID, catID.String(), `{"name":"Dining","type":"EXPENSE","description":"d","excludeFromAverageDaily":false}`, nil, nil, http.StatusOK, "",
-			map[string]interface{}{"name": "Dining", "type": "EXPENSE", "description": "d", "exclude_from_average_daily": false}},
-		{"unauthenticated", uuid.Nil, catID.String(), `{"name":"x"}`, nil, nil, http.StatusUnauthorized, "Unauthorized", nil},
-		{"invalid uuid", userID, "bad", `{"name":"x"}`, nil, nil, http.StatusBadRequest, "Invalid category ID", nil},
-		{"bad json", userID, catID.String(), `{`, nil, nil, http.StatusBadRequest, "Invalid request payload", nil},
-		{"invalid type", userID, catID.String(), `{"type":"GIFT"}`, nil, nil, http.StatusBadRequest, "Validation failed", nil},
-		{"no fields", userID, catID.String(), `{}`, nil, nil, http.StatusBadRequest, "No fields to update", nil},
-		{"update not found", userID, catID.String(), `{"name":"x"}`, constant.ErrNotFound, nil, http.StatusNotFound, "Category not found", nil},
-		{"update error", userID, catID.String(), `{"name":"x"}`, errors.New("db"), nil, http.StatusInternalServerError, "Failed to update category", nil},
-		{"reload not found", userID, catID.String(), `{"name":"x"}`, nil, constant.ErrNotFound, http.StatusNotFound, "Category not found", nil},
-		{"reload error", userID, catID.String(), `{"name":"x"}`, nil, errors.New("db"), http.StatusInternalServerError, "Failed to get updated category", nil},
+		{"success all fields", userID, catID.String(), `{"name":"Dining","type":"EXPENSE","description":"d","excludeFromAverageDaily":false}`, nil, http.StatusOK, ""},
+		{"unauthenticated", uuid.Nil, catID.String(), `{"name":"x"}`, nil, http.StatusUnauthorized, "Unauthorized"},
+		{"invalid uuid", userID, "bad", `{"name":"x"}`, nil, http.StatusBadRequest, "Invalid category ID"},
+		{"bad json", userID, catID.String(), `{`, nil, http.StatusBadRequest, "Invalid request payload"},
+		{"invalid type", userID, catID.String(), `{"type":"GIFT"}`, nil, http.StatusBadRequest, "Validation failed"},
+		{"no fields", userID, catID.String(), `{}`, constant.ErrInvalidInput, http.StatusBadRequest, "No fields to update"},
+		{"update not found", userID, catID.String(), `{"name":"x"}`, constant.ErrNotFound, http.StatusNotFound, "Category not found"},
+		{"update error", userID, catID.String(), `{"name":"x"}`, errors.New("db"), http.StatusInternalServerError, "Failed to update category"},
+		{"rename onto an existing name", userID, catID.String(), `{"name":"Food"}`, fmt.Errorf("%w: category with this name", constant.ErrAlreadyExists), http.StatusConflict, "Danh mục với tên này đã tồn tại"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotUser uuid.UUID
-			var gotUpdates map[string]interface{}
+			var gotReq dto.UpdateCategoryRequest
 			updateCalled := false
 			svc := &stubCategoryService{
-				updateFieldsFn: func(ctx context.Context, uid, id uuid.UUID, updates map[string]interface{}) error {
+				updateFn: func(ctx context.Context, uid, id uuid.UUID, req dto.UpdateCategoryRequest) (*model.Category, error) {
 					updateCalled = true
-					gotUser, gotUpdates = uid, updates
-					return tt.updateErr
-				},
-				getFn: func(ctx context.Context, uid, id uuid.UUID) (*model.Category, error) {
-					if tt.getErr != nil {
-						return nil, tt.getErr
+					gotUser, gotReq = uid, req
+					if tt.updateErr != nil {
+						return nil, tt.updateErr
 					}
 					return &model.Category{ID: id, UserID: uid, Name: "Dining"}, nil
 				},
@@ -284,14 +280,17 @@ func TestCategoryHandler_Update(t *testing.T) {
 
 			if tt.wantStatus != http.StatusOK {
 				categoryAssertError(t, rr, tt.wantStatus, tt.wantMsg)
-				if tt.wantStatus == http.StatusBadRequest || tt.wantStatus == http.StatusUnauthorized {
+				if (tt.wantStatus == http.StatusBadRequest && tt.updateErr == nil) || tt.wantStatus == http.StatusUnauthorized {
 					assert.False(t, updateCalled, "service must not be called")
 				}
 				return
 			}
 			require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 			assert.Equal(t, userID, gotUser)
-			assert.Equal(t, tt.wantUpdates, gotUpdates)
+			require.NotNil(t, gotReq.Name)
+			assert.Equal(t, "Dining", *gotReq.Name)
+			require.NotNil(t, gotReq.ExcludeFromAverageDaily)
+			assert.False(t, *gotReq.ExcludeFromAverageDaily)
 			body := decodeJSON(t, rr)
 			assert.Equal(t, "Dining", body["data"].(map[string]interface{})["name"])
 		})
@@ -309,7 +308,7 @@ func TestCategoryHandler_Delete(t *testing.T) {
 		wantStatus int
 		wantMsg    string
 	}{
-		{"success", userID, catID.String(), nil, http.StatusNoContent, ""},
+		{"success", userID, catID.String(), nil, http.StatusOK, ""},
 		{"unauthenticated", uuid.Nil, catID.String(), nil, http.StatusUnauthorized, "Unauthorized"},
 		{"invalid uuid", userID, "bad", nil, http.StatusBadRequest, "Invalid category ID"},
 		{"not found", userID, catID.String(), constant.ErrNotFound, http.StatusNotFound, "Category not found"},
@@ -326,12 +325,12 @@ func TestCategoryHandler_Delete(t *testing.T) {
 			rr := httptest.NewRecorder()
 			h.Delete(rr, categoryTestReq(http.MethodDelete, "/categories/x", "", tt.user, tt.id))
 
-			if tt.wantStatus != http.StatusNoContent {
+			if tt.wantStatus != http.StatusOK {
 				categoryAssertError(t, rr, tt.wantStatus, tt.wantMsg)
 				return
 			}
-			require.Equal(t, http.StatusNoContent, rr.Code)
-			assert.Empty(t, rr.Body.String())
+			require.Equal(t, http.StatusOK, rr.Code)
+			assert.JSONEq(t, `{"status":200,"success":true,"message":"Category deleted successfully","data":null}`, rr.Body.String())
 			assert.Equal(t, userID, gotUser)
 			assert.Equal(t, catID, gotID)
 		})

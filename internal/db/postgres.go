@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tyha2404/nexo-app-api/internal/config"
@@ -12,10 +13,10 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// buildDSN builds the Postgres DSN. The session TimeZone is set to the app
+// BuildDSN builds the Postgres DSN (also used by cmd/migrate). The session TimeZone is set to the app
 // timezone so date/timestamptz casts and date_trunc in SQL agree with the
 // "today"/"this month" boundaries computed in Go (util.Now()).
-func buildDSN(cfg *config.Config) string {
+func BuildDSN(cfg *config.Config) string {
 	tz := cfg.AppTimezone
 	if tz == "" {
 		tz = config.DefaultAppTimezone
@@ -25,27 +26,51 @@ func buildDSN(cfg *config.Config) string {
 	)
 }
 
-func NewPostgres(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
-	dsn := buildDSN(cfg)
-
-	// Configure GORM logger based on log level
-	var logLevel gormlogger.LogLevel
-	switch cfg.LogLevel {
-	case "debug":
-		logLevel = gormlogger.Info
-	case "info":
-		logLevel = gormlogger.Info // Changed to Info to show SQL queries
+// gormLogLevel maps LOG_LEVEL to the GORM log level. GORM's Info level prints
+// every SQL statement, so it is never used in production: there the level is
+// capped at Warn (slow queries and errors only).
+func gormLogLevel(cfg *config.Config) gormlogger.LogLevel {
+	var level gormlogger.LogLevel
+	switch strings.ToLower(strings.TrimSpace(cfg.LogLevel)) {
+	case "debug", "info":
+		level = gormlogger.Info // dev: show SQL queries
 	case "warn":
-		logLevel = gormlogger.Warn
+		level = gormlogger.Warn
 	case "error":
-		logLevel = gormlogger.Error
+		level = gormlogger.Error
 	default:
-		logLevel = gormlogger.Info // Default to Info for development
+		level = gormlogger.Info // default for development
 	}
+	if cfg.IsProduction() && level > gormlogger.Warn {
+		level = gormlogger.Warn
+	}
+	return level
+}
+
+// newGormLogger builds the GORM logger for cfg. In production the logged SQL
+// keeps its $n placeholders instead of the bound values (emails, password and
+// refresh-token hashes, chat text), also for slow-query and error logs.
+func newGormLogger(cfg *config.Config, logger *zap.Logger) gormlogger.Interface {
+	return &GormLogger{
+		logger:        logger,
+		level:         gormLogLevel(cfg),
+		parameterized: cfg.IsProduction(),
+	}
+}
+
+// shouldAutoMigrate reports whether NewPostgres runs GORM AutoMigrate: only
+// when explicitly enabled (AUTO_MIGRATE=true) and never in production. Goose
+// migrations are the schema source of truth.
+func shouldAutoMigrate(cfg *config.Config) bool {
+	return cfg.AutoMigrate && !cfg.IsProduction()
+}
+
+func NewPostgres(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
+	dsn := BuildDSN(cfg)
 
 	// Create GORM configuration with custom logger
 	gormConfig := &gorm.Config{
-		Logger: NewGormLogger(logger, logLevel),
+		Logger: newGormLogger(cfg, logger),
 	}
 
 	db, err := gorm.Open(postgres.New(postgres.Config{
@@ -66,12 +91,17 @@ func NewPostgres(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(10)                  // Maximum number of connections in the idle connection pool
 	sqlDB.SetConnMaxLifetime(10 * time.Minute) // Maximum amount of time a connection may be reused
 
-	// Use migrator instead of direct auto-migration (only in non-production environments)
-	if cfg.AppEnv != "production" {
+	// GORM AutoMigrate is opt-in (AUTO_MIGRATE=true) and refused in production;
+	// the schema is managed with goose (cmd/migrate).
+	switch {
+	case shouldAutoMigrate(cfg):
+		logger.Warn("AUTO_MIGRATE=true: running GORM AutoMigrate (goose migrations remain the schema source of truth)")
 		migrator := migration.NewMigrator(db)
 		if err := migrator.AutoMigrate(); err != nil {
 			return nil, fmt.Errorf("migration failed: %w", err)
 		}
+	case cfg.AutoMigrate:
+		logger.Warn("AUTO_MIGRATE is ignored in production")
 	}
 
 	return db, nil

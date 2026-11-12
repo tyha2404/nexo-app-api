@@ -59,7 +59,7 @@ func main() {
 	rolloverWorker := worker.NewMonthlyRolloverWorker(rolloverService, logg)
 	rolloverWorker.Start(context.Background())
 
-	r := router.New(gormDB, logg,
+	r := router.New(cfg, gormDB, logg,
 		router.WithCORSAllowedOrigins(cfg.CORSAllowedOrigins),
 		router.WithSwaggerDisabled(cfg.IsProduction()),
 		router.WithLocalRegisterDisabled(!cfg.LocalRegisterEnabled),
@@ -100,7 +100,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		logg.Sugar().Fatalf("server forced to shutdown: %v", err)
+		// Keep going: the DB pool is still closed and the logger flushed.
+		logg.Sugar().Errorf("server forced to shutdown: %v", err)
 	}
 
 	// Close Database connection pool

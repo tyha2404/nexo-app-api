@@ -1,0 +1,17 @@
+{
+  "preview": {
+    "ToolTitle": "Lỗi thiết lập mục tiêu",
+    "ResultJSON": "{\"error\":\"Cần cung cấp loại mục tiêu (EXPENSE/INVESTMENT) và số tiền lớn hơn 0\"}",
+    "ActionCard": null
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": null,
+    "transactions": null,
+    "transfers": null
+  }
+}

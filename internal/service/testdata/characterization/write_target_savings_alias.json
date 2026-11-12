@@ -1,0 +1,63 @@
+{
+  "confirm": {
+    "actionId": "<id-1>",
+    "status": "CONFIRMED",
+    "toolName": "set_financial_target",
+    "actionCard": {
+      "actionType": "TARGET_SET",
+      "title": "Đã lưu mục tiêu tài chính",
+      "description": "Mục tiêu đầu tư / tiết kiệm Tháng 12/2026: 5.000.000 ₫",
+      "data": {
+        "month": 12,
+        "targetAmount": 5000000,
+        "targetType": "INVESTMENT",
+        "year": 2026
+      }
+    },
+    "result": {
+      "message": "Mục tiêu tài chính đã được thiết lập thành công.",
+      "month": 12,
+      "success": true,
+      "targetAmount": 5000000,
+      "targetType": "INVESTMENT",
+      "year": 2026
+    }
+  },
+  "preview": {
+    "ToolTitle": "Đang chuẩn bị đề xuất...",
+    "ResultJSON": "{\"actionId\":\"<id-1>\",\"message\":\"Đã gửi đề xuất, chờ người dùng xác nhận. Chưa có dữ liệu nào được lưu; hãy nhắc người dùng kiểm tra và bấm \\\"Xác nhận\\\" trên thẻ đề xuất.\",\"status\":\"pending_confirmation\",\"summary\":\"Đặt mục tiêu tài chính — Mục tiêu đầu tư / tiết kiệm Tháng 12/2026: 5.000.000 ₫\"}",
+    "ActionCard": {
+      "actionType": "PENDING_CONFIRMATION",
+      "title": "Xác nhận: Đặt mục tiêu tài chính",
+      "description": "Mục tiêu đầu tư / tiết kiệm Tháng 12/2026: 5.000.000 ₫",
+      "data": {
+        "actionId": "<id-1>",
+        "amount": 5000000,
+        "expiresAt": "2026-11-08T09:15:00Z",
+        "kind": "Đặt mục tiêu tài chính",
+        "month": 12,
+        "status": "PENDING",
+        "targetType": "INVESTMENT",
+        "toolName": "set_financial_target",
+        "year": 2026
+      }
+    }
+  },
+  "sideEffects": {
+    "budgets": null,
+    "categories": null,
+    "categoryListTyp": "",
+    "debts": null,
+    "repayments": [],
+    "targets": [
+      {
+        "targetType": "INVESTMENT",
+        "targetAmount": 5000000,
+        "month": 12,
+        "year": 2026
+      }
+    ],
+    "transactions": null,
+    "transfers": null
+  }
+}

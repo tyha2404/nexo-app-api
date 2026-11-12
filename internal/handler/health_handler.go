@@ -1,17 +1,20 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
+// healthPingTimeout bounds the database ping so a hung connection cannot
+// stall the health check.
+const healthPingTimeout = 2 * time.Second
+
 type HealthHandler struct {
-	db  *gorm.DB
-	log *zap.Logger
+	db *gorm.DB
 }
 
 type HealthStatus struct {
@@ -20,8 +23,8 @@ type HealthStatus struct {
 	Services  map[string]string `json:"services"`
 }
 
-func NewHealthHandler(db *gorm.DB, log *zap.Logger) *HealthHandler {
-	return &HealthHandler{db: db, log: log}
+func NewHealthHandler(db *gorm.DB) *HealthHandler {
+	return &HealthHandler{db: db}
 }
 
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +39,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status.Status = "unhealthy"
 		status.Services["database"] = "connection failed"
-	} else if err := sqlDB.Ping(); err != nil {
+	} else if err := pingWithTimeout(r.Context(), sqlDB.PingContext); err != nil {
 		status.Status = "unhealthy"
 		status.Services["database"] = "ping failed"
 	} else {
@@ -53,14 +56,25 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+// pingWithTimeout runs ping with a context that expires after healthPingTimeout.
+func pingWithTimeout(parent context.Context, ping func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(parent, healthPingTimeout)
+	defer cancel()
+	return ping(ctx)
+}
+
+// Ready is a static readiness probe: it answers "ready" whenever the process
+// can serve HTTP and does not check dependencies (use /health for the
+// database check).
 func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
-	// Readiness probe - check if application is ready to serve traffic
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }
 
 func (h *HealthHandler) Live(w http.ResponseWriter, r *http.Request) {
 	// Liveness probe - check if application is alive
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
 }

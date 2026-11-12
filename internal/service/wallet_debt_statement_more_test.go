@@ -3,6 +3,8 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/tyha2404/nexo-app-api/internal/repository"
 	"math"
 	"testing"
 	"time"
@@ -25,15 +27,22 @@ func ptr[T any](v T) *T { return &v }
 func TestWalletService_GetWalletsDelegatesWithUser(t *testing.T) {
 	repo := new(MockWalletRepo)
 	userID := uuid.New()
-	summary := &dto.WalletSummaryResponse{TotalBalance: 1_500_000, BaseCurrency: "VND", TotalWallets: 2}
-	repo.On("GetSummaryByUserID", mock.Anything, userID).Return(summary, nil)
+	wallets := []model.Wallet{
+		{ID: uuid.New(), UserID: userID, Name: "Tiền mặt", Balance: 1_000_000, Currency: "VND", IsIncludedInTotal: true},
+		{ID: uuid.New(), UserID: userID, Name: "Thẻ", Balance: 500_000, IsIncludedInTotal: true},
+	}
+	repo.On("ListByUserID", mock.Anything, userID).Return(wallets, nil)
 
 	got, err := service.NewWalletService(repo).GetWallets(context.Background(), userID)
 	require.NoError(t, err)
-	require.Same(t, summary, got)
+	assert.Equal(t, 1_500_000.0, got.TotalBalance)
+	assert.Equal(t, "VND", got.BaseCurrency)
+	assert.Equal(t, 2, got.TotalWallets)
+	require.Len(t, got.Wallets, 2)
+	assert.Equal(t, "Tiền mặt", got.Wallets[0].Name)
 
 	other := uuid.New()
-	repo.On("GetSummaryByUserID", mock.Anything, other).Return(nil, errRepoDown)
+	repo.On("ListByUserID", mock.Anything, other).Return([]model.Wallet(nil), errRepoDown)
 	_, err = service.NewWalletService(repo).GetWallets(context.Background(), other)
 	require.ErrorIs(t, err, errRepoDown)
 }
@@ -42,7 +51,7 @@ func TestWalletService_GetWalletByIDNotOwnedIsNotFound(t *testing.T) {
 	repo := new(MockWalletRepo)
 	userID, walletID := uuid.New(), uuid.New()
 	// The repository is user scoped: another user's wallet comes back as nil.
-	repo.On("GetByID", mock.Anything, walletID, userID).Return(nil, nil)
+	repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, repository.ErrWalletNotFound)
 
 	_, err := service.NewWalletService(repo).GetWalletByID(context.Background(), userID, walletID)
 	require.ErrorIs(t, err, service.ErrWalletNotFound)
@@ -53,7 +62,7 @@ func TestWalletService_UpdateWalletAppliesAllFields(t *testing.T) {
 	svc := service.NewWalletService(repo)
 	userID, walletID := uuid.New(), uuid.New()
 	wallet := &model.Wallet{ID: walletID, UserID: userID, Name: "Old", Type: model.WalletTypeCash, Balance: 10, Currency: "VND"}
-	repo.On("GetByID", mock.Anything, walletID, userID).Return(wallet, nil)
+	repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(wallet, nil)
 	repo.On("Update", mock.Anything, wallet, true).Return(nil)
 
 	req := dto.UpdateWalletRequest{
@@ -97,7 +106,7 @@ func TestWalletService_UpdateWalletErrors(t *testing.T) {
 
 	t.Run("not found or not owned", func(t *testing.T) {
 		repo := new(MockWalletRepo)
-		repo.On("GetByID", mock.Anything, walletID, userID).Return(nil, nil)
+		repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, repository.ErrWalletNotFound)
 		_, err := service.NewWalletService(repo).UpdateWallet(context.Background(), userID, walletID, dto.UpdateWalletRequest{Name: ptr("x")})
 		require.ErrorIs(t, err, service.ErrWalletNotFound)
 		repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
@@ -105,7 +114,7 @@ func TestWalletService_UpdateWalletErrors(t *testing.T) {
 
 	t.Run("lookup error", func(t *testing.T) {
 		repo := new(MockWalletRepo)
-		repo.On("GetByID", mock.Anything, walletID, userID).Return(nil, errRepoDown)
+		repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, errRepoDown)
 		_, err := service.NewWalletService(repo).UpdateWallet(context.Background(), userID, walletID, dto.UpdateWalletRequest{})
 		require.ErrorIs(t, err, errRepoDown)
 	})
@@ -113,7 +122,7 @@ func TestWalletService_UpdateWalletErrors(t *testing.T) {
 	for _, pct := range []float64{-1, 100.5, math.NaN()} {
 		t.Run("invalid allocation percent", func(t *testing.T) {
 			repo := new(MockWalletRepo)
-			repo.On("GetByID", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
+			repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
 			_, err := service.NewWalletService(repo).UpdateWallet(context.Background(), userID, walletID, dto.UpdateWalletRequest{AllocationPercent: ptr(pct)})
 			require.ErrorIs(t, err, service.ErrInvalidAllocationPercent)
 			require.ErrorIs(t, err, constant.ErrInvalidInput)
@@ -124,7 +133,7 @@ func TestWalletService_UpdateWalletErrors(t *testing.T) {
 	t.Run("update error", func(t *testing.T) {
 		repo := new(MockWalletRepo)
 		w := &model.Wallet{ID: walletID, UserID: userID}
-		repo.On("GetByID", mock.Anything, walletID, userID).Return(w, nil)
+		repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(w, nil)
 		repo.On("Update", mock.Anything, w, false).Return(errRepoDown)
 		_, err := service.NewWalletService(repo).UpdateWallet(context.Background(), userID, walletID, dto.UpdateWalletRequest{Name: ptr("x")})
 		require.ErrorIs(t, err, errRepoDown)
@@ -136,7 +145,7 @@ func TestWalletService_DeleteWallet(t *testing.T) {
 
 	t.Run("not owned is not found and nothing is deleted", func(t *testing.T) {
 		repo := new(MockWalletRepo)
-		repo.On("GetByID", mock.Anything, walletID, userID).Return(nil, nil)
+		repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, repository.ErrWalletNotFound)
 		err := service.NewWalletService(repo).DeleteWallet(context.Background(), userID, walletID)
 		require.ErrorIs(t, err, service.ErrWalletNotFound)
 		repo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything, mock.Anything)
@@ -144,14 +153,14 @@ func TestWalletService_DeleteWallet(t *testing.T) {
 
 	t.Run("lookup error", func(t *testing.T) {
 		repo := new(MockWalletRepo)
-		repo.On("GetByID", mock.Anything, walletID, userID).Return(nil, errRepoDown)
+		repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, errRepoDown)
 		require.ErrorIs(t, service.NewWalletService(repo).DeleteWallet(context.Background(), userID, walletID), errRepoDown)
 		repo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("owner deletes with user scope", func(t *testing.T) {
 		repo := new(MockWalletRepo)
-		repo.On("GetByID", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
+		repo.On("GetByIDForUser", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
 		repo.On("Delete", mock.Anything, walletID, userID).Return(nil)
 		require.NoError(t, service.NewWalletService(repo).DeleteWallet(context.Background(), userID, walletID))
 		repo.AssertCalled(t, "Delete", mock.Anything, walletID, userID)
@@ -162,14 +171,18 @@ func TestWalletService_AutoAllocateIncomePassesUserAndRequest(t *testing.T) {
 	repo := new(MockWalletRepo)
 	userID := uuid.New()
 	req := dto.AutoAllocateRequest{SourceWalletID: uuid.New(), IncomeAmount: 20_000_000, Preset: "50_30_20"}
-	want := &dto.AutoAllocateResponse{IncomeAmount: 20_000_000, TotalAllocated: 20_000_000}
-	repo.On("AutoAllocateIncome", mock.Anything, userID, mock.MatchedBy(func(r *dto.AutoAllocateRequest) bool {
-		return r.IncomeAmount == req.IncomeAmount && r.SourceWalletID == req.SourceWalletID && r.Preset == req.Preset
-	})).Return(want, nil)
+	target := uuid.New()
+	alloc := &repository.AutoAllocation{TotalAllocated: 20_000_000, Allocations: []repository.WalletAllocation{
+		{WalletID: target, WalletName: "Tiết kiệm", AllocationPercent: 100, AllocatedAmount: 20_000_000, NewBalance: 25_000_000},
+	}}
+	repo.On("AutoAllocateIncome", mock.Anything, userID, req.SourceWalletID, req.IncomeAmount).Return(alloc, nil)
 
 	got, err := service.NewWalletService(repo).AutoAllocateIncome(context.Background(), userID, req)
 	require.NoError(t, err)
-	require.Same(t, want, got)
+	assert.Equal(t, &dto.AutoAllocateResponse{
+		SourceWalletID: &req.SourceWalletID, IncomeAmount: 20_000_000, TotalAllocated: 20_000_000,
+		Allocations: []dto.AllocatedWalletDetail{{WalletID: target, WalletName: "Tiết kiệm", AllocationPercent: 100, AllocatedAmount: 20_000_000, NewBalance: 25_000_000}},
+	}, got)
 }
 
 func TestWalletService_TransferMoneyValidationAndDate(t *testing.T) {
@@ -261,24 +274,23 @@ func TestDebtService_GetDebtsAndSummaryErrors(t *testing.T) {
 	_, err := service.NewDebtService(repo).GetDebts(context.Background(), userID, "", "")
 	require.ErrorIs(t, err, errRepoDown)
 
-	summary := &dto.DebtSummaryResponse{TotalPayable: 5, TotalReceivable: 7, OverdueCount: 1, PendingCount: 2}
-	repo.On("GetSummaryByUserID", mock.Anything, userID).Return(summary, nil)
+	repo.On("GetSummaryByUserID", mock.Anything, userID).Return(&repository.DebtSummary{TotalPayable: 5, TotalReceivable: 7, OverdueCount: 1, PendingCount: 2}, nil)
 	got, err := service.NewDebtService(repo).GetDebtSummary(context.Background(), userID)
 	require.NoError(t, err)
-	require.Same(t, summary, got)
+	assert.Equal(t, &dto.DebtSummaryResponse{TotalPayable: 5, TotalReceivable: 7, OverdueCount: 1, PendingCount: 2}, got)
 }
 
 func TestDebtService_AddRepaymentNotFoundAndRepoError(t *testing.T) {
 	userID, debtID := uuid.New(), uuid.New()
 
 	repo := new(MockDebtRepo)
-	repo.On("FindByID", mock.Anything, debtID, userID).Return(nil, nil)
+	repo.On("GetByIDForUser", mock.Anything, debtID, userID).Return(nil, repository.ErrDebtNotFound)
 	_, err := service.NewDebtService(repo).AddRepayment(context.Background(), userID, debtID, dto.AddRepaymentRequest{Amount: 1})
 	require.ErrorIs(t, err, service.ErrDebtNotFound)
 
 	repo = new(MockDebtRepo)
 	debt := &model.Debt{ID: debtID, UserID: userID, Type: model.DebtTypePayable, TotalAmount: 1000, PaidAmount: 0, Status: model.DebtStatusPending}
-	repo.On("FindByID", mock.Anything, debtID, userID).Return(debt, nil)
+	repo.On("GetByIDForUser", mock.Anything, debtID, userID).Return(debt, nil)
 	repo.On("AddRepaymentWithWallet", mock.Anything, mock.Anything, mock.Anything, (*uuid.UUID)(nil), 0.0).Return(errRepoDown)
 	_, err = service.NewDebtService(repo).AddRepayment(context.Background(), userID, debtID, dto.AddRepaymentRequest{Amount: 400})
 	require.ErrorIs(t, err, errRepoDown)
@@ -316,7 +328,7 @@ func TestCreditCardStatement_CreateValidatesWalletAndDates(t *testing.T) {
 
 	t.Run("wallet of another user", func(t *testing.T) {
 		stmts, wallets := new(MockStatementRepo), new(MockWalletRepo)
-		wallets.On("GetByID", mock.Anything, walletID, userID).Return(nil, nil)
+		wallets.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, repository.ErrWalletNotFound)
 		_, err := service.NewCreditCardStatementService(stmts, wallets).CreateStatement(context.Background(), userID, base)
 		require.ErrorIs(t, err, service.ErrWalletNotFound)
 		stmts.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -324,7 +336,7 @@ func TestCreditCardStatement_CreateValidatesWalletAndDates(t *testing.T) {
 
 	t.Run("wallet lookup error", func(t *testing.T) {
 		stmts, wallets := new(MockStatementRepo), new(MockWalletRepo)
-		wallets.On("GetByID", mock.Anything, walletID, userID).Return(nil, errRepoDown)
+		wallets.On("GetByIDForUser", mock.Anything, walletID, userID).Return(nil, errRepoDown)
 		_, err := service.NewCreditCardStatementService(stmts, wallets).CreateStatement(context.Background(), userID, base)
 		require.ErrorIs(t, err, errRepoDown)
 	})
@@ -339,7 +351,7 @@ func TestCreditCardStatement_CreateValidatesWalletAndDates(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stmts, wallets := new(MockStatementRepo), new(MockWalletRepo)
-			wallets.On("GetByID", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
+			wallets.On("GetByIDForUser", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
 			req := base
 			req.StatementDate, req.DueDate = tc.stmtDate, tc.due
 			_, err := service.NewCreditCardStatementService(stmts, wallets).CreateStatement(context.Background(), userID, req)
@@ -374,7 +386,7 @@ func TestCreditCardStatement_CreateMinimumPaymentAndStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stmts, wallets := new(MockStatementRepo), new(MockWalletRepo)
 			wallet := &model.Wallet{ID: walletID, UserID: userID, Name: "Thẻ ACB", Icon: "💳"}
-			wallets.On("GetByID", mock.Anything, walletID, userID).Return(wallet, nil)
+			wallets.On("GetByIDForUser", mock.Anything, walletID, userID).Return(wallet, nil)
 			wallets.On("UpdateStatementSnapshot", mock.Anything, walletID, userID, tc.balance, tc.wantMinPay, 0.0).Return(nil)
 			stmts.On("Create", mock.Anything, mock.MatchedBy(func(s *model.CreditCardStatement) bool {
 				return s.UserID == userID && s.WalletID == walletID && s.Status == tc.wantStatus
@@ -397,7 +409,7 @@ func TestCreditCardStatement_CreateMinimumPaymentAndStatus(t *testing.T) {
 func TestCreditCardStatement_CreateSnapshotErrorIsReturned(t *testing.T) {
 	userID, walletID := uuid.New(), uuid.New()
 	stmts, wallets := new(MockStatementRepo), new(MockWalletRepo)
-	wallets.On("GetByID", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
+	wallets.On("GetByIDForUser", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
 	stmts.On("Create", mock.Anything, mock.Anything).Return(nil)
 	wallets.On("UpdateStatementSnapshot", mock.Anything, walletID, userID, mock.Anything, mock.Anything, mock.Anything).Return(errRepoDown)
 
@@ -409,7 +421,7 @@ func TestCreditCardStatement_CreateSnapshotErrorIsReturned(t *testing.T) {
 	stmts2 := new(MockStatementRepo)
 	stmts2.On("Create", mock.Anything, mock.Anything).Return(errRepoDown)
 	wallets2 := new(MockWalletRepo)
-	wallets2.On("GetByID", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
+	wallets2.On("GetByIDForUser", mock.Anything, walletID, userID).Return(&model.Wallet{ID: walletID, UserID: userID}, nil)
 	_, err = service.NewCreditCardStatementService(stmts2, wallets2).CreateStatement(context.Background(), userID, dto.CreateStatementRequest{
 		WalletID: walletID, StatementDate: "2026-10-20", DueDate: "2026-11-05", StatementBalance: 1,
 	})
@@ -422,16 +434,16 @@ func TestCreditCardStatement_GetByID(t *testing.T) {
 	stmts := new(MockStatementRepo)
 	svc := service.NewCreditCardStatementService(stmts, new(MockWalletRepo))
 
-	stmts.On("GetByID", mock.Anything, id, userID).Return(nil, nil).Once()
+	stmts.On("GetByIDForUser", mock.Anything, id, userID).Return(nil, repository.ErrStatementNotFound).Once()
 	_, err := svc.GetStatementByID(context.Background(), userID, id)
 	require.ErrorIs(t, err, service.ErrStatementNotFound)
 
-	stmts.On("GetByID", mock.Anything, id, userID).Return(nil, errRepoDown).Once()
+	stmts.On("GetByIDForUser", mock.Anything, id, userID).Return(nil, errRepoDown).Once()
 	_, err = svc.GetStatementByID(context.Background(), userID, id)
 	require.ErrorIs(t, err, errRepoDown)
 
 	due := util.Now().AddDate(0, 0, 10)
-	stmts.On("GetByID", mock.Anything, id, userID).Return(&model.CreditCardStatement{
+	stmts.On("GetByIDForUser", mock.Anything, id, userID).Return(&model.CreditCardStatement{
 		ID: id, UserID: userID, StatementBalance: 1_000, PaidAmount: 300, Status: model.StatementStatusPartiallyPaid, DueDate: due,
 	}, nil).Once()
 	res, err := svc.GetStatementByID(context.Background(), userID, id)
@@ -514,12 +526,12 @@ func TestCreditCardStatement_UpdateRecomputesStatus(t *testing.T) {
 			},
 		},
 		{
-			name:       "invalid dates are ignored",
-			req:        dto.UpdateStatementRequest{StatementDate: ptr("not-a-date"), DueDate: ptr("31/12/2026")},
-			wantStatus: model.StatementStatusUnpaid,
+			name: "paid amount left out keeps the locked (concurrently paid) value",
+			req:  dto.UpdateStatementRequest{Note: ptr("ghi chú")},
+			// stored.PaidAmount is set below to what a concurrent PayStatement committed.
+			wantStatus: model.StatementStatusPartiallyPaid,
 			check: func(t *testing.T, s *model.CreditCardStatement) {
-				require.True(t, s.StatementDate.Equal(origStmtDate))
-				require.True(t, s.DueDate.Equal(origDue))
+				require.Equal(t, 300_000.0, s.PaidAmount)
 			},
 		},
 	}
@@ -527,9 +539,11 @@ func TestCreditCardStatement_UpdateRecomputesStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored := &model.CreditCardStatement{ID: id, UserID: userID, StatementBalance: 1_000_000, Status: model.StatementStatusUnpaid,
 				StatementDate: origStmtDate, DueDate: origDue}
+			if tc.req.PaidAmount == nil && tc.req.Note != nil {
+				stored.PaidAmount = 300_000
+			}
 			stmts := new(MockStatementRepo)
-			stmts.On("GetByID", mock.Anything, id, userID).Return(stored, nil)
-			stmts.On("Update", mock.Anything, stored).Return(nil)
+			stmts.On("Update", mock.Anything, userID, id).Return(stored, nil)
 
 			res, err := service.NewCreditCardStatementService(stmts, new(MockWalletRepo)).UpdateStatement(context.Background(), userID, id, tc.req)
 			require.NoError(t, err)
@@ -547,20 +561,28 @@ func TestCreditCardStatement_UpdateAndDeleteErrors(t *testing.T) {
 	userID, id := uuid.New(), uuid.New()
 
 	stmts := new(MockStatementRepo)
-	stmts.On("GetByID", mock.Anything, id, userID).Return(nil, nil)
+	stmts.On("Update", mock.Anything, userID, id).Return(nil, constant.ErrNotFound)
 	_, err := service.NewCreditCardStatementService(stmts, new(MockWalletRepo)).UpdateStatement(context.Background(), userID, id, dto.UpdateStatementRequest{})
 	require.ErrorIs(t, err, service.ErrStatementNotFound)
-	stmts.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+
+	// Invalid dates are rejected (like CreateStatement) before anything is locked or written.
+	for _, req := range []dto.UpdateStatementRequest{
+		{StatementDate: ptr("not-a-date")},
+		{DueDate: ptr("31/12/2026")},
+	} {
+		stmts = new(MockStatementRepo)
+		_, err = service.NewCreditCardStatementService(stmts, new(MockWalletRepo)).UpdateStatement(context.Background(), userID, id, req)
+		require.ErrorIs(t, err, service.ErrInvalidDate)
+		stmts.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+	}
 
 	stmts = new(MockStatementRepo)
-	stmts.On("GetByID", mock.Anything, id, userID).Return(nil, errRepoDown)
-	_, err = service.NewCreditCardStatementService(stmts, new(MockWalletRepo)).UpdateStatement(context.Background(), userID, id, dto.UpdateStatementRequest{})
-	require.ErrorIs(t, err, errRepoDown)
+	stmts.On("Update", mock.Anything, userID, id).Return(nil, fmt.Errorf("%w: credit card statement for this period", constant.ErrAlreadyExists))
+	_, err = service.NewCreditCardStatementService(stmts, new(MockWalletRepo)).UpdateStatement(context.Background(), userID, id, dto.UpdateStatementRequest{StatementMonth: ptr(10)})
+	require.ErrorIs(t, err, constant.ErrAlreadyExists)
 
 	stmts = new(MockStatementRepo)
-	stored := &model.CreditCardStatement{ID: id, UserID: userID}
-	stmts.On("GetByID", mock.Anything, id, userID).Return(stored, nil)
-	stmts.On("Update", mock.Anything, stored).Return(errRepoDown)
+	stmts.On("Update", mock.Anything, userID, id).Return(nil, errRepoDown)
 	_, err = service.NewCreditCardStatementService(stmts, new(MockWalletRepo)).UpdateStatement(context.Background(), userID, id, dto.UpdateStatementRequest{})
 	require.ErrorIs(t, err, errRepoDown)
 
