@@ -1,7 +1,7 @@
 {
   "preview": {
     "ToolTitle": "Lỗi thiết lập mục tiêu",
-    "ResultJSON": "{\"error\":\"loại mục tiêu phải là EXPENSE hoặc INVESTMENT: invalid input\"}",
+    "ResultJSON": "{\"error\":\"loại mục tiêu phải là EXPENSE hoặc INVESTMENT\"}",
     "ActionCard": null
   },
   "sideEffects": {

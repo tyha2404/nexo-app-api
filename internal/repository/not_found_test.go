@@ -118,9 +118,8 @@ func TestDeletes_OrderAndScope(t *testing.T) {
 	captureDeletes(t, db, statements)
 	assert.ErrorIs(t, NewWalletRepository(db).Delete(ctx, userID, id), constant.ErrNotFound)
 	assert.ErrorIs(t, NewCreditCardStatementRepository(db).Delete(ctx, userID, id), constant.ErrNotFound)
-	// DeleteSession still succeeds when nothing matched (DELETE of an unknown
-	// session answers 200); only its scope is checked.
-	assert.NoError(t, NewChatRepository(db).DeleteSession(ctx, userID, id))
+	// An unknown (or someone else's) chat session is reported as not found → 404.
+	assert.ErrorIs(t, NewChatRepository(db).DeleteSession(ctx, userID, id), constant.ErrNotFound)
 	for _, table := range []string{"wallets", "credit_card_statements", "chat_sessions"} {
 		var found bool
 		for _, s := range *statements {

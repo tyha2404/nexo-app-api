@@ -1,7 +1,7 @@
 {
   "preview": {
     "ToolTitle": "Lỗi thiết lập mục tiêu",
-    "ResultJSON": "{\"error\":\"tháng/năm không hợp lệ: invalid input\"}",
+    "ResultJSON": "{\"error\":\"tháng/năm không hợp lệ\"}",
     "ActionCard": null
   },
   "sideEffects": {

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"time"
 
@@ -32,13 +31,13 @@ func NewTargetService(repo repository.TargetRepository) TargetService {
 // for callers that do not go through the HTTP validator (the AI tools).
 func validateTarget(targetType string, amount float64, month, year int) error {
 	if targetType != string(model.TargetTypeExpense) && targetType != string(model.TargetTypeInvestment) {
-		return fmt.Errorf("loại mục tiêu phải là EXPENSE hoặc INVESTMENT: %w", constant.ErrInvalidInput)
+		return constant.NewKindError(constant.ErrInvalidInput, "loại mục tiêu phải là EXPENSE hoặc INVESTMENT")
 	}
 	if amount <= 0 || amount > maxTargetAmount {
-		return fmt.Errorf("số tiền mục tiêu không hợp lệ: %w", constant.ErrInvalidInput)
+		return constant.NewKindError(constant.ErrInvalidInput, "số tiền mục tiêu không hợp lệ")
 	}
 	if month < 1 || month > 12 || year < 2000 || year > 2100 {
-		return fmt.Errorf("tháng/năm không hợp lệ: %w", constant.ErrInvalidInput)
+		return constant.NewKindError(constant.ErrInvalidInput, "tháng/năm không hợp lệ")
 	}
 	return nil
 }

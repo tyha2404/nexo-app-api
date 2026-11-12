@@ -3064,7 +3064,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request payload / Validation failed",
+                        "description": "Invalid request payload / Validation failed / invalid target type, amount or month",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }

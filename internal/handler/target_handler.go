@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
@@ -29,7 +31,7 @@ func NewTargetHandler(svc service.TargetService, log *zap.Logger) *TargetHandler
 // @Security BearerAuth
 // @Param request body dto.UpsertTargetRequest true "Target"
 // @Success 200 {object} MessageResponse
-// @Failure 400 {object} response.ErrorResponse "Invalid request payload / Validation failed"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload / Validation failed / invalid target type, amount or month"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Failed to upsert target"
 // @Router /targets/monthly [post]
@@ -46,6 +48,10 @@ func (h *TargetHandler) UpsertTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.UpsertTarget(r.Context(), user.ID, &req); err != nil {
+		if errors.Is(err, constant.ErrInvalidInput) {
+			h.errorHandler.HandleError(w, err, http.StatusBadRequest, err.Error(), "upsert_target")
+			return
+		}
 		h.errorHandler.HandleError(w, err, http.StatusInternalServerError, "Failed to upsert target", "upsert_target")
 		return
 	}

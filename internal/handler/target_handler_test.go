@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/tyha2404/nexo-app-api/internal/constant"
 	"github.com/tyha2404/nexo-app-api/internal/dto"
 	"github.com/tyha2404/nexo-app-api/internal/service"
 	"go.uber.org/zap"
@@ -61,6 +62,7 @@ func TestTargetHandler_UpsertTarget(t *testing.T) {
 		{"year too far", false, `{"targetType":"EXPENSE","targetAmount":1,"month":1,"year":2101}`, nil, http.StatusBadRequest, "Validation failed", false},
 		{"amount too large", false, `{"targetType":"EXPENSE","targetAmount":10000000000,"month":1,"year":2026}`, nil, http.StatusBadRequest, "Validation failed", false},
 		{"zero amount", false, `{"targetType":"EXPENSE","targetAmount":0,"month":1,"year":2026}`, nil, http.StatusBadRequest, "Validation failed", false},
+		{"service validation error", false, valid, constant.NewKindError(constant.ErrInvalidInput, "số tiền mục tiêu không hợp lệ"), http.StatusBadRequest, "số tiền mục tiêu không hợp lệ", true},
 		{"internal error", false, valid, errors.New("boom"), http.StatusInternalServerError, "Failed to upsert target", true},
 	}
 	for _, tt := range tests {

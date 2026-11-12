@@ -70,10 +70,10 @@ func (r *chatRepository) UpdateSessionTitle(ctx context.Context, userID, id uuid
 		Update("title", title).Error
 }
 
+// DeleteSession deletes userID's session; "chat session not found"
+// (constant.ErrNotFound) when it does not exist or belongs to someone else.
 func (r *chatRepository) DeleteSession(ctx context.Context, userID, id uuid.UUID) error {
-	return r.db.WithContext(ctx).
-		Where("id = ? AND user_id = ?", id, userID).
-		Delete(&model.ChatSession{}).Error
+	return deleteForUser(r.db.WithContext(ctx), &model.ChatSession{}, "chat session", userID, id)
 }
 
 func (r *chatRepository) ClearUserSessions(ctx context.Context, userID uuid.UUID) error {
